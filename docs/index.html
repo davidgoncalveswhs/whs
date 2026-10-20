@@ -3,7 +3,10 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>WHS Administrator Passes</title>
+  <meta name="theme-color" content="#E87722">
+  <title>WHS</title>
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://cdn.apple-cloudkit.com">
   <style>
     :root {
@@ -20,11 +23,12 @@
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       background: var(--bg);
       color: var(--ink);
+      padding-bottom: 84px;
     }
-    .wrap { max-width: 760px; margin: 0 auto; padding: 28px 20px 64px; }
-    header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
-    .brand { font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--orange); }
-    h1 { font-size: 28px; margin: 4px 0 6px; }
+    .wrap { max-width: 860px; margin: 0 auto; padding: 22px 18px 24px; }
+    header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+    .brand { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--orange); }
+    h1 { font-size: 26px; margin: 4px 0 6px; }
     .sub { color: var(--muted); font-size: 15px; line-height: 1.45; }
     button, .btn {
       appearance: none; border: 0; border-radius: 12px; padding: 10px 14px;
@@ -41,19 +45,33 @@
       background: var(--paper); border: 1px solid var(--line); border-radius: 18px;
       padding: 18px; margin: 12px 0;
     }
+    .home-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .tile { text-align: left; width: 100%; background: white; color: var(--ink); border: 1px solid var(--line); padding: 18px; }
+    .tile b { display: block; font-size: 17px; margin-bottom: 4px; }
+    .tile span { color: var(--muted); font-weight: 500; font-size: 14px; }
     .pass-kind { font-size: 18px; font-weight: 800; letter-spacing: 0.05em; margin: 0 0 12px; }
     .field { margin: 10px 0; }
     .field span { display: block; font-size: 11px; font-weight: 650; color: var(--muted); letter-spacing: 0.04em; }
     .field strong { font-size: 16px; font-weight: 650; }
-    .sig { max-height: 72px; margin-top: 6px; }
+    .sig, .news-img { max-width: 100%; max-height: 180px; margin-top: 8px; border-radius: 10px; }
     .empty, .error { color: var(--muted); line-height: 1.5; }
     .error { color: #B42318; }
-    .setup p { color: var(--muted); line-height: 1.5; }
     ol.setup-steps { color: var(--muted); padding-left: 20px; line-height: 1.55; }
     #status { font-size: 13px; color: var(--muted); margin-top: 10px; }
-    .hidden { display: none; }
+    .hidden { display: none !important; }
     .lang { display: flex; gap: 6px; }
     .lang button { padding: 8px 10px; font-size: 13px; }
+    iframe.lunch { width: 100%; min-height: 72vh; border: 1px solid var(--line); border-radius: 18px; background: white; }
+    nav.tabs {
+      position: fixed; left: 0; right: 0; bottom: 0; background: white;
+      border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(4, 1fr);
+      padding: 6px 8px 10px;
+    }
+    nav.tabs button {
+      background: transparent; color: var(--muted); box-shadow: none; font-size: 12px; padding: 8px 4px;
+    }
+    nav.tabs button.on { color: var(--orange); }
+    @media (max-width: 560px) { .home-grid { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
@@ -61,8 +79,8 @@
     <header>
       <div>
         <div class="brand">Watertown High School</div>
-        <h1 id="title">Administrator Passes</h1>
-        <p class="sub" id="subtitle">Every hallway and Flex pass teachers send from the WHS app. Admins do not need to be nearby.</p>
+        <h1 id="title">WHS</h1>
+        <p class="sub" id="subtitle"></p>
       </div>
       <div class="lang">
         <button class="ghost" type="button" id="en">EN</button>
@@ -70,139 +88,126 @@
       </div>
     </header>
 
-    <section class="card setup" id="setup">
-      <p id="setupIntro">This portal reads the same iCloud pass log as the administrator iPhone. Create a CloudKit API token once, then paste it here. It stays on this browser.</p>
-      <ol class="setup-steps" id="steps"></ol>
-      <div class="field">
-        <label for="token" id="tokenLabel">CloudKit API token</label>
-        <input id="token" type="password" autocomplete="off" spellcheck="false">
-      </div>
-      <div class="field">
-        <label for="env" id="envLabel">Environment</label>
-        <select id="env">
-          <option value="development">Development</option>
-          <option value="production">Production</option>
-        </select>
-      </div>
-      <div class="row">
-        <button type="button" id="save">Open pass log</button>
-      </div>
-    </section>
-
-    <section id="log" class="hidden">
-      <div class="row" style="margin-bottom: 8px;">
-        <button type="button" id="refresh">Refresh</button>
-        <button class="ghost" type="button" id="signout">Change token</button>
-        <div id="apple-sign-in"></div>
-        <div id="apple-sign-out"></div>
-      </div>
-      <p id="status"></p>
-      <div id="passes"></div>
+    <section id="view-home"></section>
+    <section id="view-news" class="hidden"></section>
+    <section id="view-lunch" class="hidden"></section>
+    <section id="view-passes" class="hidden">
+      <section class="card" id="setup">
+        <p id="setupIntro"></p>
+        <ol class="setup-steps" id="steps"></ol>
+        <div class="field">
+          <label for="token" id="tokenLabel">CloudKit API token</label>
+          <input id="token" type="password" autocomplete="off" spellcheck="false">
+        </div>
+        <div class="field">
+          <label for="env" id="envLabel">Environment</label>
+          <select id="env">
+            <option value="development">Development</option>
+            <option value="production">Production</option>
+          </select>
+        </div>
+        <div class="row">
+          <button type="button" id="save">Open</button>
+        </div>
+      </section>
+      <section id="log" class="hidden">
+        <div class="row">
+          <button type="button" id="refresh">Refresh</button>
+          <button class="ghost" type="button" id="signout">Change token</button>
+          <div id="apple-sign-in"></div>
+          <div id="apple-sign-out"></div>
+        </div>
+        <p id="status"></p>
+        <div id="passes"></div>
+      </section>
     </section>
   </div>
 
+  <nav class="tabs" id="tabs"></nav>
   <script src="https://cdn.apple-cloudkit.com/ck/2/cloudkit.js"></script>
   <script>
     const CONTAINER = "iCloud.com.davidgoncalvespersonalteam.UntitledProject";
-    const RECORD_TYPE = "WHSTeacherPass";
+    const PASS_TYPE = "WHSTeacherPass";
+    const NEWS_TYPE = "WHSAnnouncement";
     const MANIFEST = "whs-teacher-pass-manifest";
+    const LUNCH = "https://drive.google.com/file/d/1FcyUw6LwftfJC6cDnOQrlXgBXC4UjB57/preview";
     const copy = {
       en: {
-        title: "Administrator Passes",
-        subtitle: "Every hallway and Flex pass teachers send from the WHS app. Admins do not need to be nearby.",
-        setup: "This portal reads the same iCloud pass log as the administrator iPhone. Create a CloudKit API token once, then paste it here. It stays on this browser.",
+        homeTitle: "Home",
+        homeSub: "News, lunch, and administrator passes on Chromebook. Study games and hallway passes stay on iPhone.",
+        news: "News", newsSub: "School announcements from the WHS app.",
+        lunch: "Lunch", lunchSub: "This week’s menu.",
+        passes: "Passes", passesSub: "Administrator log of hallway and Flex passes.",
+        chromebook: "On a Chromebook, use Chrome → More → Save and share → Create shortcut → Open as window.",
+        newsEmpty: "No news yet. Paste the CloudKit token under Passes first, then open News.",
+        setup: "Paste the CloudKit API token once on this Chromebook. It stays in this browser. Lunch does not need a token.",
         steps: [
-          "Open CloudKit Dashboard and the container iCloud.com.davidgoncalvespersonalteam.UntitledProject.",
-          "API Access → create a token with permission to read the public database.",
-          "If Xcode tests used Development, keep Development selected here.",
-          "Open this folder with a local web server, not as a raw file. Example: python3 -m http.server"
+          "CloudKit Dashboard → Tokens & Keys → WHS Admin Portal.",
+          "Keep Development selected while testing with Xcode.",
+          "World Read must be on for WHSTeacherPass and WHSAnnouncement."
         ],
         token: "CloudKit API token",
         env: "Environment",
-        open: "Open pass log",
+        open: "Save and load",
         refresh: "Refresh",
         change: "Change token",
-        loading: "Loading passes…",
-        empty: "No passes yet. Click Sign in with Apple ID (same iCloud as the teacher iPhone), then Refresh. The teacher iPhone needs internet when sending.",
-        indexHint: "Also in CloudKit Dashboard: Schema → Security Roles, let World read WHSTeacherPass. Schema → Indexes, QUERYABLE on recordName and studentName.",
+        loading: "Loading…",
+        empty: "No passes yet. Sign in with Apple ID if the list stays empty, then Refresh.",
+        indexHint: "CloudKit: World Read on WHSTeacherPass, QUERYABLE index on recordName.",
         hallway: "HALLWAY PASS",
         flex: "FLEX PASS",
         student: "STUDENT NAME",
         destination: "DESTINATION",
         dates: "DATE(S)",
         teacher: "TEACHER",
-        failed: "Could not load passes. Check the token, environment, and that this page is served over http."
+        failed: "Could not load CloudKit data. Check the token and environment."
       },
       es: {
-        title: "Pases de administrador",
-        subtitle: "Cada pase de pasillo y Flex que envían los maestros desde la app WHS. Los administradores no tienen que estar cerca.",
-        setup: "Este portal lee el mismo registro de iCloud que el iPhone de administrador. Crea un token de CloudKit una vez y pégalo aquí. Se queda en este navegador.",
+        homeTitle: "Inicio",
+        homeSub: "Noticias, almuerzo y pases de administrador en Chromebook. Los juegos y los pases de pasillo se quedan en iPhone.",
+        news: "Noticias", newsSub: "Anuncios escolares de la app WHS.",
+        lunch: "Almuerzo", lunchSub: "El menú de esta semana.",
+        passes: "Pases", passesSub: "Registro de pases de pasillo y Flex.",
+        chromebook: "En un Chromebook: Chrome → Más → Guardar y compartir → Crear acceso directo → Abrir como ventana.",
+        newsEmpty: "Aún no hay noticias. Pega el token de CloudKit en Pases y luego abre Noticias.",
+        setup: "Pega el token de CloudKit una vez en este Chromebook. Se queda en este navegador. El almuerzo no necesita token.",
         steps: [
-          "Abre CloudKit Dashboard y el contenedor iCloud.com.davidgoncalvespersonalteam.UntitledProject.",
-          "API Access → crea un token con permiso de lectura de la base de datos pública.",
-          "Si las pruebas de Xcode usaron Development, déjalo en Development aquí.",
-          "Abre esta carpeta con un servidor local, no como archivo. Ejemplo: python3 -m http.server"
+          "CloudKit Dashboard → Tokens & Keys → WHS Admin Portal.",
+          "Deja Development si estás probando con Xcode.",
+          "World Read debe estar activo para WHSTeacherPass y WHSAnnouncement."
         ],
         token: "Token de API de CloudKit",
         env: "Entorno",
-        open: "Abrir registro",
+        open: "Guardar y cargar",
         refresh: "Actualizar",
         change: "Cambiar token",
-        loading: "Cargando pases…",
-        empty: "Aún no hay pases. Toca Sign in with Apple ID (el mismo iCloud que el iPhone del maestro) y luego Actualizar. El iPhone del maestro necesita internet al enviar.",
-        indexHint: "También en CloudKit Dashboard: Schema → Security Roles, permite que World lea WHSTeacherPass. Schema → Indexes, QUERYABLE en recordName y studentName.",
+        loading: "Cargando…",
+        empty: "Aún no hay pases. Inicia sesión con Apple ID si la lista sigue vacía y actualiza.",
+        indexHint: "CloudKit: World Read en WHSTeacherPass, índice QUERYABLE en recordName.",
         hallway: "PASE DE PASILLO",
         flex: "PASE FLEX",
         student: "NOMBRE DEL ESTUDIANTE",
         destination: "DESTINO",
         dates: "FECHA(S)",
         teacher: "MAESTRO",
-        failed: "No se pudieron cargar los pases. Revisa el token, el entorno y que esta página se sirva por http."
+        failed: "No se pudieron cargar los datos. Revisa el token y el entorno."
       }
     };
 
     let lang = localStorage.getItem("whsAdminLang") || "en";
     let configured = false;
-
+    let view = "home";
     function t() { return copy[lang]; }
 
-    function applyLang() {
-      const c = t();
-      document.documentElement.lang = lang;
-      title.textContent = c.title;
-      subtitle.textContent = c.subtitle;
-      setupIntro.textContent = c.setup;
-      steps.innerHTML = c.steps.map((s) => `<li>${s}</li>`).join("");
-      tokenLabel.textContent = c.token;
-      envLabel.textContent = c.env;
-      save.textContent = c.open;
-      refresh.textContent = c.refresh;
-      signout.textContent = c.change;
-    }
-
-    function field(label, value) {
-      const safe = value ? String(value) : "";
-      return `<div class="field"><span>${label}</span><strong>${escapeHtml(safe)}</strong></div>`;
-    }
-
     function escapeHtml(value) {
-      return value.replace(/[&<>"']/g, (ch) => ({
+      return String(value || "").replace(/[&<>"']/g, (ch) => ({
         "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
       }[ch]));
     }
 
-    function fieldValue(record, key) {
-      if (!record) return "";
-      if (typeof record.get === "function") {
-        try {
-          const got = record.get(key);
-          if (got != null && got !== "") return unwrapField(got);
-        } catch (_) { /* CloudKit JS get() can throw for missing keys */ }
-      }
-      const field = record.fields && record.fields[key];
-      if (field != null) return unwrapField(field);
-      if (record[key] != null && typeof record[key] !== "object") return String(record[key]);
-      return "";
+    function field(label, value) {
+      if (!value) return "";
+      return `<div class="field"><span>${label}</span><strong>${escapeHtml(value)}</strong></div>`;
     }
 
     function unwrapField(field) {
@@ -214,42 +219,21 @@
         const date = new Date(value);
         return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
       }
-      if (value && typeof value === "object" && (value.downloadURL || value.fileChecksum)) {
-        return value.downloadURL || "";
-      }
+      if (value && typeof value === "object" && value.downloadURL) return value.downloadURL;
       return typeof value === "object" ? "" : String(value);
     }
 
-    function renderPasses(records) {
-      const c = t();
-      const usable = records.filter((r) => {
-        const name = r.recordName || r.recordName || "";
-        return name && name !== MANIFEST && (fieldValue(r, "studentName") || fieldValue(r, "teacherName") || fieldValue(r, "destination"));
-      });
-      usable.sort((a, b) => {
-        const da = new Date(fieldValue(a, "createdAt") || a.createdTimestamp || 0).getTime();
-        const db = new Date(fieldValue(b, "createdAt") || b.createdTimestamp || 0).getTime();
-        return db - da;
-      });
-      if (!usable.length) {
-        passes.innerHTML = `<p class="empty">${c.empty}</p><p class="empty">${c.indexHint}</p>`;
-        return;
+    function fieldValue(record, key) {
+      if (!record) return "";
+      if (typeof record.get === "function") {
+        try {
+          const got = record.get(key);
+          if (got != null && got !== "") return unwrapField(got);
+        } catch (_) {}
       }
-      passes.innerHTML = usable.map((record) => {
-        const kind = fieldValue(record, "kind") === "flex" ? c.flex : c.hallway;
-        const signature = fieldValue(record, "signature");
-        const created = fieldValue(record, "createdAt") || "";
-        const sig = signature ? `<img class="sig" alt="" src="${escapeHtml(signature)}">` : "";
-        return `<article class="card">
-          <p class="pass-kind">${kind}</p>
-          ${field(c.student, fieldValue(record, "studentName"))}
-          ${field(c.destination, fieldValue(record, "destination"))}
-          ${field(c.dates, fieldValue(record, "dates"))}
-          ${field(c.teacher, fieldValue(record, "teacherName"))}
-          ${created ? field("", created) : ""}
-          ${sig}
-        </article>`;
-      }).join("");
+      const item = record.fields && record.fields[key];
+      if (item != null) return unwrapField(item);
+      return "";
     }
 
     function recordsFrom(response) {
@@ -273,15 +257,141 @@
           const response = await db.fetchRecords(argument);
           const list = recordsFrom(response);
           if (list.length) return list;
-        } catch (_) { /* try the next CloudKit JS shape */ }
+        } catch (_) {}
       }
       return [];
     }
 
-    function cloudKitErrorText(response) {
-      const errors = response && (response.errors || response._errors);
-      if (!errors || !errors.length) return "";
-      return errors.map((item) => item.reason || item.message || item.ckErrorCode || String(item)).join(" ");
+    function applyLang() {
+      const c = t();
+      document.documentElement.lang = lang;
+      setupIntro.textContent = c.setup;
+      steps.innerHTML = c.steps.map((s) => `<li>${s}</li>`).join("");
+      tokenLabel.textContent = c.token;
+      envLabel.textContent = c.env;
+      save.textContent = c.open;
+      refresh.textContent = c.refresh;
+      signout.textContent = c.change;
+      tabs.innerHTML = ["home", "news", "lunch", "passes"].map((id) => {
+        const label = id === "home" ? c.homeTitle : c[id];
+        return `<button type="button" data-view="${id}" class="${view === id ? "on" : ""}">${label}</button>`;
+      }).join("");
+      renderView();
+    }
+
+    function show(id) {
+      view = id;
+      ["home", "news", "lunch", "passes"].forEach((name) => {
+        document.getElementById("view-" + name).classList.toggle("hidden", name !== id);
+      });
+      applyLang();
+      if (id === "news") loadNews();
+      if (id === "passes" && configured) loadPasses();
+    }
+
+    function renderView() {
+      const c = t();
+      const titles = { home: c.homeTitle, news: c.news, lunch: c.lunch, passes: c.passes };
+      const subs = { home: c.homeSub, news: c.newsSub, lunch: c.lunchSub, passes: c.passesSub };
+      title.textContent = titles[view];
+      subtitle.textContent = subs[view];
+      document.getElementById("view-home").innerHTML = `
+        <p class="sub">${c.chromebook}</p>
+        <div class="home-grid">
+          <button class="tile" data-go="news"><b>${c.news}</b><span>${c.newsSub}</span></button>
+          <button class="tile" data-go="lunch"><b>${c.lunch}</b><span>${c.lunchSub}</span></button>
+          <button class="tile" data-go="passes"><b>${c.passes}</b><span>${c.passesSub}</span></button>
+        </div>`;
+      document.getElementById("view-lunch").innerHTML = `
+        <p class="sub"><a href="${LUNCH.replace("/preview", "/view")}" target="_blank" rel="noopener">Open in Drive</a></p>
+        <iframe class="lunch" title="Lunch menu" src="${LUNCH}"></iframe>`;
+    }
+
+    function renderPasses(records) {
+      const c = t();
+      const usable = records.filter((r) => {
+        const name = r.recordName || "";
+        return name && name !== MANIFEST && (fieldValue(r, "studentName") || fieldValue(r, "teacherName"));
+      });
+      usable.sort((a, b) => new Date(fieldValue(b, "createdAt") || 0) - new Date(fieldValue(a, "createdAt") || 0));
+      if (!usable.length) {
+        passes.innerHTML = `<p class="empty">${c.empty}</p><p class="empty">${c.indexHint}</p>`;
+        return;
+      }
+      passes.innerHTML = usable.map((record) => {
+        const kind = fieldValue(record, "kind") === "flex" ? c.flex : c.hallway;
+        const signature = fieldValue(record, "signature");
+        const created = fieldValue(record, "createdAt");
+        const sig = signature ? `<img class="sig" alt="" src="${escapeHtml(signature)}">` : "";
+        return `<article class="card"><p class="pass-kind">${kind}</p>
+          ${field(c.student, fieldValue(record, "studentName"))}
+          ${field(c.destination, fieldValue(record, "destination"))}
+          ${field(c.dates, fieldValue(record, "dates"))}
+          ${field(c.teacher, fieldValue(record, "teacherName"))}
+          ${field("", created)}${sig}</article>`;
+      }).join("");
+    }
+
+    function renderNews(records) {
+      const c = t();
+      const usable = records.filter((r) => {
+        const published = Number(fieldValue(r, "published") || 1);
+        return published !== 0 && (fieldValue(r, "titleEN") || fieldValue(r, "titleES"));
+      });
+      usable.sort((a, b) => Number(fieldValue(b, "published") || 0) - Number(fieldValue(a, "published") || 0));
+      if (!usable.length) {
+        document.getElementById("view-news").innerHTML = `<p class="empty">${c.newsEmpty}</p>`;
+        return;
+      }
+      document.getElementById("view-news").innerHTML = usable.map((record) => {
+        const heading = lang === "es"
+          ? (fieldValue(record, "titleES") || fieldValue(record, "titleEN"))
+          : (fieldValue(record, "titleEN") || fieldValue(record, "titleES"));
+        const body = lang === "es"
+          ? (fieldValue(record, "subtitleES") || fieldValue(record, "subtitleEN"))
+          : (fieldValue(record, "subtitleEN") || fieldValue(record, "subtitleES"));
+        const image = fieldValue(record, "image");
+        const img = image ? `<img class="news-img" alt="" src="${escapeHtml(image)}">` : "";
+        return `<article class="card"><b>${escapeHtml(heading)}</b><p class="sub">${escapeHtml(body)}</p>${img}</article>`;
+      }).join("");
+    }
+
+    async function ensureCloud() {
+      const token = localStorage.getItem("whsAdminToken") || document.getElementById("token").value.trim();
+      const environment = localStorage.getItem("whsAdminEnv") || document.getElementById("env").value;
+      if (!token) return false;
+      if (!configured) {
+        CloudKit.configure({
+          containers: [{
+            containerIdentifier: CONTAINER,
+            apiTokenAuth: {
+              apiToken: token,
+              persist: true,
+              signInButton: { id: "apple-sign-in", theme: "black" },
+              signOutButton: { id: "apple-sign-out", theme: "black" }
+            },
+            environment
+          }]
+        });
+        configured = true;
+        try { await CloudKit.getDefaultContainer().setUpAuth(); } catch (_) {}
+      }
+      return true;
+    }
+
+    async function loadNews() {
+      const node = document.getElementById("view-news");
+      node.innerHTML = `<p class="empty">${t().loading}</p>`;
+      if (!(await ensureCloud())) {
+        node.innerHTML = `<p class="empty">${t().newsEmpty}</p>`;
+        return;
+      }
+      try {
+        const queried = await CloudKit.getDefaultContainer().publicCloudDatabase.performQuery({ recordType: NEWS_TYPE });
+        renderNews(recordsFrom(queried));
+      } catch (error) {
+        node.innerHTML = `<p class="error">${escapeHtml(error.message || t().failed)}</p>`;
+      }
     }
 
     async function loadPasses() {
@@ -289,85 +399,50 @@
       status.textContent = c.loading;
       const seen = new Map();
       const remember = (record) => {
-        const name = record && (record.recordName || (record.recordName === 0 ? "0" : ""));
-        if (record && name && !record.serverErrorCode) {
-          seen.set(name, record);
-        }
+        if (record && record.recordName && !record.serverErrorCode) seen.set(record.recordName, record);
       };
-      let queryNote = "";
       try {
-        const container = CloudKit.getDefaultContainer();
-        const db = container.publicCloudDatabase;
+        if (!(await ensureCloud())) return;
+        const db = CloudKit.getDefaultContainer().publicCloudDatabase;
         (await fetchByNames(db, [MANIFEST])).forEach(remember);
-        const manifest = seen.get(MANIFEST);
-        const raw = manifest ? fieldValue(manifest, "passIDs") : "";
-        const ids = raw.split(",").map((part) => part.trim()).filter(Boolean);
-        (await fetchByNames(db, ids)).forEach(remember);
+        const raw = seen.get(MANIFEST) ? fieldValue(seen.get(MANIFEST), "passIDs") : "";
+        (await fetchByNames(db, raw.split(",").map((part) => part.trim()).filter(Boolean))).forEach(remember);
         try {
-          const queried = await db.performQuery({ recordType: RECORD_TYPE });
-          const queryError = cloudKitErrorText(queried);
-          if (queryError) queryNote = queryError;
-          recordsFrom(queried).forEach(remember);
-        } catch (error) {
-          queryNote = error.message || String(error);
-        }
+          recordsFrom(await db.performQuery({ recordType: PASS_TYPE })).forEach(remember);
+        } catch (_) {}
         status.textContent = "";
         renderPasses([...seen.values()]);
-        if (queryNote && ![...seen.values()].some((record) => fieldValue(record, "studentName") || fieldValue(record, "teacherName"))) {
-          passes.innerHTML += `<p class="error">${escapeHtml(queryNote)}</p><p class="empty">${c.indexHint}</p>`;
-        }
       } catch (error) {
         status.textContent = "";
-        if ([...seen.values()].some((record) => fieldValue(record, "studentName") || fieldValue(record, "teacherName"))) {
-          renderPasses([...seen.values()]);
-          return;
-        }
-        passes.innerHTML = `<p class="error">${c.failed}</p><p class="error">${escapeHtml(error.message || String(error))}</p><p class="empty">${c.indexHint}</p>`;
+        passes.innerHTML = `<p class="error">${c.failed}</p><p class="error">${escapeHtml(error.message || "")}</p>`;
       }
-    }
-
-    function configure(token, environment) {
-      CloudKit.configure({
-        containers: [{
-          containerIdentifier: CONTAINER,
-          apiTokenAuth: {
-            apiToken: token,
-            persist: true,
-            signInButton: { id: "apple-sign-in", theme: "black" },
-            signOutButton: { id: "apple-sign-out", theme: "black" }
-          },
-          environment
-        }]
-      });
-      configured = true;
     }
 
     async function openLog() {
       const token = document.getElementById("token").value.trim();
-      const environment = document.getElementById("env").value;
       if (!token) return;
       localStorage.setItem("whsAdminToken", token);
-      localStorage.setItem("whsAdminEnv", environment);
+      localStorage.setItem("whsAdminEnv", document.getElementById("env").value);
       setup.classList.add("hidden");
       log.classList.remove("hidden");
-      if (!configured) configure(token, environment);
-      const container = CloudKit.getDefaultContainer();
-      try {
-        const user = await container.setUpAuth();
-        if (typeof container.whenUserSignsIn === "function") {
-          container.whenUserSignsIn().then(() => loadPasses());
-        }
-        status.textContent = user ? "" : t().empty;
-      } catch (_) { /* public read may still work */ }
       await loadPasses();
     }
 
-    const savedToken = localStorage.getItem("whsAdminToken") || "";
-    const savedEnv = localStorage.getItem("whsAdminEnv") || "development";
-    document.getElementById("token").value = savedToken;
-    document.getElementById("env").value = savedEnv;
-    applyLang();
+    document.getElementById("token").value = localStorage.getItem("whsAdminToken") || "";
+    document.getElementById("env").value = localStorage.getItem("whsAdminEnv") || "development";
+    if (localStorage.getItem("whsAdminToken")) {
+      setup.classList.add("hidden");
+      log.classList.remove("hidden");
+    }
 
+    tabs.addEventListener("click", (event) => {
+      const button = event.target.closest("button[data-view]");
+      if (button) show(button.dataset.view);
+    });
+    document.getElementById("view-home").addEventListener("click", (event) => {
+      const tile = event.target.closest("button[data-go]");
+      if (tile) show(tile.dataset.go);
+    });
     save.addEventListener("click", openLog);
     refresh.addEventListener("click", loadPasses);
     signout.addEventListener("click", () => {
@@ -377,6 +452,7 @@
     });
     en.addEventListener("click", () => { lang = "en"; localStorage.setItem("whsAdminLang", lang); applyLang(); });
     es.addEventListener("click", () => { lang = "es"; localStorage.setItem("whsAdminLang", lang); applyLang(); });
+    applyLang();
   </script>
 </body>
 </html>

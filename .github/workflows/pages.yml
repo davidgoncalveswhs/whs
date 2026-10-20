@@ -23,6 +23,6 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: admin-portal
+          path: docs
       - id: deployment
         uses: actions/deploy-pages@v4
