@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>WHS Administrator Passes</title>
+  <link rel="preconnect" href="https://cdn.apple-cloudkit.com">
+  <style>
+    :root {
+      --orange: #E87722;
+      --ink: #0F172A;
+      --muted: #64748B;
+      --line: #E2E8F0;
+      --paper: #FFFFFF;
+      --bg: #F8FAFC;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+    }
+    .wrap { max-width: 760px; margin: 0 auto; padding: 28px 20px 64px; }
+    header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 24px; }
+    .brand { font-size: 13px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--orange); }
+    h1 { font-size: 28px; margin: 4px 0 6px; }
+    .sub { color: var(--muted); font-size: 15px; line-height: 1.45; }
+    button, .btn {
+      appearance: none; border: 0; border-radius: 12px; padding: 10px 14px;
+      font: inherit; font-weight: 600; cursor: pointer; background: var(--orange); color: white;
+    }
+    button.ghost { background: white; color: var(--ink); border: 1px solid var(--line); }
+    .row { display: flex; gap: 8px; flex-wrap: wrap; }
+    label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+    input, select {
+      width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line);
+      font: inherit; background: white; color: var(--ink);
+    }
+    .card {
+      background: var(--paper); border: 1px solid var(--line); border-radius: 18px;
+      padding: 18px; margin: 12px 0;
+    }
+    .pass-kind { font-size: 18px; font-weight: 800; letter-spacing: 0.05em; margin: 0 0 12px; }
+    .field { margin: 10px 0; }
+    .field span { display: block; font-size: 11px; font-weight: 650; color: var(--muted); letter-spacing: 0.04em; }
+    .field strong { font-size: 16px; font-weight: 650; }
+    .sig { max-height: 72px; margin-top: 6px; }
+    .empty, .error { color: var(--muted); line-height: 1.5; }
+    .error { color: #B42318; }
+    .setup p { color: var(--muted); line-height: 1.5; }
+    ol.setup-steps { color: var(--muted); padding-left: 20px; line-height: 1.55; }
+    #status { font-size: 13px; color: var(--muted); margin-top: 10px; }
+    .hidden { display: none; }
+    .lang { display: flex; gap: 6px; }
+    .lang button { padding: 8px 10px; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <div class="brand">Watertown High School</div>
+        <h1 id="title">Administrator Passes</h1>
+        <p class="sub" id="subtitle">Every hallway and Flex pass teachers send from the WHS app. Admins do not need to be nearby.</p>
+      </div>
+      <div class="lang">
+        <button class="ghost" type="button" id="en">EN</button>
+        <button class="ghost" type="button" id="es">ES</button>
+      </div>
+    </header>
+
+    <section class="card setup" id="setup">
+      <p id="setupIntro">This portal reads the same iCloud pass log as the administrator iPhone. Create a CloudKit API token once, then paste it here. It stays on this browser.</p>
+      <ol class="setup-steps" id="steps"></ol>
+      <div class="field">
+        <label for="token" id="tokenLabel">CloudKit API token</label>
+        <input id="token" type="password" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="field">
+        <label for="env" id="envLabel">Environment</label>
+        <select id="env">
+          <option value="development">Development</option>
+          <option value="production">Production</option>
+        </select>
+      </div>
+      <div class="row">
+        <button type="button" id="save">Open pass log</button>
+      </div>
+    </section>
+
+    <section id="log" class="hidden">
+      <div class="row" style="margin-bottom: 8px;">
+        <button type="button" id="refresh">Refresh</button>
+        <button class="ghost" type="button" id="signout">Change token</button>
+        <div id="apple-sign-in"></div>
+        <div id="apple-sign-out"></div>
+      </div>
+      <p id="status"></p>
+      <div id="passes"></div>
+    </section>
+  </div>
+
+  <script src="https://cdn.apple-cloudkit.com/ck/2/cloudkit.js"></script>
+  <script>
+    const CONTAINER = "iCloud.com.davidgoncalvespersonalteam.UntitledProject";
+    const RECORD_TYPE = "WHSTeacherPass";
+    const MANIFEST = "whs-teacher-pass-manifest";
+    const copy = {
+      en: {
+        title: "Administrator Passes",
+        subtitle: "Every hallway and Flex pass teachers send from the WHS app. Admins do not need to be nearby.",
+        setup: "This portal reads the same iCloud pass log as the administrator iPhone. Create a CloudKit API token once, then paste it here. It stays on this browser.",
+        steps: [
+          "Open CloudKit Dashboard and the container iCloud.com.davidgoncalvespersonalteam.UntitledProject.",
+          "API Access → create a token with permission to read the public database.",
+          "If Xcode tests used Development, keep Development selected here.",
+          "Open this folder with a local web server, not as a raw file. Example: python3 -m http.server"
+        ],
+        token: "CloudKit API token",
+        env: "Environment",
+        open: "Open pass log",
+        refresh: "Refresh",
+        change: "Change token",
+        loading: "Loading passes…",
+        empty: "No passes yet. Click Sign in with Apple ID (same iCloud as the teacher iPhone), then Refresh. The teacher iPhone needs internet when sending.",
+        indexHint: "Also in CloudKit Dashboard: Schema → Security Roles, let World read WHSTeacherPass. Schema → Indexes, QUERYABLE on recordName and studentName.",
+        hallway: "HALLWAY PASS",
+        flex: "FLEX PASS",
+        student: "STUDENT NAME",
+        destination: "DESTINATION",
+        dates: "DATE(S)",
+        teacher: "TEACHER",
+        failed: "Could not load passes. Check the token, environment, and that this page is served over http."
+      },
+      es: {
+        title: "Pases de administrador",
+        subtitle: "Cada pase de pasillo y Flex que envían los maestros desde la app WHS. Los administradores no tienen que estar cerca.",
+        setup: "Este portal lee el mismo registro de iCloud que el iPhone de administrador. Crea un token de CloudKit una vez y pégalo aquí. Se queda en este navegador.",
+        steps: [
+          "Abre CloudKit Dashboard y el contenedor iCloud.com.davidgoncalvespersonalteam.UntitledProject.",
+          "API Access → crea un token con permiso de lectura de la base de datos pública.",
+          "Si las pruebas de Xcode usaron Development, déjalo en Development aquí.",
+          "Abre esta carpeta con un servidor local, no como archivo. Ejemplo: python3 -m http.server"
+        ],
+        token: "Token de API de CloudKit",
+        env: "Entorno",
+        open: "Abrir registro",
+        refresh: "Actualizar",
+        change: "Cambiar token",
+        loading: "Cargando pases…",
+        empty: "Aún no hay pases. Toca Sign in with Apple ID (el mismo iCloud que el iPhone del maestro) y luego Actualizar. El iPhone del maestro necesita internet al enviar.",
+        indexHint: "También en CloudKit Dashboard: Schema → Security Roles, permite que World lea WHSTeacherPass. Schema → Indexes, QUERYABLE en recordName y studentName.",
+        hallway: "PASE DE PASILLO",
+        flex: "PASE FLEX",
+        student: "NOMBRE DEL ESTUDIANTE",
+        destination: "DESTINO",
+        dates: "FECHA(S)",
+        teacher: "MAESTRO",
+        failed: "No se pudieron cargar los pases. Revisa el token, el entorno y que esta página se sirva por http."
+      }
+    };
+
+    let lang = localStorage.getItem("whsAdminLang") || "en";
+    let configured = false;
+
+    function t() { return copy[lang]; }
+
+    function applyLang() {
+      const c = t();
+      document.documentElement.lang = lang;
+      title.textContent = c.title;
+      subtitle.textContent = c.subtitle;
+      setupIntro.textContent = c.setup;
+      steps.innerHTML = c.steps.map((s) => `<li>${s}</li>`).join("");
+      tokenLabel.textContent = c.token;
+      envLabel.textContent = c.env;
+      save.textContent = c.open;
+      refresh.textContent = c.refresh;
+      signout.textContent = c.change;
+    }
+
+    function field(label, value) {
+      const safe = value ? String(value) : "";
+      return `<div class="field"><span>${label}</span><strong>${escapeHtml(safe)}</strong></div>`;
+    }
+
+    function escapeHtml(value) {
+      return value.replace(/[&<>"']/g, (ch) => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[ch]));
+    }
+
+    function fieldValue(record, key) {
+      if (!record) return "";
+      if (typeof record.get === "function") {
+        try {
+          const got = record.get(key);
+          if (got != null && got !== "") return unwrapField(got);
+        } catch (_) { /* CloudKit JS get() can throw for missing keys */ }
+      }
+      const field = record.fields && record.fields[key];
+      if (field != null) return unwrapField(field);
+      if (record[key] != null && typeof record[key] !== "object") return String(record[key]);
+      return "";
+    }
+
+    function unwrapField(field) {
+      if (field == null) return "";
+      if (typeof field !== "object") return String(field);
+      const value = Object.prototype.hasOwnProperty.call(field, "value") ? field.value : field;
+      if (value == null) return "";
+      if (typeof value === "number" && (field.type === "TIMESTAMP" || field.type === "DATE" || value > 1000000000000)) {
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
+      }
+      if (value && typeof value === "object" && (value.downloadURL || value.fileChecksum)) {
+        return value.downloadURL || "";
+      }
+      return typeof value === "object" ? "" : String(value);
+    }
+
+    function renderPasses(records) {
+      const c = t();
+      const usable = records.filter((r) => {
+        const name = r.recordName || r.recordName || "";
+        return name && name !== MANIFEST && (fieldValue(r, "studentName") || fieldValue(r, "teacherName") || fieldValue(r, "destination"));
+      });
+      usable.sort((a, b) => {
+        const da = new Date(fieldValue(a, "createdAt") || a.createdTimestamp || 0).getTime();
+        const db = new Date(fieldValue(b, "createdAt") || b.createdTimestamp || 0).getTime();
+        return db - da;
+      });
+      if (!usable.length) {
+        passes.innerHTML = `<p class="empty">${c.empty}</p><p class="empty">${c.indexHint}</p>`;
+        return;
+      }
+      passes.innerHTML = usable.map((record) => {
+        const kind = fieldValue(record, "kind") === "flex" ? c.flex : c.hallway;
+        const signature = fieldValue(record, "signature");
+        const created = fieldValue(record, "createdAt") || "";
+        const sig = signature ? `<img class="sig" alt="" src="${escapeHtml(signature)}">` : "";
+        return `<article class="card">
+          <p class="pass-kind">${kind}</p>
+          ${field(c.student, fieldValue(record, "studentName"))}
+          ${field(c.destination, fieldValue(record, "destination"))}
+          ${field(c.dates, fieldValue(record, "dates"))}
+          ${field(c.teacher, fieldValue(record, "teacherName"))}
+          ${created ? field("", created) : ""}
+          ${sig}
+        </article>`;
+      }).join("");
+    }
+
+    function recordsFrom(response) {
+      if (!response) return [];
+      if (Array.isArray(response)) return response;
+      if (Array.isArray(response.records)) return response.records;
+      if (response.recordName) return [response];
+      return [];
+    }
+
+    async function fetchByNames(db, names) {
+      const unique = [...new Set(names.filter(Boolean))];
+      if (!unique.length || typeof db.fetchRecords !== "function") return [];
+      const attempts = [
+        unique,
+        unique.map((recordName) => ({ recordName })),
+        { records: unique.map((recordName) => ({ recordName })) }
+      ];
+      for (const argument of attempts) {
+        try {
+          const response = await db.fetchRecords(argument);
+          const list = recordsFrom(response);
+          if (list.length) return list;
+        } catch (_) { /* try the next CloudKit JS shape */ }
+      }
+      return [];
+    }
+
+    function cloudKitErrorText(response) {
+      const errors = response && (response.errors || response._errors);
+      if (!errors || !errors.length) return "";
+      return errors.map((item) => item.reason || item.message || item.ckErrorCode || String(item)).join(" ");
+    }
+
+    async function loadPasses() {
+      const c = t();
+      status.textContent = c.loading;
+      const seen = new Map();
+      const remember = (record) => {
+        const name = record && (record.recordName || (record.recordName === 0 ? "0" : ""));
+        if (record && name && !record.serverErrorCode) {
+          seen.set(name, record);
+        }
+      };
+      let queryNote = "";
+      try {
+        const container = CloudKit.getDefaultContainer();
+        const db = container.publicCloudDatabase;
+        (await fetchByNames(db, [MANIFEST])).forEach(remember);
+        const manifest = seen.get(MANIFEST);
+        const raw = manifest ? fieldValue(manifest, "passIDs") : "";
+        const ids = raw.split(",").map((part) => part.trim()).filter(Boolean);
+        (await fetchByNames(db, ids)).forEach(remember);
+        try {
+          const queried = await db.performQuery({ recordType: RECORD_TYPE });
+          const queryError = cloudKitErrorText(queried);
+          if (queryError) queryNote = queryError;
+          recordsFrom(queried).forEach(remember);
+        } catch (error) {
+          queryNote = error.message || String(error);
+        }
+        status.textContent = "";
+        renderPasses([...seen.values()]);
+        if (queryNote && ![...seen.values()].some((record) => fieldValue(record, "studentName") || fieldValue(record, "teacherName"))) {
+          passes.innerHTML += `<p class="error">${escapeHtml(queryNote)}</p><p class="empty">${c.indexHint}</p>`;
+        }
+      } catch (error) {
+        status.textContent = "";
+        if ([...seen.values()].some((record) => fieldValue(record, "studentName") || fieldValue(record, "teacherName"))) {
+          renderPasses([...seen.values()]);
+          return;
+        }
+        passes.innerHTML = `<p class="error">${c.failed}</p><p class="error">${escapeHtml(error.message || String(error))}</p><p class="empty">${c.indexHint}</p>`;
+      }
+    }
+
+    function configure(token, environment) {
+      CloudKit.configure({
+        containers: [{
+          containerIdentifier: CONTAINER,
+          apiTokenAuth: {
+            apiToken: token,
+            persist: true,
+            signInButton: { id: "apple-sign-in", theme: "black" },
+            signOutButton: { id: "apple-sign-out", theme: "black" }
+          },
+          environment
+        }]
+      });
+      configured = true;
+    }
+
+    async function openLog() {
+      const token = document.getElementById("token").value.trim();
+      const environment = document.getElementById("env").value;
+      if (!token) return;
+      localStorage.setItem("whsAdminToken", token);
+      localStorage.setItem("whsAdminEnv", environment);
+      setup.classList.add("hidden");
+      log.classList.remove("hidden");
+      if (!configured) configure(token, environment);
+      const container = CloudKit.getDefaultContainer();
+      try {
+        const user = await container.setUpAuth();
+        if (typeof container.whenUserSignsIn === "function") {
+          container.whenUserSignsIn().then(() => loadPasses());
+        }
+        status.textContent = user ? "" : t().empty;
+      } catch (_) { /* public read may still work */ }
+      await loadPasses();
+    }
+
+    const savedToken = localStorage.getItem("whsAdminToken") || "";
+    const savedEnv = localStorage.getItem("whsAdminEnv") || "development";
+    document.getElementById("token").value = savedToken;
+    document.getElementById("env").value = savedEnv;
+    applyLang();
+
+    save.addEventListener("click", openLog);
+    refresh.addEventListener("click", loadPasses);
+    signout.addEventListener("click", () => {
+      configured = false;
+      log.classList.add("hidden");
+      setup.classList.remove("hidden");
+    });
+    en.addEventListener("click", () => { lang = "en"; localStorage.setItem("whsAdminLang", lang); applyLang(); });
+    es.addEventListener("click", () => { lang = "es"; localStorage.setItem("whsAdminLang", lang); applyLang(); });
+  </script>
+</body>
+</html>
