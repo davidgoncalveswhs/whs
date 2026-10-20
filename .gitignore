@@ -1,0 +1,15 @@
+.DS_Store
+**/.DS_Store
+xcuserdata/
+*.xcuserstate
+DerivedData/
+.build/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+.env
+.env.*
+*.p12
+*.mobileprovision
