@@ -254,8 +254,13 @@
     .pass-grid .action { text-align: left; width: 100%; }
     .page-head { margin-bottom: 16px; }
     @media (min-width: 820px) {
-      body { display: grid; grid-template-columns: 220px 1fr; }
-      .app { padding: 28px 36px 36px; }
+      body {
+        display: grid; grid-template-columns: 220px minmax(0, 1fr);
+        grid-template-rows: minmax(100vh, auto); min-height: 100vh;
+      }
+      nav.tabs { grid-column: 1; grid-row: 1; }
+      .app { grid-column: 2; grid-row: 1; min-width: 0; padding: 28px 36px 36px; }
+      .overlay, .sheet { grid-column: 1 / -1; grid-row: 1; }
       nav.tabs {
         position: sticky; top: 0; height: 100vh; width: 220px;
         grid-template-columns: 1fr; align-content: start; gap: 6px;
@@ -342,6 +347,7 @@
         skip: "Continue as guest",
         gateHint: "On iPhone: Account → Chromebook. Student, Teacher, Parent, and Administrator each get a different dashboard. Guest is a limited student view.",
         dashGuest: "Guest view. News, lunch, and the staff directory. Sign in with a WHS Web Code for your full role.",
+        useCode: "Use my WHS Web Code",
         gateFail: "Could not find that code. Check the letters. Open the iPhone app so it can save your code, then try again.",
         dashStudent: "Your Chromebook dashboard. Swipe Card, classes, and accepted hallway and Flex passes sync from your iPhone with this web code.",
         yourPasses: "Your passes",
@@ -434,6 +440,7 @@
         skip: "Continuar como invitado",
         gateHint: "En iPhone: Cuenta → Chromebook. Estudiante, maestro, padre y administrador ven un panel distinto. Invitado es una vista limitada de estudiante.",
         dashGuest: "Vista de invitado. Noticias, almuerzo y el directorio. Entra con un código web WHS para tu rol.",
+        useCode: "Usar mi código web WHS",
         gateFail: "No se encontró ese código. Revisa las letras. Abre la app de iPhone para que guarde el código y vuelve a intentar.",
         dashStudent: "Tu panel de Chromebook. Tarjeta Swipe, las clases y los pases aceptados se sincronizan desde iPhone con este código web.",
         yourPasses: "Tus pases",
@@ -556,6 +563,9 @@
     function schoolEnv() {
       return localStorage.getItem("whsAdminEnv") || window.WHS_CK_ENV || "development";
     }
+    function cloudDb() {
+      try { return CloudKit.getDefaultContainer().publicCloudDatabase; } catch (_) { return null; }
+    }
     function escapeHtml(value) {
       return String(value || "").replace(/[&<>"']/g, (ch) => ({
         "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
@@ -665,7 +675,24 @@
       if (!record || record.deleted || record.serverErrorCode) return false;
       return !!(record.recordName || record.recordType || (record.fields && Object.keys(record.fields).length));
     }
+    async function restLookup(names) {
+      const token = schoolToken();
+      const unique = [...new Set(names.filter(Boolean).flatMap(codeNames))];
+      if (!token || !unique.length) return [];
+      const url = `https://api.apple-cloudkit.com/database/1/${CONTAINER}/${schoolEnv()}/public/records/lookup?ckAPIToken=${encodeURIComponent(token)}`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ records: unique.map((recordName) => ({ recordName })) })
+      });
+      const payload = await response.json();
+      return recordsFrom(payload).filter(usableRecord);
+    }
     async function fetchByNames(db, names) {
+      try {
+        const rest = await restLookup(names);
+        if (rest.length) return rest;
+      } catch (_) {}
       const unique = [...new Set(names.filter(Boolean).flatMap(codeNames))];
       if (!unique.length) return [];
       const found = [];
@@ -675,13 +702,13 @@
         if (id && found.some((item) => item.recordName === id)) return;
         found.push(record);
       };
-      if (typeof db.fetchRecord === "function") {
+      if (db && typeof db.fetchRecord === "function") {
         for (const name of unique) {
           try { recordsFrom(await db.fetchRecord(name)).forEach(remember); } catch (_) {}
         }
         if (found.length) return found;
       }
-      if (typeof db.fetchRecords === "function") {
+      if (db && typeof db.fetchRecords === "function") {
         const attempts = [unique, unique.map((recordName) => ({ recordName })), { records: unique.map((recordName) => ({ recordName })) }];
         for (const argument of attempts) {
           try { recordsFrom(await db.fetchRecords(argument)).forEach(remember); } catch (_) {}
@@ -789,6 +816,7 @@
       } else {
         cards = `
           <div class="card wide"><p class="muted" style="margin:0;">${isGuest() ? c.dashGuest : c.dashStudent}</p></div>
+          ${isGuest() ? `<button class="card action wide" type="button" data-action="useCode"><div class="t">${c.useCode}</div></button>` : ""}
           ${currentRole() === "student" ? `<button class="card action hero-pass wide" type="button" data-go="swipe">
             <div class="row-item">
               <img class="tile-swipe" id="swipeTileMark" src="./SwipeCard.png" alt="">
@@ -1195,15 +1223,9 @@
         if (view === "class") renderClassDetail();
         return;
       }
-      if (!(await ensureCloud())) {
-        applyClassTile();
-        if (view === "classes") renderClasses();
-        if (view === "class") renderClassDetail();
-        return;
-      }
+      try { await ensureCloud(); } catch (_) {}
       try {
-        const db = CloudKit.getDefaultContainer().publicCloudDatabase;
-        const profiles = await fetchByNames(db, [profile.key]);
+        const profiles = await fetchByNames(cloudDb(), [profile.key]);
         const mine = profiles.find((item) => normalizeCode(item.recordName) === profile.key);
         window._study = parseStudy(fieldValue(mine, "studyJSON"));
         applyClassTile();
@@ -1221,13 +1243,13 @@
       if (currentRole() !== "student" || !profile || !profile.key) return;
       if (list && view === "swipe") list.innerHTML = `${backBar()}<p class="muted">${t().swipe}</p>`;
       applySwipeTile("");
-      if (!(await ensureCloud())) {
+      if (!schoolToken()) {
         if (list && view === "swipe") list.innerHTML = swipePage("");
         return;
       }
+      try { await ensureCloud(); } catch (_) {}
       try {
-        const db = CloudKit.getDefaultContainer().publicCloudDatabase;
-        const profiles = await fetchByNames(db, [profile.key]);
+        const profiles = await fetchByNames(cloudDb(), [profile.key]);
         const mine = profiles.find((item) => normalizeCode(item.recordName) === profile.key);
         const url = fieldValue(mine, "swipeCard");
         applySwipeTile(url);
@@ -1323,14 +1345,14 @@
       if (list && view === "mypasses") {
         list.innerHTML = `${backBar()}<p class="muted">${c.yourPasses}</p>`;
       }
-      if (!(await ensureCloud())) {
+      if (!schoolToken()) {
         if (tileSub) tileSub.textContent = c.noneYet;
         if (list && view === "mypasses") list.innerHTML = `${backBar()}<p class="muted">${c.noStudentPasses}</p>`;
         return;
       }
+      try { await ensureCloud(); } catch (_) {}
       try {
-        const db = CloudKit.getDefaultContainer().publicCloudDatabase;
-        const profiles = await fetchByNames(db, [profile.key]);
+        const profiles = await fetchByNames(cloudDb(), [profile.key]);
         const mine = profiles.find((item) => normalizeCode(item.recordName) === profile.key);
         const ids = String(fieldValue(mine, "passIDs") || "").split(",").map((part) => part.trim()).filter(Boolean);
         const records = await fetchByNames(db, ids);
@@ -1422,6 +1444,12 @@
       }
     }
 
+    function returnToCodeGate() {
+      localStorage.removeItem("whsWebProfile");
+      profile = null;
+      showGate();
+    }
+
     async function enterWithCode() {
       gateError.textContent = "";
       const key = normalizeCode(webCode.value);
@@ -1429,12 +1457,15 @@
         gateError.textContent = t().gateFail;
         return;
       }
-      if (!(await ensureCloud())) {
+      if (!schoolToken()) {
         gateError.textContent = t().gateFail;
         return;
       }
+      try { await ensureCloud(); } catch (_) {}
       try {
-        const records = await fetchByNames(CloudKit.getDefaultContainer().publicCloudDatabase, [key]);
+        let db = null;
+        try { db = CloudKit.getDefaultContainer().publicCloudDatabase; } catch (_) {}
+        const records = await fetchByNames(db, [key]);
         const record = records.find((item) => codeNames(item.recordName).includes(key));
         if (!record) {
           gateError.textContent = t().gateFail;
@@ -1480,6 +1511,7 @@
         if (name === "aide") openAide();
         if (name === "askGo") answerAsk(document.getElementById("askBox") && document.getElementById("askBox").value);
         if (name === "closeSheet") closeSheet();
+        if (name === "useCode") returnToCodeGate();
         if (name === "openPass" || name === "openStudentPass") openPass(action.dataset.passId || "");
         if (name === "openClass") {
           window._classID = action.dataset.classId || "";
