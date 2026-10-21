@@ -2169,18 +2169,7 @@
         const ids = String(fieldValue(mine, "passIDs") || "").split(",").map((part) => part.trim()).filter(Boolean);
         const records = await fetchByNames(cloudDb(), ids);
         const byName = new Map(records.map((record) => [String(record.recordName || "").toLowerCase(), record]));
-        let usable = ids.map((id) => byName.get(id.toLowerCase())).filter((record) => record && (fieldValue(record, "studentName") || fieldValue(record, "teacherName")));
-        if (!usable.length) {
-          const mineName = String(profile.firstName || profile.displayName || "").trim().toLowerCase();
-          if (mineName) {
-            let all = [];
-            try { all = await restQuery(PASS_TYPE); } catch (_) {}
-            usable = all.filter((record) => {
-              const student = String(fieldValue(record, "studentName") || "").trim().toLowerCase();
-              return student && (student === mineName || student.startsWith(mineName + " "));
-            });
-          }
-        }
+        const usable = ids.map((id) => byName.get(id.toLowerCase())).filter((record) => record && (fieldValue(record, "studentName") || fieldValue(record, "teacherName")));
         if (tileSub) {
           if (!usable.length) tileSub.textContent = c.noneYet;
           else {
