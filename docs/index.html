@@ -1112,7 +1112,6 @@
       } else {
         cards = `
           <div class="card wide"><p class="muted" style="margin:0;">${isGuest() ? c.dashGuest : c.dashStudent}</p></div>
-          ${isGuest() ? `<button class="card action wide" type="button" data-action="useCode"><div class="t">${c.useCode}</div></button>` : ""}
           ${currentRole() === "student" ? `<button class="card action hero-pass wide" type="button" data-go="swipe">
             <div class="row-item">
               <img class="tile-swipe" id="swipeTileMark" src="./SwipeCard.png" alt="">
@@ -1190,6 +1189,7 @@
         <div class="dash">
           <div class="card wide"><div class="more-face">${face}<div><div class="t">${escapeHtml(profile ? profile.displayName : "")}</div><div class="s">${escapeHtml(roleLabel())}</div></div></div></div>
           ${adminTools}
+          ${isGuest() ? `<button class="card action" type="button" data-action="useCode"><div class="t">${c.useCode}</div></button>` : ""}
           <button class="card action" type="button" id="signOutProfile">${c.signOut}</button>
         </div>`;
       const tokenEl = document.getElementById("token");
