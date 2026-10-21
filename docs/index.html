@@ -152,7 +152,7 @@
       padding: 14px; font-weight: 700; margin-top: 10px;
     }
     .ghost {
-      background: white; border-radius: 16px; padding: 12px 14px; font-weight: 600;
+      background: #F2F2F7; border-radius: 16px; padding: 12px 14px; font-weight: 600;
     }
     .muted { font-family: var(--font-text); color: var(--muted); line-height: 1.33; font-size: 15px; letter-spacing: -0.016em; }
     .error { color: #B42318; }
@@ -293,15 +293,15 @@
     <div class="gate-box">
       <div class="brand">WATERTOWN HIGH SCHOOL</div>
       <h1 id="gateTitle">Welcome</h1>
-      <p class="muted" id="gateBody"></p>
+      <p class="muted" id="gateBody">Paste your WHS Web Code from the iPhone app. This Chromebook loads your name, grade, and role.</p>
       <div class="card">
-        <label class="muted" id="codeLabel"></label>
+        <label class="muted" id="codeLabel">WHS Web Code</label>
         <input id="webCode" autocomplete="off" spellcheck="false" placeholder="XXXXX-XXXXX" style="margin-top:8px;">
-        <button class="primary" type="button" id="enterSite"></button>
-        <button class="ghost" type="button" id="skipSite" style="width:100%;margin-top:8px;"></button>
+        <button class="primary" type="button" id="enterSite">Load my profile</button>
+        <button class="ghost" type="button" id="skipSite" style="width:100%;margin-top:8px;">Continue as guest</button>
         <p class="error" id="gateError"></p>
       </div>
-      <p class="muted" id="gateHint"></p>
+      <p class="muted" id="gateHint">On iPhone: Account → Chromebook. Student, Teacher, Parent, and Administrator each get a different dashboard. Guest is a limited student view.</p>
     </div>
   </div>
   <div class="sheet hidden" id="sheet">
@@ -485,7 +485,7 @@
       localStorage.removeItem("whsWebProfile");
       profile = null;
     }
-    function t() { return copy[lang]; }
+    function t() { return copy[lang] || copy.en; }
     function schoolToken() {
       return localStorage.getItem("whsAdminToken") || window.WHS_SCHOOL_TOKEN || "";
     }
@@ -1138,7 +1138,6 @@
       show("home");
     }
     window.show = show;
-    window.openSwipe = openSwipe;
     window.openAsk = openAsk;
     window.openAide = openAide;
     window.openPassesInfo = openPassesInfo;
