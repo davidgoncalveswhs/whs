@@ -147,6 +147,22 @@
       display: flex; flex-direction: column; justify-content: space-between;
     }
     .shortcut:hover { background: #FAFAFC; }
+    .shortcut .plate { width: 34px; height: 34px; border-radius: 10px; }
+    .shortcut .plate .icon { width: 18px; height: 18px; }
+    .tile-wire { width: 34px; height: 34px; object-fit: contain; flex: none; }
+    .news-row {
+      display: flex; gap: 12px; align-items: center;
+      width: 100%; text-align: left; padding: 12px 0;
+      border-bottom: 1px solid var(--line); background: transparent;
+    }
+    .news-row:last-child { border-bottom: 0; }
+    .news-art {
+      width: 56px; height: 56px; border-radius: 10px; object-fit: cover; flex: none;
+      background: var(--soft);
+    }
+    .news-art.empty { display: grid; place-items: center; color: var(--orange); }
+    .news-art.empty .icon { width: 22px; height: 22px; fill: currentColor; }
+    .news-full { width: 100%; max-height: 70vh; object-fit: contain; border-radius: 12px; background: #111; }
     button, .btn { appearance: none; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
     input, select, textarea {
       width: 100%; padding: 14px; border-radius: 16px; border: 1px solid #E5E5EA;
@@ -334,6 +350,7 @@
       .home-grid { grid-template-columns: 1.15fr .85fr; }
       .home-grid .wide { grid-column: 1 / -1; }
       .shortcuts { grid-template-columns: repeat(4, 1fr); }
+      .dash .shortcuts { grid-template-columns: 1fr 1fr; }
       .news-grid, .pass-grid { grid-template-columns: repeat(2, 1fr); }
       .people-grid { grid-template-columns: repeat(2, 1fr); }
       .people-grid .card { padding: 8px 16px; }
@@ -412,7 +429,7 @@
         enter: "Load my profile",
         skip: "Continue as guest",
         gateHint: "On iPhone: Account → Chromebook. Student, Teacher, Parent, and Administrator each get a different dashboard. Guest is a limited student view.",
-        dashGuest: "Guest view. News, lunch, and the staff directory. Sign in with a WHS Web Code for your full role.",
+        dashGuest: "Guest view. News and lunch are here. Sign in with a WHS Web Code for your full role.",
         useCode: "Use my WHS Web Code",
         gateFail: "Could not find that code. Check the letters. Open the iPhone app so it can save your code, then try again.",
         dashStudent: "Your Chromebook dashboard. Swipe Card, classes, and accepted hallway and Flex passes sync from your iPhone with this web code.",
@@ -426,8 +443,12 @@
         dashTeacher: "Teacher dashboard. The campus pass log matches the administrator log. Hallway and Flex are still sent from iPhone.",
         dashParent: "Parent dashboard. News is the bell. Staff is in Contacts.",
         dashAdmin: "Administrator dashboard. The campus pass log is here. Students do not see it.",
-        openLunch: "This week’s lunch",
+        openLunch: "WHS Lunch",
         openNews: "School news",
+        lunchMenu: "WHS Lunch",
+        wire: "Warrior's Wire",
+        wireSub: "Open the school newspaper",
+        newsFeed: "Notifications",
         openContacts: "Staff directory",
         openPasses: "Campus pass log",
         swipe: "Swipe Card",
@@ -438,7 +459,7 @@
         news: "News", lunch: "Lunch", contacts: "Contacts", classes: "Classes", more: "More", home: "Home",
         calendar: "Calendar", agenda: "Agenda",
         calendarEmpty: "Open school news for this week.",
-        lunchSub: "This week",
+        lunchSub: "This week’s menu",
         ask: "Ask WHS", aide: "Warrior's Aide",
         shortcuts: "Shortcuts",
         classesTile: "Classes",
@@ -517,7 +538,7 @@
         enter: "Cargar mi perfil",
         skip: "Continuar como invitado",
         gateHint: "En iPhone: Cuenta → Chromebook. Estudiante, maestro, padre y administrador ven un panel distinto. Invitado es una vista limitada de estudiante.",
-        dashGuest: "Vista de invitado. Noticias, almuerzo y el directorio. Entra con un código web WHS para tu rol.",
+        dashGuest: "Vista de invitado. Noticias y almuerzo están aquí. Entra con un código web WHS para tu rol.",
         useCode: "Usar mi código web WHS",
         gateFail: "No se encontró ese código. Revisa las letras. Abre la app de iPhone para que guarde el código y vuelve a intentar.",
         dashStudent: "Tu panel de Chromebook. Tarjeta Swipe, las clases y los pases aceptados se sincronizan desde iPhone con este código web.",
@@ -531,8 +552,12 @@
         dashTeacher: "Panel de maestro. El registro de pases es el mismo que el de administrador. Los pases se envían en iPhone.",
         dashParent: "Panel de padre. Las noticias están en la campana. El personal está en Contactos.",
         dashAdmin: "Panel de administrador. El registro de pases está aquí. Los estudiantes no lo ven.",
-        openLunch: "Almuerzo de esta semana",
+        openLunch: "Almuerzo WHS",
         openNews: "Noticias",
+        lunchMenu: "Almuerzo WHS",
+        wire: "Warrior's Wire",
+        wireSub: "Abrir el periódico escolar",
+        newsFeed: "Notificaciones",
         openContacts: "Directorio",
         openPasses: "Registro de pases",
         swipe: "Tarjeta Swipe",
@@ -543,7 +568,7 @@
         news: "Noticias", lunch: "Almuerzo", contacts: "Contactos", classes: "Clases", more: "Más", home: "Inicio",
         calendar: "Calendario", agenda: "Agenda",
         calendarEmpty: "Abre las noticias de la escuela de esta semana.",
-        lunchSub: "Esta semana",
+        lunchSub: "Menú de esta semana",
         ask: "Ask WHS", aide: "Warrior's Aide",
         shortcuts: "Atajos",
         classesTile: "Clases",
@@ -679,7 +704,9 @@
       books: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.2 3.5h3.1c.7 0 1.2.55 1.2 1.2v14.6c0 .7-.55 1.2-1.2 1.2H6.2c-.7 0-1.2-.5-1.2-1.2V4.7c0-.65.5-1.2 1.2-1.2zm8.5 0h3.1c.7 0 1.2.55 1.2 1.2v12.3c.7.15 1.2.75 1.2 1.5 0 .85-.7 1.5-1.5 1.5h-4c-.8 0-1.5-.65-1.5-1.5 0-.75.5-1.35 1.2-1.5V4.7c0-.65.5-1.2 1.2-1.2z"/></svg>',
       person: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12.2a4.35 4.35 0 1 0 0-8.7 4.35 4.35 0 0 0 0 8.7zM4.4 20.4c.45-3.55 3.55-6 7.6-6s7.15 2.45 7.6 6c.08.6-.4 1.1-1 1.1H5.4c-.6 0-1.08-.5-1-1.1z"/></svg>',
       more: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6.5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="17.5" cy="12" r="1.9"/></svg>',
-      bell: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22.2a2.35 2.35 0 0 0 2.3-2.2h-4.6A2.35 2.35 0 0 0 12 22.2zM19.2 16V11a7.2 7.2 0 0 0-5.1-6.85V3.7a2.1 2.1 0 1 0-4.2 0v.45A7.2 7.2 0 0 0 4.8 11v5L3.15 17.7c-.55.55-.16 1.5.62 1.5h16.46c.78 0 1.17-.95.62-1.5z"/></svg>'
+      bell: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22.2a2.35 2.35 0 0 0 2.3-2.2h-4.6A2.35 2.35 0 0 0 12 22.2zM19.2 16V11a7.2 7.2 0 0 0-5.1-6.85V3.7a2.1 2.1 0 1 0-4.2 0v.45A7.2 7.2 0 0 0 4.8 11v5L3.15 17.7c-.55.55-.16 1.5.62 1.5h16.46c.78 0 1.17-.95.62-1.5z"/></svg>',
+      fork: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M8.2 2.5c.45 0 .8.35.8.8v6.1c0 .9-.55 1.65-1.35 1.9V20.7c0 .45-.35.8-.8.8s-.8-.35-.8-.8v-9.4C5.25 10.85 4.7 10.1 4.7 9.2V3.3c0-.45.35-.8.8-.8s.8.35.8.8v5.3h.55V3.3c0-.45.35-.8.8-.8s.8.35.8.8v5.3h.55V3.3c0-.45.35-.8.8-.8zM16.6 2.5c.45 0 .8.35.8.8v7.2h.7c.9 0 1.65.75 1.65 1.65V20.7c0 .45-.35.8-.8.8s-.8-.35-.8-.8v-8h-.75c-.9 0-1.65-.75-1.65-1.65V3.3c0-.45.35-.8.85-.8z"/></svg>',
+      mega: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 6.2v11.6c0 .7-.8 1.1-1.4.7L14 15H8.5C5.5 15 3 12.5 3 9.5S5.5 4 8.5 4H14l5.6-3.5c.6-.4 1.4 0 1.4.7zM8.2 16.5 10 19.8c.3.5 0 1.2-.6 1.2H7.3c-.4 0-.7-.2-.9-.6L4.8 16.5z"/></svg>'
     };
     function initials(name) {
       const parts = String(name || "W").trim().split(/\s+/);
@@ -785,6 +812,18 @@
     function usableRecord(record) {
       if (!record || record.deleted || record.serverErrorCode) return false;
       return !!(record.recordName || record.recordType || (record.fields && Object.keys(record.fields).length));
+    }
+    async function restQuery(recordType) {
+      const token = schoolToken();
+      if (!token || !recordType) return [];
+      const url = `https://api.apple-cloudkit.com/database/1/${CONTAINER}/${schoolEnv()}/public/records/query?ckAPIToken=${encodeURIComponent(token)}`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ query: { recordType }, resultsLimit: 80 })
+      });
+      const payload = await response.json();
+      return recordsFrom(payload).filter(usableRecord);
     }
     async function restLookup(names) {
       const token = schoolToken();
@@ -951,23 +990,33 @@
               <span class="chev">›</span>
             </div>
           </button>` : ""}
-          ${dashCard("news", c.openNews, "")}
-          ${dashCard("lunch", c.openLunch, "")}
-          ${dashCard("contacts", c.openContacts, "")}`;
+          <div class="shortcuts wide">
+            <button class="shortcut" type="button" data-go="lunch">
+              <span class="plate">${icons.fork}</span>
+              <div class="t">${c.lunchMenu}</div>
+              <div class="s">${c.lunchSub}</div>
+            </button>
+            <button class="shortcut" type="button" data-go="news">
+              <img class="tile-wire" src="./WarriorsWire.png" alt="">
+              <div class="t">${c.wire}</div>
+              <div class="s">${c.openNews}</div>
+            </button>
+          </div>`;
       }
       document.getElementById("view-home").innerHTML = `<div class="dash">${cards}</div>`;
     }
 
     function renderLunch() {
       const node = document.getElementById("view-lunch");
-      if (!lunchReady) {
-        node.innerHTML = `${backBar()}<iframe class="lunch" title="Lunch" src="${LUNCH}"></iframe>`;
-        lunchReady = true;
-      } else if (!node.querySelector("iframe")) {
-        node.innerHTML = `${backBar()}<iframe class="lunch" title="Lunch" src="${LUNCH}"></iframe>`;
-      } else if (!node.querySelector(".toolbar")) {
-        node.insertAdjacentHTML("afterbegin", backBar());
-      }
+      const c = t();
+      node.innerHTML = `${backBar()}
+        <div class="card wide" style="max-width:920px;">
+          <div class="t">${c.lunchMenu}</div>
+          <p class="muted">${c.lunchSub}</p>
+          <iframe class="lunch" title="${c.lunchMenu}" src="./WHSLunchMenu.pdf"></iframe>
+          <p class="muted"><a href="${LUNCH}" target="_blank" rel="noopener">${c.lunchMenu}</a></p>
+        </div>`;
+      lunchReady = true;
     }
 
     function renderMore() {
@@ -1690,30 +1739,76 @@
         ${passPaper(record, true)}`);
     }
 
+    function newsHeading(record) {
+      return lang === "es"
+        ? (fieldValue(record, "titleES") || fieldValue(record, "titleEN"))
+        : (fieldValue(record, "titleEN") || fieldValue(record, "titleES"));
+    }
+    function newsBody(record) {
+      return lang === "es"
+        ? (fieldValue(record, "subtitleES") || fieldValue(record, "subtitleEN"))
+        : (fieldValue(record, "subtitleEN") || fieldValue(record, "subtitleES"));
+    }
+    function newsStamp(record) {
+      const raw = record && record.fields && record.fields.postedAt && record.fields.postedAt.value;
+      const value = typeof raw === "number" ? raw : Date.parse(fieldValue(record, "postedAt"));
+      if (!value) return 0;
+      return value;
+    }
+    function wireCard() {
+      const c = t();
+      return `<a class="card action wide" href="https://whswarriorswire.com" target="_blank" rel="noopener">
+        <div class="row-item">
+          <img class="tile-wire" src="./WarriorsWire.png" alt="">
+          <div><div class="t">${c.wire}</div><div class="s">${c.wireSub}</div></div>
+          <span class="chev">›</span>
+        </div>
+      </a>`;
+    }
+    function newsFeedHTML(records) {
+      const c = t();
+      if (!records.length) return `<div class="card wide"><p class="muted" style="margin:0;">${c.newsEmpty}</p></div>`;
+      return `<div class="card wide"><div class="t" style="margin-bottom:8px;">${c.newsFeed}</div>` + records.map((record) => {
+        const id = record.recordName || "";
+        const image = fieldValue(record, "image");
+        const art = image
+          ? `<img class="news-art" alt="" src="${escapeHtml(image)}">`
+          : `<span class="news-art empty">${icons.mega}</span>`;
+        return `<button class="news-row" type="button" data-action="openNewsItem" data-news-id="${escapeHtml(id)}">
+          ${art}
+          <span><div class="t">${escapeHtml(newsHeading(record))}</div><div class="s">${escapeHtml(newsBody(record))}</div></span>
+        </button>`;
+      }).join("") + `</div>`;
+    }
     async function loadNews() {
       const node = document.getElementById("view-news");
       const c = t();
-      node.innerHTML = `${backBar()}<p class="muted">${c.newsEmpty}</p>`;
-      if (!(await ensureCloud())) {
-        node.innerHTML = `${backBar()}<div class="card"><p class="muted">${c.newsNeedToken}</p><button class="primary" type="button" data-go="more">${c.more}</button></div>`;
-        return;
-      }
+      node.innerHTML = `${backBar()}${wireCard()}<div class="card wide"><p class="muted" style="margin:0;">${c.newsFeed}</p></div>`;
+      let usable = [];
       try {
-        const queried = await CloudKit.getDefaultContainer().publicCloudDatabase.performQuery({ recordType: NEWS_TYPE });
-        const usable = recordsFrom(queried).filter((r) => Number(fieldValue(r, "published") || 1) !== 0);
-        if (!usable.length) {
-          node.innerHTML = `${backBar()}<div class="card"><p class="muted">${c.newsEmpty}</p></div>`;
-          return;
-        }
-        node.innerHTML = backBar() + `<div class="news-grid">` + usable.map((record) => {
-          const heading = lang === "es" ? (fieldValue(record, "titleES") || fieldValue(record, "titleEN")) : (fieldValue(record, "titleEN") || fieldValue(record, "titleES"));
-          const body = lang === "es" ? (fieldValue(record, "subtitleES") || fieldValue(record, "subtitleEN")) : (fieldValue(record, "subtitleEN") || fieldValue(record, "subtitleES"));
-          const image = fieldValue(record, "image");
-          return `<article class="card"><b>${escapeHtml(heading)}</b><p class="muted">${escapeHtml(body)}</p>${image ? `<img class="news-img" alt="" src="${escapeHtml(image)}">` : ""}</article>`;
-        }).join("") + `</div>`;
-      } catch (error) {
-        node.innerHTML = `${backBar()}<p class="error">${escapeHtml(error.message)}</p>`;
+        usable = (await restQuery(NEWS_TYPE)).filter((record) => Number(fieldValue(record, "published") || 1) !== 0);
+      } catch (_) {}
+      if (!usable.length) {
+        try { await ensureCloud(); } catch (_) {}
+        try {
+          const db = cloudDb();
+          if (db && typeof db.performQuery === "function") {
+            usable = recordsFrom(await db.performQuery({ recordType: NEWS_TYPE }))
+              .filter((record) => Number(fieldValue(record, "published") || 1) !== 0);
+          }
+        } catch (_) {}
       }
+      usable.sort((a, b) => {
+        const pub = Number(fieldValue(b, "published") || 0) - Number(fieldValue(a, "published") || 0);
+        if (pub) return pub;
+        return newsStamp(b) - newsStamp(a);
+      });
+      window._newsRecords = {};
+      usable.forEach((record) => {
+        const id = record.recordName || "";
+        if (id) window._newsRecords[id] = record;
+      });
+      node.innerHTML = `${backBar()}${wireCard()}${newsFeedHTML(usable)}`;
     }
 
     async function loadPasses() {
@@ -1813,6 +1908,16 @@
         if (name === "aide") openAide();
         if (name === "askGo") answerAsk(document.getElementById("askBox") && document.getElementById("askBox").value);
         if (name === "closeSheet") closeSheet();
+        if (name === "openNewsItem") {
+          const record = window._newsRecords && window._newsRecords[action.dataset.newsId || ""];
+          if (record) {
+            const image = fieldValue(record, "image");
+            openSheet(`
+              <div class="card-title"><b>${escapeHtml(newsHeading(record))}</b><button type="button" data-action="closeSheet">${t().close}</button></div>
+              ${image ? `<img class="news-full" alt="" src="${escapeHtml(image)}">` : ""}
+              <p class="muted">${escapeHtml(newsBody(record))}</p>`);
+          }
+        }
         if (name === "useCode") returnToCodeGate();
         if (name === "openPass" || name === "openStudentPass") openPass(action.dataset.passId || "");
         if (name === "openClass") {
