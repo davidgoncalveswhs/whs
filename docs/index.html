@@ -559,6 +559,11 @@
         roleTeacher: "Teacher",
         gateHint: "",
         useCode: "Use my WHS Web Code",
+        webCodeTitle: "WHS Web Code",
+        webCodeGuestHint: "Show this to a teacher so they can issue a hallway or Flex pass to this Chromebook.",
+        webCodeCopy: "Copy code",
+        webCodeCopied: "Copied",
+        webCodeSaveFail: "Could not save your web code. Check the school connection and try again.",
         addHome: "Add to Home Screen",
         addHomeSub: "Open WHS as its own app, without the browser bar",
         addHomeOnDevice: "WHS is on this Home Screen",
@@ -694,6 +699,11 @@
         roleTeacher: "Maestro",
         gateHint: "",
         useCode: "Usar mi código web WHS",
+        webCodeTitle: "Código web WHS",
+        webCodeGuestHint: "Muéstralo a un maestro para que emita un pase de pasillo o Flex a este Chromebook.",
+        webCodeCopy: "Copiar código",
+        webCodeCopied: "Copiado",
+        webCodeSaveFail: "No se pudo guardar tu código web. Revisa la conexión de la escuela e inténtalo de nuevo.",
         addHome: "Añadir a inicio",
         addHomeSub: "Abre WHS como una app, sin la barra del navegador",
         addHomeOnDevice: "WHS está en esta pantalla de inicio",
@@ -835,8 +845,30 @@
       if (currentRole() === "guest") return true;
       return !String(profile.key || "").trim();
     }
+    function hasWebKey() {
+      return normalizeCode(profile && profile.key).length === 10;
+    }
     function isPairedStudent() {
-      return currentRole() === "student" && !!(profile && String(profile.key || "").trim());
+      return currentRole() === "student" && hasWebKey() && !isGuest();
+    }
+    function isGuestStudent() {
+      if (!isGuest()) return false;
+      const role = currentRole();
+      return role === "student" || role === "guest" || role === "";
+    }
+    function canSeeOwnPasses() {
+      return hasWebKey() && (isPairedStudent() || isGuestStudent());
+    }
+    function formatWebKey(value) {
+      const compact = normalizeCode(value);
+      if (compact.length === 10) return compact.slice(0, 5) + "-" + compact.slice(5);
+      return compact;
+    }
+    function makeWebUnlockKey() {
+      const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+      let key = "";
+      for (let i = 0; i < 10; i += 1) key += alphabet[Math.floor(Math.random() * alphabet.length)];
+      return key;
     }
     function isStandaloneApp() {
       return window.matchMedia("(display-mode: standalone)").matches
@@ -1070,6 +1102,70 @@
       const payload = await response.json();
       return recordsFrom(payload).filter(usableRecord);
     }
+    async function restModify(record, operationType) {
+      const token = schoolToken();
+      if (!token || !record || !record.recordName) return null;
+      const url = `https://api.apple-cloudkit.com/database/1/${CONTAINER}/${schoolEnv()}/public/records/modify?ckAPIToken=${encodeURIComponent(token)}`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          operations: [{
+            operationType: operationType || "create",
+            record
+          }]
+        })
+      });
+      const payload = await response.json();
+      const records = recordsFrom(payload).filter(usableRecord);
+      if (records.length) return records[0];
+      const errors = payload.serverErrorCode || (payload.records && payload.records[0] && payload.records[0].serverErrorCode) || "";
+      if (errors) throw new Error(String(errors));
+      return null;
+    }
+    async function allocateGuestStudentKey(person) {
+      if (!schoolToken()) return "";
+      try { await ensureCloud(); } catch (_) {}
+      for (let i = 0; i < 8; i += 1) {
+        const key = makeWebUnlockKey();
+        let existing = [];
+        try { existing = await restLookup([key]); } catch (_) { existing = []; }
+        if (existing.length) continue;
+        try {
+          const saved = await restModify({
+            recordType: "WHSWebProfile",
+            recordName: key,
+            fields: {
+              displayName: { value: person.displayName || person.firstName || "Warrior" },
+              firstName: { value: person.firstName || person.displayName || "" },
+              role: { value: "student" },
+              grade: { value: String(person.grade || "") }
+            }
+          }, "create");
+          if (saved) return key;
+        } catch (_) {}
+      }
+      return "";
+    }
+    async function ensureGuestStudentProfile() {
+      if (!isGuestStudent() || hasWebKey()) return;
+      const key = await allocateGuestStudentKey(profile || {});
+      if (!key || !profile) return;
+      profile.key = key;
+      profile.guest = true;
+      if (!profile.role || profile.role === "guest") profile.role = "student";
+      localStorage.setItem("whsWebProfile", JSON.stringify(profile));
+    }
+    function guestWebCodeCard() {
+      const c = t();
+      if (!isGuestStudent() || !hasWebKey()) return "";
+      return `<div class="card wide">
+          <div class="t">${c.webCodeTitle}</div>
+          <div class="s" style="font-size:22px;font-weight:700;letter-spacing:0.08em;margin:8px 0;color:var(--ink);">${escapeHtml(formatWebKey(profile.key))}</div>
+          <p class="muted" style="margin:0 0 10px;">${c.webCodeGuestHint}</p>
+          <button class="ghost" type="button" data-action="copyWebCode" id="copyWebCode">${c.webCodeCopy}</button>
+        </div>`;
+    }
     async function fetchByNames(db, names) {
       try {
         const rest = await restLookup(names);
@@ -1176,6 +1272,16 @@
           loadSwipeCard();
           loadStudentPasses();
           loadStudy();
+        } else if (isGuestStudent() && !hasWebKey()) {
+          ensureGuestStudentProfile().then(() => {
+            if (view === "home") {
+              renderHome();
+              loadStudentPasses();
+            }
+            if (view === "more") renderMore();
+          });
+        } else if (canSeeOwnPasses()) {
+          loadStudentPasses();
         }
       }
       if (id === "swipe") loadSwipeCard();
@@ -1239,6 +1345,13 @@
           </button>
           ${homeLunchWireNews()}`;
       } else {
+        const passTile = `<button class="card action hero-pass wide" type="button" data-go="mypasses">
+            <div class="row-item">
+              <img class="tile-mark" src="./FlexHallwayMark.png" alt="">
+              <div><div class="t">${c.passesTile}</div><div class="s" id="passTileSub">${c.noneYet}</div></div>
+              <span class="chev">›</span>
+            </div>
+          </button>`;
         cards = `
           ${isPairedStudent() ? `<button class="card action hero-pass wide" type="button" data-go="swipe">
             <div class="row-item">
@@ -1247,20 +1360,14 @@
               <span class="chev">›</span>
             </div>
           </button>
-          <button class="card action hero-pass wide" type="button" data-go="mypasses">
-            <div class="row-item">
-              <img class="tile-mark" src="./FlexHallwayMark.png" alt="">
-              <div><div class="t">${c.passesTile}</div><div class="s" id="passTileSub">${c.noneYet}</div></div>
-              <span class="chev">›</span>
-            </div>
-          </button>
+          ${passTile}
           <button class="card action hero-pass wide" type="button" data-go="classes">
             <div class="row-item">
               <span class="plate"><img class="sf-glyph" src="./books-vertical.png" alt=""></span>
               <div><div class="t">${c.classesTile}</div><div class="s" id="classTileSub">${c.classesSub}</div></div>
               <span class="chev">›</span>
             </div>
-          </button>` : ""}
+          </button>` : (canSeeOwnPasses() ? passTile : "")}
           ${homeLunchWireNews()}`;
       }
       document.getElementById("view-home").innerHTML = `<div class="dash">${cards}</div>`;
@@ -1305,6 +1412,7 @@
         <div class="dash">
           <div class="card wide"><div class="more-face">${face}<div><div class="t">${escapeHtml(profile ? profile.displayName : "")}</div><div class="s">${escapeHtml(roleLabel())}</div></div></div></div>
           ${adminTools}
+          ${guestWebCodeCard()}
           ${isGuest() ? `${guestHomeCard()}<button class="card action" type="button" data-action="useCode"><div class="t">${c.useCode}</div></button>` : ""}
           <button class="card action" type="button" id="signOutProfile">${c.signOut}</button>
         </div>`;
@@ -1951,7 +2059,7 @@
       const c = t();
       const list = document.getElementById("view-mypasses");
       const tileSub = document.getElementById("passTileSub");
-      if (currentRole() !== "student" || !profile || !profile.key) return;
+      if (!canSeeOwnPasses()) return;
       if (list && view === "mypasses") {
         list.innerHTML = `${backBar()}<p class="muted">${c.yourPasses}</p>`;
       }
@@ -1962,8 +2070,9 @@
       }
       try { await ensureCloud(); } catch (_) {}
       try {
-        const profiles = await fetchByNames(cloudDb(), [profile.key]);
-        const mine = profiles.find((item) => normalizeCode(item.recordName) === profile.key);
+        const key = normalizeCode(profile.key);
+        const profiles = await fetchByNames(cloudDb(), [key]);
+        const mine = profiles.find((item) => normalizeCode(item.recordName) === key);
         const ids = String(fieldValue(mine, "passIDs") || "").split(",").map((part) => part.trim()).filter(Boolean);
         const records = await fetchByNames(cloudDb(), ids);
         const byName = new Map(records.map((record) => [String(record.recordName || "").toLowerCase(), record]));
@@ -2213,6 +2322,18 @@
           }
         }
         if (name === "useCode") returnToCodeGate();
+        if (name === "copyWebCode") {
+          const formatted = formatWebKey(profile && profile.key);
+          const button = document.getElementById("copyWebCode");
+          const done = () => {
+            if (button) button.textContent = t().webCodeCopied;
+          };
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(formatted).then(done).catch(done);
+          } else {
+            done();
+          }
+        }
         if (name === "addHome") showAddHome();
         if (name === "installHome") promptInstallHome();
         if (name === "openPass" || name === "openStudentPass") openPass(action.dataset.passId || "");
@@ -2400,9 +2521,19 @@
         return;
       }
       if (err) err.textContent = "";
-      profile = staff
-        ? { displayName: name, firstName: name, role, key: "", guest: true }
-        : { displayName: name, firstName: name, role: "student", grade, key: "", guest: true };
+      if (staff) {
+        profile = { displayName: name, firstName: name, role, key: "", guest: true };
+      } else {
+        const finish = document.getElementById("guestFinish");
+        if (finish) finish.disabled = true;
+        const key = await allocateGuestStudentKey({ displayName: name, firstName: name, grade });
+        if (finish) finish.disabled = false;
+        if (!key) {
+          if (err) err.textContent = t().webCodeSaveFail;
+          return;
+        }
+        profile = { displayName: name, firstName: name, role: "student", grade, key, guest: true };
+      }
       localStorage.setItem("whsWebProfile", JSON.stringify(profile));
       applyAvatar("");
       showGate();
