@@ -6,7 +6,9 @@
   <meta name="theme-color" content="#F2F2F7">
   <title>WHS</title>
   <link rel="manifest" href="./manifest.webmanifest">
-  <link rel="icon" href="./icon.svg" type="image/svg+xml">
+  <link rel="icon" href="./favicon.png" type="image/png" sizes="32x32">
+  <link rel="icon" href="./app-icon.png" type="image/png" sizes="1024x1024">
+  <link rel="apple-touch-icon" href="./app-icon-192.png">
   <link rel="preconnect" href="https://cdn.apple-cloudkit.com">
   <script src="./config.js"></script>
   <style>
@@ -237,6 +239,7 @@
     .news-grid, .pass-grid, .people-grid {
       display: grid; gap: 14px; grid-template-columns: 1fr;
     }
+    .pass-grid .action { text-align: left; width: 100%; }
     .page-head { margin-bottom: 16px; }
     @media (min-width: 820px) {
       body { display: grid; grid-template-columns: 220px 1fr; }
@@ -950,19 +953,19 @@
           list.innerHTML = `${backBar()}<p class="muted">${c.noStudentPasses}</p>`;
           return;
         }
-        window._studentPasses = {};
+        window._passRecords = {};
         list.innerHTML = backBar() + usable.map((record) => {
           const id = record.recordName || fieldValue(record, "recordName") || String(Math.random());
-          window._studentPasses[id] = record;
-          return `<button type="button" class="action" style="margin-bottom:12px;max-width:560px;" data-action="openStudentPass" data-pass-id="${escapeHtml(id)}">${passPaper(record, false)}</button>`;
+          window._passRecords[id] = record;
+          return `<button type="button" class="action" style="margin-bottom:12px;max-width:560px;" data-action="openPass" data-pass-id="${escapeHtml(id)}">${passPaper(record, false)}</button>`;
         }).join("");
       } catch (error) {
         if (list && view === "mypasses") list.innerHTML = `${backBar()}<p class="error">${escapeHtml(error.message)}</p>`;
       }
     }
 
-    function openStudentPass(id) {
-      const record = window._studentPasses && window._studentPasses[id];
+    function openPass(id) {
+      const record = window._passRecords && window._passRecords[id];
       if (!record) return;
       openSheet(`
         <div class="card-title"><button type="button" data-action="closeSheet">${t().close}</button></div>
@@ -1012,14 +1015,11 @@
         (await fetchByNames(db, raw.split(",").map((part) => part.trim()))).forEach(remember);
         try { recordsFrom(await db.performQuery({ recordType: PASS_TYPE })).forEach(remember); } catch (_) {}
         const usable = [...seen.values()].filter((r) => r.recordName !== MANIFEST && (fieldValue(r, "studentName") || fieldValue(r, "teacherName")));
+        window._passRecords = {};
         document.getElementById("passes").innerHTML = usable.length ? `<div class="pass-grid">` + usable.map((record) => {
-          const kind = fieldValue(record, "kind") === "flex" ? c.flex : c.hallway;
-          const signature = fieldValue(record, "signature");
-          return `<article class="card"><p class="pass-kind">${kind}</p>
-            <div class="t">${escapeHtml(fieldValue(record, "studentName"))}</div>
-            <div class="s">${escapeHtml(fieldValue(record, "destination"))}</div>
-            <div class="s">${escapeHtml(fieldValue(record, "teacherName"))}</div>
-            ${signature ? `<img class="sig" alt="" src="${escapeHtml(signature)}">` : ""}</article>`;
+          const id = record.recordName || fieldValue(record, "recordName") || String(Math.random());
+          window._passRecords[id] = record;
+          return `<button type="button" class="action" data-action="openPass" data-pass-id="${escapeHtml(id)}">${passPaper(record, false)}</button>`;
         }).join("") + `</div>` : `<div class="card"><p class="muted">${c.emptyPasses}</p></div>`;
       } catch (error) {
         node.insertAdjacentHTML("beforeend", `<p class="error">${escapeHtml(error.message)}</p>`);
@@ -1084,7 +1084,7 @@
         if (name === "aide") openAide();
         if (name === "askGo") answerAsk(document.getElementById("askBox") && document.getElementById("askBox").value);
         if (name === "closeSheet") closeSheet();
-        if (name === "openStudentPass") openStudentPass(action.dataset.passId || "");
+        if (name === "openPass" || name === "openStudentPass") openPass(action.dataset.passId || "");
       }
       const go = event.target.closest("[data-go]");
       if (go) show(go.dataset.go);
