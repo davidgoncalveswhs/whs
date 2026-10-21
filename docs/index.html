@@ -19,13 +19,31 @@
       --bg: #F2F2F7;
       --tab: rgba(255,255,255,0.94);
       --soft: #FFF1E6;
+      --font-text: "SF Pro Text", "SF Pro", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
+      --font-display: "SF Pro Display", "SF Pro Text", "SF Pro", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Helvetica, Arial, sans-serif;
     }
+    @font-face { font-family: "SF Pro Text"; src: local("SF Pro Text Regular"), local("SFProText-Regular"), local(".SFNS-Regular"); font-weight: 400; font-style: normal; }
+    @font-face { font-family: "SF Pro Text"; src: local("SF Pro Text Medium"), local("SFProText-Medium"), local(".SFNS-Medium"); font-weight: 500; font-style: normal; }
+    @font-face { font-family: "SF Pro Text"; src: local("SF Pro Text Semibold"), local("SFProText-Semibold"), local(".SFNS-Semibold"); font-weight: 600; font-style: normal; }
+    @font-face { font-family: "SF Pro Text"; src: local("SF Pro Text Bold"), local("SFProText-Bold"), local(".SFNS-Bold"); font-weight: 700; font-style: normal; }
+    @font-face { font-family: "SF Pro Text"; src: local("SF Pro Text Heavy"), local("SFProText-Heavy"); font-weight: 800; font-style: normal; }
+    @font-face { font-family: "SF Pro Display"; src: local("SF Pro Display Regular"), local("SFProDisplay-Regular"); font-weight: 400; font-style: normal; }
+    @font-face { font-family: "SF Pro Display"; src: local("SF Pro Display Medium"), local("SFProDisplay-Medium"); font-weight: 500; font-style: normal; }
+    @font-face { font-family: "SF Pro Display"; src: local("SF Pro Display Semibold"), local("SFProDisplay-Semibold"); font-weight: 600; font-style: normal; }
+    @font-face { font-family: "SF Pro Display"; src: local("SF Pro Display Bold"), local("SFProDisplay-Bold"); font-weight: 700; font-style: normal; }
+    @font-face { font-family: "SF Pro Display"; src: local("SF Pro Display Heavy"), local("SFProDisplay-Heavy"); font-weight: 800; font-style: normal; }
     * { box-sizing: border-box; }
     html, body { margin: 0; min-height: 100%; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+      font-family: var(--font-text);
+      font-size: 17px;
+      line-height: 1.29;
+      font-weight: 400;
+      letter-spacing: -0.022em;
       background: var(--bg);
       color: var(--ink);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
     }
     .app { min-height: 100vh; padding: 12px 20px 96px; }
     .wrap { width: min(1180px, 100%); margin: 0 auto; }
@@ -34,7 +52,8 @@
       margin-bottom: 18px;
     }
     .brand {
-      color: var(--orange); font-size: 11px; font-weight: 800; letter-spacing: .08em;
+      font-family: var(--font-text);
+      color: var(--orange); font-size: 11px; font-weight: 600; letter-spacing: .06em;
     }
     .pill {
       display: flex; align-items: center; justify-content: center; gap: 2px;
@@ -54,13 +73,19 @@
       line-height: 1; letter-spacing: 0; text-align: center;
     }
     h1 {
-      font-size: clamp(32px, 4vw, 44px); letter-spacing: -0.04em; margin: 0 0 6px;
-      font-weight: 800; line-height: 1.05;
+      font-family: var(--font-display);
+      font-size: 34px; letter-spacing: 0.011em; margin: 0 0 6px;
+      font-weight: 700; line-height: 1.21;
     }
-    .date { color: var(--muted); font-size: 16px; font-weight: 500; }
+    .date {
+      font-family: var(--font-text);
+      color: var(--muted); font-size: 16px; font-weight: 400; letter-spacing: -0.02em; line-height: 1.31;
+    }
     .role-chip {
+      font-family: var(--font-text);
       display: inline-flex; align-items: center; margin-top: 10px;
-      background: var(--soft); color: var(--orange); font-size: 13px; font-weight: 700;
+      background: var(--soft); color: var(--orange); font-size: 13px; font-weight: 600;
+      letter-spacing: -0.008em;
       padding: 6px 10px; border-radius: 999px;
     }
     .dash { display: grid; gap: 14px; grid-template-columns: 1fr; }
@@ -79,15 +104,15 @@
     .card-title {
       display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px;
     }
-    .card-title b { font-size: 17px; }
-    .card-title .link { color: var(--orange); font-size: 15px; font-weight: 600; }
+    .card-title b { font-family: var(--font-text); font-size: 17px; font-weight: 600; letter-spacing: -0.022em; }
+    .card-title .link { font-family: var(--font-text); color: var(--orange); font-size: 15px; font-weight: 600; }
     .row-item { display: flex; gap: 12px; align-items: center; }
     .plate {
       width: 34px; height: 34px; border-radius: 10px; background: var(--soft);
       color: var(--orange); display: grid; place-items: center; font-size: 16px; flex: none;
     }
-    .t { font-size: 16px; font-weight: 600; }
-    .s { font-size: 13px; color: var(--muted); }
+    .t { font-family: var(--font-text); font-size: 17px; font-weight: 600; letter-spacing: -0.022em; }
+    .s { font-family: var(--font-text); font-size: 13px; font-weight: 400; color: var(--muted); letter-spacing: -0.008em; line-height: 1.38; }
     .wmark {
       width: 34px; height: 34px; border-radius: 10px; background: var(--orange);
       color: white; font-weight: 800; display: grid; place-items: center; flex: none;
@@ -109,7 +134,7 @@
     }
     .pair .mini:hover { background: #FAFAFC; }
     .pair .split { width: 1px; background: rgba(0,0,0,0.12); align-self: center; height: 48px; }
-    .section { font-size: 22px; font-weight: 800; margin: 8px 0 0; grid-column: 1 / -1; }
+    .section { font-family: var(--font-display); font-size: 22px; font-weight: 700; letter-spacing: 0.016em; margin: 8px 0 0; grid-column: 1 / -1; }
     .shortcuts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .shortcut {
       background: white; border-radius: 28px; padding: 16px; min-height: 104px;
@@ -129,7 +154,7 @@
     .ghost {
       background: white; border-radius: 16px; padding: 12px 14px; font-weight: 600;
     }
-    .muted { color: var(--muted); line-height: 1.45; font-size: 15px; }
+    .muted { font-family: var(--font-text); color: var(--muted); line-height: 1.33; font-size: 15px; letter-spacing: -0.016em; }
     .error { color: #B42318; }
     .ok { color: #1F7A3A; }
     .pass-kind { font-size: 18px; font-weight: 800; letter-spacing: 0.04em; margin: 0 0 10px; }
@@ -139,20 +164,22 @@
     }
     .paper.big { padding: 28px; border-width: 3px; }
     .paper-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
-    .paper-w {
-      width: 42px; height: 42px; background: var(--orange); color: #fff;
-      font-weight: 800; display: grid; place-items: center; font-size: 22px; flex: none;
-    }
-    .paper.big .paper-w { width: 64px; height: 64px; font-size: 32px; }
+    .paper-w-img { width: 42px; height: 42px; object-fit: contain; flex: none; }
+    .paper.big .paper-w-img { width: 64px; height: 64px; }
+    .tile-mark { width: 42px; height: 42px; object-fit: contain; flex: none; }
+    .hero-pass { min-height: 88px; }
+    .hero-pass .row-item { min-height: 56px; }
     .paper-title {
-      font-size: 22px; font-weight: 800; letter-spacing: 0.06em; line-height: 1.1;
+      font-family: var(--font-display);
+      font-size: 22px; font-weight: 800; letter-spacing: 0.016em; line-height: 1.1;
     }
-    .paper.big .paper-title { font-size: 34px; }
+    .paper.big .paper-title { font-size: 34px; letter-spacing: 0.011em; }
     .paper-field { margin-bottom: 8px; }
     .paper-field .lab {
-      font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: 0.04em;
+      font-family: var(--font-text);
+      font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: 0.06em;
     }
-    .paper-field .val { font-size: 16px; padding-bottom: 6px; border-bottom: 1px solid #111; min-height: 28px; }
+    .paper-field .val { font-family: var(--font-text); font-size: 17px; letter-spacing: -0.022em; padding-bottom: 6px; border-bottom: 1px solid #111; min-height: 28px; }
     .paper.big .paper-field .val { font-size: 20px; }
     .paper-sign { margin-top: 8px; }
     .paper-sign img { max-height: 54px; max-width: 100%; display: block; }
@@ -167,7 +194,7 @@
       display: grid; grid-template-columns: repeat(3, 1fr);
       padding: 8px 10px 14px;
     }
-    nav.tabs button { color: #8E8E93; font-size: 10px; font-weight: 600; padding: 6px; border-radius: 14px; }
+    nav.tabs button { font-family: var(--font-text); color: #8E8E93; font-size: 10px; font-weight: 500; letter-spacing: 0.06em; padding: 6px; border-radius: 14px; }
     nav.tabs button.on { color: var(--orange); background: var(--soft); }
     nav.tabs .ico { display: grid; place-items: center; margin: 0 auto 4px; }
     nav.tabs .ico .icon { width: 22px; height: 22px; }
@@ -209,7 +236,7 @@
         border-top: 0; border-right: 1px solid var(--line);
         padding: 28px 14px;
       }
-      nav.tabs button { font-size: 14px; text-align: left; padding: 12px 14px; display: flex; gap: 10px; align-items: center; }
+      nav.tabs button { font-size: 17px; font-weight: 600; letter-spacing: -0.022em; text-align: left; padding: 12px 14px; display: flex; gap: 10px; align-items: center; }
       nav.tabs .ico { display: grid; margin: 0; }
       .home-grid { grid-template-columns: 1.15fr .85fr; }
       .home-grid .wide { grid-column: 1 / -1; }
@@ -246,6 +273,7 @@
       <section id="view-contacts" class="hidden"></section>
       <section id="view-more" class="hidden"></section>
       <section id="view-passes" class="hidden"></section>
+      <section id="view-mypasses" class="hidden"></section>
     </div>
   </div>
 
@@ -287,6 +315,7 @@
         gateFail: "Could not find that code. Check the letters. An administrator may need to save the school CloudKit token after signing in.",
         dashStudent: "Your Chromebook dashboard. Accepted hallway and Flex passes sync from your iPhone with this web code.",
         yourPasses: "Your passes",
+        noneYet: "No passes yet",
         noStudentPasses: "No passes on this Chromebook yet. Accept a pass in Teacher Passes on iPhone, then reload.",
         signature: "TEACHER'S SIGNATURE",
         studentNameLabel: "STUDENT NAME",
@@ -354,6 +383,7 @@
         gateFail: "No se encontró ese código. Revisa las letras. Un administrador puede guardar el token de CloudKit después de entrar.",
         dashStudent: "Tu panel de Chromebook. Los pases aceptados se sincronizan desde iPhone con este código web.",
         yourPasses: "Tus pases",
+        noneYet: "Aún no hay pases",
         noStudentPasses: "Aún no hay pases en este Chromebook. Acepta un pase en Pases de maestros en iPhone y recarga.",
         signature: "FIRMA DEL MAESTRO",
         studentNameLabel: "NOMBRE DEL ESTUDIANTE",
@@ -597,7 +627,7 @@
     function show(id) {
       view = id;
       closeSheet();
-      ["home", "news", "lunch", "contacts", "more", "passes"].forEach((name) => {
+      ["home", "news", "lunch", "contacts", "more", "passes", "mypasses"].forEach((name) => {
         document.getElementById("view-" + name).classList.toggle("hidden", name !== id);
       });
       applyChrome();
@@ -605,6 +635,7 @@
         renderHome();
         if (currentRole() === "student") loadStudentPasses();
       }
+      if (id === "mypasses") loadStudentPasses();
       if (id === "news") loadNews();
       if (id === "lunch") renderLunch();
       if (id === "contacts") renderStaff(document.getElementById("staffQuery") ? document.getElementById("staffQuery").value : "");
@@ -650,7 +681,13 @@
       } else {
         cards = `
           <div class="card wide"><p class="muted" style="margin:0;">${isGuest() ? c.dashGuest : c.dashStudent}</p></div>
-          ${currentRole() === "student" ? `<div class="wide"><div class="section">${c.yourPasses}</div><div id="studentPasses"><p class="muted">${c.noStudentPasses}</p></div></div>` : ""}
+          ${currentRole() === "student" ? `<button class="card action hero-pass wide" type="button" data-go="mypasses">
+            <div class="row-item">
+              <img class="tile-mark" src="./FlexHallwayMark.png" alt="">
+              <div><div class="t">${c.passesTile}</div><div class="s" id="passTileSub">${c.noneYet}</div></div>
+              <span class="chev">›</span>
+            </div>
+          </button>` : ""}
           ${dashCard("news", c.openNews, "")}
           ${dashCard("lunch", c.openLunch, "")}
           ${dashCard("contacts", c.openContacts, "")}`;
@@ -800,7 +837,7 @@
       const kind = fieldValue(record, "kind") === "flex" ? c.flex : c.hallway;
       const signature = fieldValue(record, "signature");
       return `<article class="paper${enlarged ? " big" : ""}">
-        <div class="paper-head"><div class="paper-w">W</div><div class="paper-title">${kind}</div></div>
+        <div class="paper-head"><img class="paper-w-img" src="./WHSBlockW.png" alt=""><div class="paper-title">${kind}</div></div>
         <div class="paper-field"><div class="lab">${c.studentNameLabel}</div><div class="val">${escapeHtml(fieldValue(record, "studentName"))}</div></div>
         <div class="paper-field"><div class="lab">${c.destinationLabel}</div><div class="val">${escapeHtml(fieldValue(record, "destination"))}</div></div>
         <div class="paper-field"><div class="lab">${c.datesLabel}</div><div class="val">${escapeHtml(fieldValue(record, "dates"))}</div></div>
@@ -813,12 +850,16 @@
     }
 
     async function loadStudentPasses() {
-      const node = document.getElementById("studentPasses");
       const c = t();
-      if (!node || currentRole() !== "student" || !profile || !profile.key) return;
-      node.innerHTML = `<p class="muted">${c.yourPasses}</p>`;
+      const list = document.getElementById("view-mypasses");
+      const tileSub = document.getElementById("passTileSub");
+      if (currentRole() !== "student" || !profile || !profile.key) return;
+      if (list && view === "mypasses") {
+        list.innerHTML = `${backBar()}<p class="muted">${c.yourPasses}</p>`;
+      }
       if (!(await ensureCloud())) {
-        node.innerHTML = `<p class="muted">${c.noStudentPasses}</p>`;
+        if (tileSub) tileSub.textContent = c.noneYet;
+        if (list && view === "mypasses") list.innerHTML = `${backBar()}<p class="muted">${c.noStudentPasses}</p>`;
         return;
       }
       try {
@@ -828,18 +869,28 @@
         const ids = String(fieldValue(mine, "passIDs") || "").split(",").map((part) => part.trim()).filter(Boolean);
         const records = await fetchByNames(db, ids);
         const usable = records.filter((record) => fieldValue(record, "studentName") || fieldValue(record, "teacherName"));
+        if (tileSub) {
+          if (!usable.length) tileSub.textContent = c.noneYet;
+          else {
+            const first = usable[0];
+            const teacher = fieldValue(first, "teacherName");
+            const dest = fieldValue(first, "destination");
+            tileSub.textContent = dest ? `${teacher} · ${dest}` : (teacher || c.yourPasses);
+          }
+        }
+        if (!(list && view === "mypasses")) return;
         if (!usable.length) {
-          node.innerHTML = `<p class="muted">${c.noStudentPasses}</p>`;
+          list.innerHTML = `${backBar()}<p class="muted">${c.noStudentPasses}</p>`;
           return;
         }
         window._studentPasses = {};
-        node.innerHTML = usable.map((record) => {
+        list.innerHTML = backBar() + usable.map((record) => {
           const id = record.recordName || fieldValue(record, "recordName") || String(Math.random());
           window._studentPasses[id] = record;
-          return `<button type="button" class="action" style="margin-bottom:12px;" data-action="openStudentPass" data-pass-id="${escapeHtml(id)}">${passPaper(record, false)}</button>`;
+          return `<button type="button" class="action" style="margin-bottom:12px;max-width:560px;" data-action="openStudentPass" data-pass-id="${escapeHtml(id)}">${passPaper(record, false)}</button>`;
         }).join("");
       } catch (error) {
-        node.innerHTML = `<p class="error">${escapeHtml(error.message)}</p>`;
+        if (list && view === "mypasses") list.innerHTML = `${backBar()}<p class="error">${escapeHtml(error.message)}</p>`;
       }
     }
 
