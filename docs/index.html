@@ -603,6 +603,9 @@
         swipe: "Swipe Card",
         swipeSub: "Add your ID photo to use Swipe",
         noSwipe: "No Swipe Card on this Chromebook yet. Add your ID photo in Swipe Card on iPhone, then reload.",
+        swipeGuestEmpty: "Add a photo of your student ID to use Swipe on this Chromebook.",
+        addSwipePhoto: "Add ID photo",
+        replaceSwipePhoto: "Replace ID photo",
         passesTile: "Teacher Passes",
         passesSub: "Hallway and Flex stay on iPhone",
         news: "News", lunch: "Lunch", contacts: "Contacts", classes: "Classes", more: "More", home: "Home",
@@ -743,6 +746,9 @@
         swipe: "Tarjeta Swipe",
         swipeSub: "Añade la foto de tu ID para usar Swipe",
         noSwipe: "Aún no hay Tarjeta Swipe en este Chromebook. Añade la foto de tu ID en Tarjeta Swipe en iPhone y recarga.",
+        swipeGuestEmpty: "Añade una foto de tu ID de estudiante para usar Swipe en este Chromebook.",
+        addSwipePhoto: "Añadir foto de ID",
+        replaceSwipePhoto: "Cambiar foto de ID",
         passesTile: "Pases de maestros",
         passesSub: "Pasillo y Flex se quedan en iPhone",
         news: "Noticias", lunch: "Almuerzo", contacts: "Contactos", classes: "Clases", more: "Más", home: "Inicio",
@@ -1272,14 +1278,20 @@
           loadSwipeCard();
           loadStudentPasses();
           loadStudy();
-        } else if (isGuestStudent() && !hasWebKey()) {
-          ensureGuestStudentProfile().then(() => {
-            if (view === "home") {
-              renderHome();
-              loadStudentPasses();
-            }
-            if (view === "more") renderMore();
-          });
+        } else if (isGuestStudent()) {
+          loadSwipeCard();
+          if (!hasWebKey()) {
+            ensureGuestStudentProfile().then(() => {
+              if (view === "home") {
+                renderHome();
+                loadSwipeCard();
+                loadStudentPasses();
+              }
+              if (view === "more") renderMore();
+            });
+          } else if (canSeeOwnPasses()) {
+            loadStudentPasses();
+          }
         } else if (canSeeOwnPasses()) {
           loadStudentPasses();
         }
@@ -1352,14 +1364,15 @@
               <span class="chev">›</span>
             </div>
           </button>`;
-        cards = `
-          ${isPairedStudent() ? `<button class="card action hero-pass wide" type="button" data-go="swipe">
+        const swipeTile = `<button class="card action hero-pass wide" type="button" data-go="swipe">
             <div class="row-item">
               <img class="tile-swipe" id="swipeTileMark" src="./SwipeCard.png" alt="">
               <div><div class="t">${c.swipe}</div><div class="s" id="swipeTileSub">${c.swipeSub}</div></div>
               <span class="chev">›</span>
             </div>
-          </button>
+          </button>`;
+        cards = `
+          ${isPairedStudent() ? `${swipeTile}
           ${passTile}
           <button class="card action hero-pass wide" type="button" data-go="classes">
             <div class="row-item">
@@ -1367,7 +1380,7 @@
               <div><div class="t">${c.classesTile}</div><div class="s" id="classTileSub">${c.classesSub}</div></div>
               <span class="chev">›</span>
             </div>
-          </button>` : (canSeeOwnPasses() ? passTile : "")}
+          </button>` : (isGuestStudent() ? `${swipeTile}${canSeeOwnPasses() ? passTile : ""}` : "")}
           ${homeLunchWireNews()}`;
       }
       document.getElementById("view-home").innerHTML = `<div class="dash">${cards}</div>`;
@@ -1487,12 +1500,21 @@
       }
     }
 
+    function swipeUploadControls(hasPhoto) {
+      const c = t();
+      return `<input id="swipeFile" class="hidden" type="file" accept="image/*" capture="environment">
+        <button class="primary" type="button" data-action="pickSwipe" style="max-width:480px;">${hasPhoto ? c.replaceSwipePhoto : c.addSwipePhoto}</button>`;
+    }
     function swipePage(url) {
       const c = t();
       const name = (profile && (profile.firstName || profile.displayName)) || "Warrior";
       const grade = profile && profile.grade ? `${c.grade} ${profile.grade}` : "";
+      const canUpload = isGuestStudent();
       if (!url) {
-        return `${backBar()}<div class="card wide"><p class="muted" style="margin:0;">${c.noSwipe}</p></div>`;
+        return `${backBar()}<div class="card wide" style="max-width:480px;">
+          <p class="muted" style="margin:0;">${canUpload ? c.swipeGuestEmpty : c.noSwipe}</p>
+          ${canUpload ? swipeUploadControls(false) : ""}
+        </div>`;
       }
       return `${backBar()}
         <div class="card wide" style="max-width:480px;">
@@ -1501,7 +1523,49 @@
             <div class="t">${escapeHtml(name)}</div>
             <div class="s">${escapeHtml(c.school)}${grade ? " · " + escapeHtml(grade) : ""}</div>
           </div>
+          ${canUpload ? swipeUploadControls(true) : ""}
         </div>`;
+    }
+    function saveGuestSwipe(dataUrl) {
+      if (!profile || !isGuestStudent() || !dataUrl) return;
+      profile.swipeCard = dataUrl;
+      localStorage.setItem("whsWebProfile", JSON.stringify(profile));
+    }
+    function compressSwipePhoto(file) {
+      return new Promise((resolve, reject) => {
+        if (!file) {
+          reject(new Error("no file"));
+          return;
+        }
+        const img = new Image();
+        const blobURL = URL.createObjectURL(file);
+        img.onload = () => {
+          const max = 1400;
+          const scale = Math.min(1, max / Math.max(img.width, img.height));
+          const width = Math.max(1, Math.round(img.width * scale));
+          const height = Math.max(1, Math.round(img.height * scale));
+          const canvas = document.createElement("canvas");
+          canvas.width = width;
+          canvas.height = height;
+          canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+          URL.revokeObjectURL(blobURL);
+          resolve(canvas.toDataURL("image/jpeg", 0.72));
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(blobURL);
+          reject(new Error("image"));
+        };
+        img.src = blobURL;
+      });
+    }
+    async function handleSwipeFile(file) {
+      try {
+        const dataUrl = await compressSwipePhoto(file);
+        saveGuestSwipe(dataUrl);
+        applySwipeTile(dataUrl);
+        if (view === "swipe") loadSwipeCard();
+        if (view === "home") applySwipeTile(dataUrl);
+      } catch (_) {}
     }
 
     const SPANISH_FILES = [
@@ -1958,7 +2022,13 @@
 
     async function loadSwipeCard() {
       const list = document.getElementById("view-swipe");
-      if (currentRole() !== "student" || !profile || !profile.key) return;
+      if (isGuestStudent()) {
+        const url = (profile && profile.swipeCard) || "";
+        applySwipeTile(url);
+        if (list && view === "swipe") list.innerHTML = swipePage(url);
+        return;
+      }
+      if (!isPairedStudent()) return;
       if (list && view === "swipe") list.innerHTML = `${backBar()}<p class="muted">${t().swipe}</p>`;
       applySwipeTile("");
       if (!schoolToken()) {
@@ -2334,6 +2404,10 @@
             done();
           }
         }
+        if (name === "pickSwipe") {
+          const picker = document.getElementById("swipeFile");
+          if (picker) picker.click();
+        }
         if (name === "addHome") showAddHome();
         if (name === "installHome") promptInstallHome();
         if (name === "openPass" || name === "openStudentPass") openPass(action.dataset.passId || "");
@@ -2452,6 +2526,10 @@
         const err = document.getElementById("setupError");
         if (err) err.textContent = "";
         syncGuestRoleFields();
+      }
+      if (event.target.id === "swipeFile" && event.target.files && event.target.files[0]) {
+        handleSwipeFile(event.target.files[0]);
+        event.target.value = "";
       }
     });
     document.body.addEventListener("keydown", (event) => {
