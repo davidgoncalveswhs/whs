@@ -195,9 +195,14 @@
     }
     .quiz-choice:hover { background: #FAFAFC; }
     .ql {
-      background: #ff9b70; color: #2e140a; border-radius: 28px;
-      min-height: min(84vh, 820px); padding: 10px 0 24px; display: flex; flex-direction: column;
+      position: fixed; inset: 0; z-index: 50;
+      background: #ff9b70; color: #2e140a; border-radius: 0;
+      min-height: 100%; min-height: 100dvh; width: 100%;
+      padding: max(10px, env(safe-area-inset-top)) 0 max(24px, env(safe-area-inset-bottom));
+      display: flex; flex-direction: column;
     }
+    body.ql-open { overflow: hidden; }
+    body.ql-open nav.tabs { display: none !important; }
     .ql-head {
       display: flex; align-items: center; justify-content: space-between;
       padding: 6px 16px 10px;
@@ -300,7 +305,7 @@
       }
       nav.tabs { grid-column: 1; grid-row: 1; }
       .app { grid-column: 2; grid-row: 1; min-width: 0; padding: 28px 36px 36px; }
-      .overlay, .sheet { grid-column: 1 / -1; grid-row: 1; }
+      .overlay, .sheet, .ql { grid-column: 1 / -1; grid-row: 1; }
       nav.tabs {
         position: sticky; top: 0; height: 100vh; width: 220px;
         grid-template-columns: 1fr; align-content: start; gap: 6px;
@@ -824,6 +829,7 @@
 
     function show(id) {
       view = id;
+      if (id !== "study") document.body.classList.remove("ql-open");
       closeSheet();
       ["home", "news", "lunch", "contacts", "more", "passes", "mypasses", "swipe", "classes", "class", "study"].forEach((name) => {
         document.getElementById("view-" + name).classList.toggle("hidden", name !== id);
@@ -1240,6 +1246,7 @@
       const c = t();
       const back = `<div class="toolbar"><button class="ghost" type="button" data-action="openClass" data-class-id="${escapeHtml(window._classID || "")}">${c.back}</button></div>`;
       const mode = window._studyMode || {};
+      document.body.classList.toggle("ql-open", mode.type === "learn");
       if (mode.type === "phone") {
         node.innerHTML = `${back}<div class="card wide"><p class="muted" style="margin:0;">${c.openOnPhone}</p></div>`;
         return;
