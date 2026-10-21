@@ -194,6 +194,46 @@
       padding: 14px; margin-top: 8px; font-weight: 600;
     }
     .quiz-choice:hover { background: #FAFAFC; }
+    .ql {
+      background: #ff9b70; color: #2e140a; border-radius: 28px;
+      min-height: min(84vh, 820px); padding: 10px 0 24px; display: flex; flex-direction: column;
+    }
+    .ql-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 6px 16px 10px;
+    }
+    .ql-x {
+      width: 36px; height: 36px; border-radius: 50%; background: rgba(0,0,0,0.10);
+      font-weight: 700;
+    }
+    .ql-count { font-size: 15px; font-weight: 500; font-variant-numeric: tabular-nums; }
+    .ql-track { height: 2px; background: rgba(0,0,0,0.16); }
+    .ql-fill { height: 2px; background: #eb6114; width: 0; }
+    .ql-body { flex: 1; display: flex; flex-direction: column; justify-content: flex-end; }
+    .ql-prompt {
+      font-family: var(--font-display); font-size: 22px; font-weight: 400;
+      padding: 24px 22px; min-height: 160px;
+    }
+    .ql-pop {
+      display: inline-block; color: #fff; font-weight: 600; border-radius: 16px;
+      padding: 12px 22px; margin: 8px 22px 0; box-shadow: 0 6px 16px rgba(0,0,0,0.16);
+    }
+    .ql-pop.ok { background: #2e8c52; }
+    .ql-pop.bad { background: #c72e29; }
+    .ql-choose { font-weight: 600; padding: 0 18px 10px; }
+    .ql-opt {
+      display: block; width: calc(100% - 36px); margin: 0 18px 10px; text-align: left;
+      border: 1px solid rgba(0,0,0,0.28); border-radius: 12px; padding: 16px; background: transparent;
+    }
+    .ql-opt.ok { background: rgba(46,140,82,0.18); border-color: #2e8c52; }
+    .ql-opt.bad { background: rgba(199,46,41,0.16); border-color: #c72e29; }
+    .ql-opt.dim { opacity: 0.45; }
+    .ql-go {
+      display: block; width: calc(100% - 36px); margin: 8px 18px 0; background: #eb6114;
+      color: #fff; border-radius: 12px; padding: 14px; font-weight: 600;
+    }
+    .ql-summary { text-align: center; padding: 48px 24px; }
+    .ql-summary .t { font-size: 22px; }
     .paper-title {
       font-family: var(--font-display);
       font-size: 22px; font-weight: 800; letter-spacing: 0.016em; line-height: 1.1;
@@ -385,6 +425,21 @@
         studyFolder: "Spanish study folder",
         vocabScanner: "Vocabulary Scanner",
         studyGames: "Study games",
+        readySets: "Ready Grammar Sets",
+        readyHint: "Play Ready Grammar Sets. Choose a set, then pick the answer.",
+        presentTense: "Present tense",
+        bootVerbsGame: "Boot verbs",
+        serEstarGame: "Ser vs estar",
+        preteriteGame: "Preterite",
+        aspectGame: "Preterite vs imperfect",
+        articlesSet: "Articles",
+        numbersSet: "Numbers",
+        chooseAnswer: "Choose the answer",
+        learnCorrect: "Correct",
+        learnIncorrect: "Incorrect",
+        continueBtn: "Continue",
+        practiceAgain: "Practice again",
+        aspectDone: "All sentences done",
         pronunciation: "Pronunciation",
         storyReader: "Story Reader",
         englishQuiz: "Definition Quiz",
@@ -478,6 +533,21 @@
         studyFolder: "Carpeta de estudio de español",
         vocabScanner: "Escáner de vocabulario",
         studyGames: "Juegos de estudio",
+        readySets: "Conjuntos de gramática listos",
+        readyHint: "Juega conjuntos de gramática listos. Elige un conjunto y luego la respuesta.",
+        presentTense: "Presente",
+        bootVerbsGame: "Verbos de bota",
+        serEstarGame: "Ser vs estar",
+        preteriteGame: "Pretérito",
+        aspectGame: "Pretérito vs imperfecto",
+        articlesSet: "Artículos",
+        numbersSet: "Números",
+        chooseAnswer: "Elige la respuesta",
+        learnCorrect: "Correcto",
+        learnIncorrect: "Incorrecto",
+        continueBtn: "Continuar",
+        practiceAgain: "Practicar de nuevo",
+        aspectDone: "Oraciones terminadas",
         pronunciation: "Pronunciación",
         storyReader: "Lector de cuentos",
         englishQuiz: "Quiz de definiciones",
@@ -951,6 +1021,66 @@
       { id: "spanishPreteriteSheet", file: "./study/Spanish-Preterite-Study-Sheet.pdf", kind: "pdf" },
       { id: "spanishPreteriteImperfect", file: "./study/Spanish-Preterite-Imperfect-Uses.pdf", kind: "pdf" }
     ];
+    const SPANISH_READY_SETS = [
+      { id: "present", nameKey: "presentTense", kind: "form", pairs: [
+        ["hablar · yo", "hablo"], ["hablar · tú", "hablas"], ["hablar · ella", "habla"], ["hablar · nosotros", "hablamos"],
+        ["comer · yo", "como"], ["comer · tú", "comes"], ["comer · ellos", "comen"],
+        ["vivir · yo", "vivo"], ["vivir · tú", "vives"], ["vivir · nosotros", "vivimos"],
+        ["tener · yo", "tengo"], ["ir · yo", "voy"], ["ser · yo", "soy"], ["estar · yo", "estoy"],
+        ["hacer · yo", "hago"], ["decir · yo", "digo"]
+      ]},
+      { id: "boot", nameKey: "bootVerbsGame", kind: "form", pairs: [
+        ["pensar · yo", "pienso"], ["pensar · tú", "piensas"], ["pensar · nosotros", "pensamos"],
+        ["querer · yo", "quiero"], ["querer · tú", "quieres"], ["querer · nosotros", "queremos"],
+        ["poder · yo", "puedo"], ["poder · ella", "puede"], ["poder · nosotros", "podemos"],
+        ["dormir · yo", "duermo"], ["dormir · nosotros", "dormimos"],
+        ["pedir · yo", "pido"], ["pedir · tú", "pides"],
+        ["jugar · yo", "juego"], ["jugar · nosotros", "jugamos"], ["empezar · yo", "empiezo"]
+      ]},
+      { id: "serestar", nameKey: "serEstarGame", kind: "form", pairs: [
+        ["Yo ___ de México.", "soy"], ["Ella ___ doctora.", "es"], ["Nosotros ___ estudiantes.", "somos"],
+        ["Tú ___ inteligente.", "eres"], ["Ellos ___ altos.", "son"], ["El libro ___ de Ana.", "es"],
+        ["Yo ___ cansado.", "estoy"], ["Ella ___ en casa.", "está"], ["Nosotros ___ enfermos.", "estamos"],
+        ["Tú ___ feliz hoy.", "estás"], ["La fiesta ___ en el parque.", "está"], ["¿Dónde ___ el baño?", "está"],
+        ["Las ventanas ___ abiertas.", "están"], ["Ustedes ___ listos.", "están"]
+      ]},
+      { id: "preterite", nameKey: "preteriteGame", kind: "form", pairs: [
+        ["hablar · yo · pretérito", "hablé"], ["hablar · tú · pretérito", "hablaste"], ["hablar · él · pretérito", "habló"],
+        ["comer · yo · pretérito", "comí"], ["comer · ella · pretérito", "comió"],
+        ["vivir · yo · pretérito", "viví"], ["vivir · ellos · pretérito", "vivieron"],
+        ["ir · yo · pretérito", "fui"], ["ser · ella · pretérito", "fue"],
+        ["tener · yo · pretérito", "tuve"], ["estar · nosotros · pretérito", "estuvimos"], ["hacer · yo · pretérito", "hice"]
+      ]},
+      { id: "aspect", nameKey: "aspectGame", kind: "aspect", pairs: [
+        ["Ayer yo _____ al cine con mis amigos.", "fui", "iba"],
+        ["Cuando era niño, yo _____ al parque todos los días.", "iba", "fui"],
+        ["Anoche nosotros _____ una película.", "vimos", "veíamos"],
+        ["Los viernes nosotros siempre _____ películas.", "veíamos", "vimos"],
+        ["De repente, ella _____ la puerta.", "abrió", "abría"],
+        ["Mientras yo _____, mi hermano leía.", "estudiaba", "estudié"],
+        ["El año pasado ellos _____ a México.", "fueron", "iban"],
+        ["Cada verano ellos _____ a la playa.", "iban", "fueron"],
+        ["Una vez yo _____ un perro negro.", "tuve", "tenía"],
+        ["De niña, ella _____ un perro.", "tenía", "tuvo"],
+        ["Anoche tú _____ la tarea.", "hiciste", "hacías"],
+        ["Todos los días tú _____ la tarea después de clase.", "hacías", "hiciste"],
+        ["Ayer yo _____ con María por una hora.", "hablé", "hablaba"],
+        ["Mientras hablábamos, el teléfono _____.", "sonó", "sonaba"],
+        ["Cuando yo era joven, _____ en León.", "vivía", "viví"],
+        ["El lunes pasado nosotros _____ el examen.", "dimos", "dábamos"],
+        ["Siempre nosotros _____ exámenes los lunes.", "dábamos", "dimos"],
+        ["Ayer, de repente, _____ a llover.", "empezó", "empezaba"]
+      ]},
+      { id: "articles", nameKey: "articlesSet", kind: "form", pairs: [
+        ["libro", "el"], ["casa", "la"], ["lápiz", "el"], ["mesa", "la"], ["chico", "el"], ["chica", "la"],
+        ["libros", "los"], ["casas", "las"], ["problema", "el"], ["mano", "la"], ["día", "el"], ["agua", "el"]
+      ]},
+      { id: "numbers", nameKey: "numbersSet", kind: "form", pairs: [
+        ["11", "once"], ["12", "doce"], ["13", "trece"], ["15", "quince"], ["16", "dieciséis"],
+        ["20", "veinte"], ["21", "veintiuno"], ["22", "veintidós"], ["30", "treinta"], ["40", "cuarenta"],
+        ["100", "cien"], ["500", "quinientos"]
+      ]}
+    ];
     const FILE_TITLES = {
       en: {
         spanishSerEstar: "Ser vs Estar",
@@ -1004,7 +1134,7 @@
       if (cat === "spanish") {
         return [
           { id: "vocabularyScanner", title: c.vocabScanner, kind: "spanishVocab" },
-          { id: "spanishStudyGames", title: c.studyGames, kind: "spanishVocab" },
+          { id: "spanishStudyGames", title: c.readySets, kind: "readySets" },
           { id: "spanishStudyFolder", title: c.studyFolder, kind: "folder" },
           { id: "spanishPronunciation", title: c.pronunciation, kind: "phone" },
           { id: "spanishStoryReader", title: c.storyReader, kind: "phone" }
@@ -1074,7 +1204,7 @@
         <div class="dash">${resources.length ? resources.map((resource) => `
           <button class="card action" type="button" data-action="openResource" data-resource="${escapeHtml(resource.id)}" data-class-id="${escapeHtml(course.id)}">
             <div class="t">${escapeHtml(resource.title)}</div>
-            <div class="s">${resource.kind === "phone" ? c.openOnPhone : c.classesBody}</div>
+            <div class="s">${resource.kind === "phone" ? c.openOnPhone : resource.kind === "readySets" ? c.readyHint : c.classesBody}</div>
           </button>`).join("") : `<div class="card wide"><p class="muted" style="margin:0;">${c.noResources}</p></div>`}</div>`;
     }
 
@@ -1127,6 +1257,18 @@
           ? `<img class="id-photo" alt="" src="${escapeHtml(mode.file)}">`
           : `<iframe class="study-doc" title="${escapeHtml(mode.title || "")}" src="${escapeHtml(mode.file)}"></iframe>`;
         node.innerHTML = `${back}<div class="card wide"><div class="t">${escapeHtml(mode.title || "")}</div>${body}</div>`;
+        return;
+      }
+      if (mode.type === "readySets") {
+        node.innerHTML = `${back}<p class="muted">${c.readyHint}</p><div class="dash">` + SPANISH_READY_SETS.map((set) => `
+          <button class="card action" type="button" data-action="openReadySet" data-set="${escapeHtml(set.id)}">
+            <div class="t">${escapeHtml(c[set.nameKey] || set.id)}</div>
+            <div class="s">${set.pairs.length}</div>
+          </button>`).join("") + `</div>`;
+        return;
+      }
+      if (mode.type === "learn") {
+        node.innerHTML = renderLearnQuiz();
         return;
       }
       if (mode.type === "lists") {
@@ -1182,6 +1324,93 @@
         <p class="muted" id="quizNote"></p>`;
     }
 
+    function startLearnQuiz(setId) {
+      const set = SPANISH_READY_SETS.find((item) => item.id === setId);
+      if (!set) return;
+      const deck = set.pairs.map((pair) => ({
+        prompt: pair[0],
+        answer: pair[1],
+        alt: pair[2] || ""
+      })).sort(() => Math.random() - 0.5);
+      window._ql = {
+        setId,
+        kind: set.kind,
+        deck,
+        index: 0,
+        correct: 0,
+        selected: "",
+        revealed: false,
+        finished: !deck.length,
+        options: []
+      };
+      loadLearnOptions();
+      window._studyMode = { type: "learn" };
+      show("study");
+      renderStudy();
+    }
+
+    function loadLearnOptions() {
+      const ql = window._ql;
+      if (!ql || !ql.deck[ql.index]) {
+        if (ql) ql.options = [];
+        return;
+      }
+      const item = ql.deck[ql.index];
+      if (ql.kind === "aspect" && item.alt) {
+        ql.options = [item.answer, item.alt].sort(() => Math.random() - 0.5);
+        return;
+      }
+      const pool = ql.deck.map((pair) => pair.answer).filter((answer) => answer !== item.answer);
+      const options = [item.answer];
+      while (options.length < Math.min(4, pool.length + 1) && pool.length) {
+        const next = pool.splice(Math.floor(Math.random() * pool.length), 1)[0];
+        if (next && !options.includes(next)) options.push(next);
+      }
+      ql.options = options.sort(() => Math.random() - 0.5);
+    }
+
+    function renderLearnQuiz() {
+      const c = t();
+      const ql = window._ql;
+      if (!ql) return `<div class="card wide"><p class="muted">${c.noResources}</p></div>`;
+      const total = ql.deck.length;
+      const progress = ql.finished ? 100 : ((ql.index + (ql.revealed ? 1 : 0)) / Math.max(total, 1)) * 100;
+      if (ql.finished) {
+        return `<div class="ql">
+          <div class="ql-head"><button class="ql-x" type="button" data-action="qlClose">${"×"}</button><span></span></div>
+          <div class="ql-track"><div class="ql-fill" style="width:100%"></div></div>
+          <div class="ql-summary">
+            <div class="t">${c.aspectDone}</div>
+            <p class="muted">${c.correct}: ${ql.correct} / ${total}</p>
+            <button class="ql-go" type="button" data-action="qlAgain">${c.practiceAgain}</button>
+          </div>
+        </div>`;
+      }
+      const item = ql.deck[ql.index];
+      const ok = ql.revealed && ql.selected === item.answer;
+      return `<div class="ql">
+        <div class="ql-head">
+          <button class="ql-x" type="button" data-action="qlClose">${"×"}</button>
+          <div class="ql-count">${Math.min(ql.index + 1, total)} / ${total}</div>
+          <span style="width:36px"></span>
+        </div>
+        <div class="ql-track"><div class="ql-fill" style="width:${progress}%"></div></div>
+        <div class="ql-body">
+          ${ql.revealed ? `<div class="ql-pop ${ok ? "ok" : "bad"}">${ok ? c.learnCorrect : c.learnIncorrect}</div>` : ""}
+          <div class="ql-prompt">${escapeHtml(item.prompt)}</div>
+          <div class="ql-choose">${c.chooseAnswer}</div>
+          ${ql.options.map((choice) => {
+            let cls = "ql-opt";
+            if (ql.revealed && choice === item.answer) cls += " ok";
+            else if (ql.revealed && choice === ql.selected) cls += " bad";
+            else if (ql.revealed) cls += " dim";
+            return `<button class="${cls}" type="button" data-action="qlPick" data-pick="${escapeHtml(choice)}">${escapeHtml(choice)}</button>`;
+          }).join("")}
+          ${ql.revealed ? `<button class="ql-go" type="button" data-action="qlContinue">${ql.index + 1 >= total ? c.close : c.continueBtn}</button>` : ""}
+        </div>
+      </div>`;
+    }
+
     function startQuiz(pairs) {
       const shuffled = pairs.slice().sort(() => Math.random() - 0.5).slice(0, 20);
       const quiz = { order: shuffled, index: 0, correct: 0, choices: shuffled.map((item) => {
@@ -1205,6 +1434,8 @@
         window._studyMode = { type: "phone" };
       } else if (resource.kind === "folder") {
         window._studyMode = { type: "folder" };
+      } else if (resource.kind === "readySets") {
+        window._studyMode = { type: "readySets" };
       } else if (resource.kind === "englishQuiz") {
         window._studyMode = { type: "lists", kind: "englishQuiz" };
       } else if (resource.kind === "englishVocab") {
@@ -1518,6 +1749,34 @@
           show("class");
         }
         if (name === "openResource") openResource(action.dataset.classId || "", action.dataset.resource || "");
+        if (name === "openReadySet") startLearnQuiz(action.dataset.set || "");
+        if (name === "qlClose") {
+          window._studyMode = { type: "readySets" };
+          renderStudy();
+        }
+        if (name === "qlPick") {
+          const ql = window._ql;
+          if (ql && !ql.revealed && !ql.finished) {
+            ql.selected = action.dataset.pick || "";
+            ql.revealed = true;
+            if (ql.selected === (ql.deck[ql.index] && ql.deck[ql.index].answer)) ql.correct += 1;
+            renderStudy();
+          }
+        }
+        if (name === "qlContinue") {
+          const ql = window._ql;
+          if (ql) {
+            if (ql.index + 1 >= ql.deck.length) ql.finished = true;
+            else {
+              ql.index += 1;
+              ql.selected = "";
+              ql.revealed = false;
+              loadLearnOptions();
+            }
+            renderStudy();
+          }
+        }
+        if (name === "qlAgain") startLearnQuiz((window._ql && window._ql.setId) || "");
         if (name === "openList") {
           window._studyPairs = pairsFromList(action.dataset.kind || "spanish", action.dataset.folder || "", action.dataset.list || "");
           window._cardIndex = 0;
