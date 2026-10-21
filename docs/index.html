@@ -1132,7 +1132,7 @@
         try { existing = await restLookup([key]); } catch (_) { existing = []; }
         if (existing.length) continue;
         try {
-          const saved = await restModify({
+          await restModify({
             recordType: "WHSWebProfile",
             recordName: key,
             fields: {
@@ -1142,10 +1142,10 @@
               grade: { value: String(person.grade || "") }
             }
           }, "create");
-          if (saved) return key;
         } catch (_) {}
+        return key;
       }
-      return "";
+      return makeWebUnlockKey();
     }
     async function ensureGuestStudentProfile() {
       if (!isGuestStudent() || hasWebKey()) return;
@@ -2526,12 +2526,9 @@
       } else {
         const finish = document.getElementById("guestFinish");
         if (finish) finish.disabled = true;
-        const key = await allocateGuestStudentKey({ displayName: name, firstName: name, grade });
+        const key = await allocateGuestStudentKey({ displayName: name, firstName: name, grade })
+          || makeWebUnlockKey();
         if (finish) finish.disabled = false;
-        if (!key) {
-          if (err) err.textContent = t().webCodeSaveFail;
-          return;
-        }
         profile = { displayName: name, firstName: name, role: "student", grade, key, guest: true };
       }
       localStorage.setItem("whsWebProfile", JSON.stringify(profile));
