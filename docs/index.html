@@ -14,10 +14,11 @@
       --orange: #E87722;
       --ink: #000;
       --muted: #8E8E93;
-      --line: rgba(0,0,0,0.06);
+      --line: rgba(0,0,0,0.08);
       --paper: #FFFFFF;
       --bg: #F2F2F7;
-      --tab: rgba(255,255,255,0.92);
+      --tab: rgba(255,255,255,0.94);
+      --soft: #FFF1E6;
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; min-height: 100%; }
@@ -25,17 +26,20 @@
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
       background: var(--bg);
       color: var(--ink);
-      padding-bottom: 88px;
     }
-    .wrap { max-width: 430px; margin: 0 auto; padding: 8px 20px 28px; }
+    .app { min-height: 100vh; padding: 12px 20px 96px; }
+    .wrap { width: min(1180px, 100%); margin: 0 auto; }
     .top {
-      display: flex; justify-content: flex-end; align-items: center;
-      min-height: 52px; margin-bottom: 4px;
+      display: flex; justify-content: space-between; align-items: flex-start; gap: 16px;
+      margin-bottom: 18px;
+    }
+    .brand {
+      color: var(--orange); font-size: 11px; font-weight: 800; letter-spacing: .08em;
     }
     .pill {
       display: flex; align-items: center; gap: 2px;
       background: white; border-radius: 999px; padding: 6px 8px 6px 10px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.06);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.06); flex: none;
     }
     .pill button {
       width: 34px; height: 34px; border: 0; background: transparent; border-radius: 50%;
@@ -46,17 +50,18 @@
       color: white; display: grid; place-items: center; font-weight: 700; font-size: 13px;
     }
     h1 {
-      font-size: 34px; letter-spacing: -0.04em; margin: 0 0 6px;
+      font-size: clamp(32px, 4vw, 44px); letter-spacing: -0.04em; margin: 0 0 6px;
       font-weight: 800; line-height: 1.05;
     }
-    .date { color: var(--muted); font-size: 16px; font-weight: 500; margin-bottom: 18px; }
+    .date { color: var(--muted); font-size: 16px; font-weight: 500; }
     .card {
       background: var(--paper);
       border-radius: 28px;
-      padding: 16px;
-      margin: 0 0 14px;
+      padding: 18px;
       box-shadow: 0 1px 0 rgba(0,0,0,0.02);
     }
+    .action { cursor: pointer; text-align: left; width: 100%; border: 0; font: inherit; color: inherit; }
+    .action:hover { background: #FAFAFC; }
     .card-title {
       display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px;
     }
@@ -64,35 +69,42 @@
     .card-title .link { color: var(--orange); font-size: 15px; font-weight: 600; }
     .row-item { display: flex; gap: 12px; align-items: center; }
     .plate {
-      width: 30px; height: 30px; border-radius: 8px; background: #FFF1E6;
+      width: 34px; height: 34px; border-radius: 10px; background: var(--soft);
       color: var(--orange); display: grid; place-items: center; font-size: 16px; flex: none;
     }
-    .row-item .t { font-size: 16px; font-weight: 500; }
-    .row-item .s { font-size: 13px; color: var(--muted); }
+    .t { font-size: 16px; font-weight: 600; }
+    .s { font-size: 13px; color: var(--muted); }
+    .wmark {
+      width: 34px; height: 34px; border-radius: 10px; background: var(--orange);
+      color: white; font-weight: 800; display: grid; place-items: center; flex: none;
+    }
+    .lock, .chev { margin-left: auto; color: var(--muted); }
+    .home-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+    }
     .pair {
       display: grid; grid-template-columns: 1fr 1px 1fr;
-      background: white; border-radius: 28px; margin-bottom: 14px; min-height: 88px;
-      align-items: center;
+      background: white; border-radius: 28px; min-height: 96px;
+      align-items: stretch;
     }
-    .pair .mini { padding: 16px; display: flex; align-items: center; gap: 10px; }
-    .pair .split { width: 1px; height: 48px; background: rgba(0,0,0,0.12); justify-self: center; }
-    .lock { margin-left: auto; color: var(--muted); font-size: 18px; }
-    .chev { margin-left: auto; color: var(--muted); }
-    .wmark {
-      width: 28px; height: 28px; border-radius: 8px; background: var(--orange);
-      color: white; font-weight: 800; display: grid; place-items: center;
+    .pair .mini {
+      padding: 16px; display: flex; align-items: center; gap: 10px;
+      width: 100%; background: transparent;
     }
-    .section { font-size: 22px; font-weight: 800; margin: 22px 0 12px; }
+    .pair .mini:hover { background: #FAFAFC; }
+    .pair .split { width: 1px; background: rgba(0,0,0,0.12); align-self: center; height: 48px; }
+    .section { font-size: 22px; font-weight: 800; margin: 8px 0 0; grid-column: 1 / -1; }
     .shortcuts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .shortcut {
-      background: white; border-radius: 28px; padding: 16px; min-height: 92px;
+      background: white; border-radius: 28px; padding: 16px; min-height: 104px;
       border: 0; text-align: left; font: inherit; cursor: pointer;
+      display: flex; flex-direction: column; justify-content: space-between;
     }
-    .shortcut .plate { margin-bottom: 10px; }
-    button, .btn {
-      appearance: none; border: 0; background: none; font: inherit; color: inherit; cursor: pointer;
-    }
-    input, select {
+    .shortcut:hover { background: #FAFAFC; }
+    button, .btn { appearance: none; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
+    input, select, textarea {
       width: 100%; padding: 14px; border-radius: 16px; border: 1px solid #E5E5EA;
       font: inherit; background: #F2F2F7;
     }
@@ -105,36 +117,102 @@
     }
     .muted { color: var(--muted); line-height: 1.45; font-size: 15px; }
     .error { color: #B42318; }
+    .ok { color: #1F7A3A; }
     .pass-kind { font-size: 18px; font-weight: 800; letter-spacing: 0.04em; margin: 0 0 10px; }
-    .sig, .news-img { max-width: 100%; max-height: 160px; margin-top: 8px; border-radius: 12px; }
-    .lunch { width: 100%; min-height: 70vh; border: 0; border-radius: 24px; background: white; }
+    .sig, .news-img { max-width: 100%; max-height: 220px; margin-top: 8px; border-radius: 12px; }
+    .lunch { width: 100%; min-height: 72vh; border: 0; border-radius: 24px; background: white; }
     .search { margin-bottom: 12px; }
     nav.tabs {
-      position: fixed; left: 0; right: 0; bottom: 0;
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 8;
       background: var(--tab); backdrop-filter: blur(18px);
       border-top: 1px solid var(--line);
       display: grid; grid-template-columns: repeat(4, 1fr);
       padding: 8px 10px 14px;
     }
-    nav.tabs button { color: #8E8E93; font-size: 10px; font-weight: 600; }
-    nav.tabs button.on { color: var(--orange); }
+    nav.tabs button { color: #8E8E93; font-size: 10px; font-weight: 600; padding: 6px; border-radius: 14px; }
+    nav.tabs button.on { color: var(--orange); background: var(--soft); }
     nav.tabs .ico { font-size: 20px; display: block; margin-bottom: 2px; }
     .hidden { display: none !important; }
-    .overlay {
-      position: fixed; inset: 0; background: var(--bg); z-index: 20; overflow: auto;
+    .overlay, .sheet {
+      position: fixed; inset: 0; background: var(--bg); z-index: 30; overflow: auto;
     }
+    .gate-box { width: min(520px, calc(100% - 40px)); margin: 72px auto; }
+    .sheet { background: rgba(0,0,0,0.28); display: grid; place-items: center; padding: 24px; }
+    .sheet-card { width: min(560px, 100%); background: white; border-radius: 28px; padding: 22px; }
+    .id-card {
+      background: linear-gradient(160deg, #111 0%, #2A2A2A 100%);
+      color: white; border-radius: 22px; padding: 22px; margin: 12px 0 16px;
+    }
+    .id-card .school { color: var(--orange); font-size: 11px; font-weight: 800; letter-spacing: .08em; }
     .lang { display: flex; gap: 6px; }
-    .lang button { padding: 6px 10px; border-radius: 999px; background: white; font-size: 13px; font-weight: 700; }
-    .staff { padding: 10px 0; border-bottom: 1px solid var(--line); }
+    .lang button { padding: 6px 10px; border-radius: 999px; background: #F2F2F7; font-size: 13px; font-weight: 700; }
+    .lang button.on { background: var(--orange); color: white; }
+    .staff {
+      display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: center;
+      padding: 12px 0; border-bottom: 1px solid var(--line); width: 100%;
+      background: transparent; text-align: left;
+    }
     .staff:last-child { border-bottom: 0; }
+    .staff:hover { color: var(--orange); }
     details.admin { background: white; border-radius: 28px; padding: 16px; }
     details.admin summary { cursor: pointer; font-weight: 700; color: var(--muted); font-size: 14px; }
+    .toolbar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+    .news-grid, .pass-grid, .people-grid {
+      display: grid; gap: 14px; grid-template-columns: 1fr;
+    }
+    .page-head { margin-bottom: 16px; }
+    @media (min-width: 820px) {
+      body { display: grid; grid-template-columns: 220px 1fr; }
+      .app { padding: 28px 36px 36px; }
+      nav.tabs {
+        position: sticky; top: 0; height: 100vh; width: 220px;
+        grid-template-columns: 1fr; align-content: start; gap: 6px;
+        border-top: 0; border-right: 1px solid var(--line);
+        padding: 28px 14px;
+      }
+      nav.tabs button { font-size: 14px; text-align: left; padding: 12px 14px; display: flex; gap: 10px; align-items: center; }
+      nav.tabs .ico { display: inline; font-size: 18px; margin: 0; }
+      .home-grid { grid-template-columns: 1.15fr .85fr; }
+      .home-grid .wide { grid-column: 1 / -1; }
+      .shortcuts { grid-template-columns: repeat(4, 1fr); }
+      .news-grid, .pass-grid { grid-template-columns: repeat(2, 1fr); }
+      .people-grid { grid-template-columns: repeat(2, 1fr); }
+      .people-grid .card { padding: 8px 16px; }
+    }
+    @media (min-width: 1400px) {
+      .news-grid { grid-template-columns: repeat(3, 1fr); }
+    }
   </style>
 </head>
 <body>
+  <nav class="tabs" id="tabs"></nav>
+  <div class="app">
+    <div class="wrap">
+      <div class="top">
+        <div>
+          <div class="brand">WATERTOWN HIGH SCHOOL</div>
+          <h1 id="hello"></h1>
+          <div class="date" id="dateLine"></div>
+        </div>
+        <div class="pill">
+          <button type="button" id="bell" aria-label="News">🔔</button>
+          <button type="button" id="me" aria-label="More"><span class="avatar" id="avatar">W</span></button>
+        </div>
+      </div>
+
+      <section id="view-home"></section>
+      <section id="view-news" class="hidden"></section>
+      <section id="view-lunch" class="hidden"></section>
+      <section id="view-contacts" class="hidden"></section>
+      <section id="view-classes" class="hidden"></section>
+      <section id="view-more" class="hidden"></section>
+      <section id="view-passes" class="hidden"></section>
+    </div>
+  </div>
+
   <div class="overlay" id="gate">
-    <div class="wrap" style="padding-top: 48px;">
-      <div class="brand" style="color: var(--orange); font-size: 12px; font-weight: 800; letter-spacing: .08em;">WATERTOWN HIGH SCHOOL</div>
+    <div class="gate-box">
+      <div class="brand">WATERTOWN HIGH SCHOOL</div>
       <h1 id="gateTitle">Welcome</h1>
       <p class="muted" id="gateBody"></p>
       <div class="card">
@@ -147,33 +225,15 @@
       <p class="muted" id="gateHint"></p>
     </div>
   </div>
-
-  <div class="wrap">
-    <div class="top">
-      <div class="pill">
-        <button type="button" id="bell" aria-label="News">🔔</button>
-        <button type="button" id="me" aria-label="More"><span class="avatar" id="avatar">W</span></button>
-      </div>
-    </div>
-    <h1 id="hello"></h1>
-    <div class="date" id="dateLine"></div>
-
-    <section id="view-home"></section>
-    <section id="view-news" class="hidden"></section>
-    <section id="view-lunch" class="hidden"></section>
-    <section id="view-contacts" class="hidden"></section>
-    <section id="view-classes" class="hidden"></section>
-    <section id="view-more" class="hidden"></section>
-    <section id="view-passes" class="hidden"></section>
+  <div class="sheet hidden" id="sheet">
+    <div class="sheet-card" id="sheetCard"></div>
   </div>
-  <nav class="tabs" id="tabs"></nav>
 
   <script src="https://cdn.apple-cloudkit.com/ck/2/cloudkit.js"></script>
   <script>
     const CONTAINER = "iCloud.com.davidgoncalvespersonalteam.UntitledProject";
     const PASS_TYPE = "WHSTeacherPass";
     const NEWS_TYPE = "WHSAnnouncement";
-    const PROFILE_TYPE = "WHSWebProfile";
     const MANIFEST = "whs-teacher-pass-manifest";
     const LUNCH = "https://drive.google.com/file/d/1FcyUw6LwftfJC6cDnOQrlXgBXC4UjB57/preview";
     const copy = {
@@ -186,31 +246,52 @@
         gateHint: "Find it in the iPhone app: Account → Chromebook.",
         gateFail: "Could not find that code. Check the letters, then try again. The school CloudKit token in More → Administrator is needed the first time.",
         swipe: "Swipe Card",
-        swipeSub: "Opens on iPhone",
+        swipeSub: "Show your Chromebook ID",
         passesTile: "Teacher Passes",
-        passesSub: "Accept and send on iPhone",
+        passesSub: "Hallway and Flex stay on iPhone",
         news: "News", lunch: "Lunch", contacts: "Contacts", classes: "Classes", more: "More", home: "Home",
         calendar: "Calendar", agenda: "Agenda",
-        calendarEmpty: "School dates stay on iPhone. News is on this site.",
+        calendarEmpty: "Open school news for this week.",
         lunchSub: "This week",
-        ask: "Ask WHS", aide: "Warrior's Aide", iphoneOnly: "iPhone",
+        ask: "Ask WHS", aide: "Warrior's Aide",
         shortcuts: "Shortcuts",
-        classesBody: "Classes, quizzes, and study games stay on the WHS iPhone app.",
-        moreBody: "On this site: news, lunch, and the staff directory. On iPhone: student ID, classes, quizzes, and sending hallway passes.",
+        classesBody: "Quizzes and study games stay on iPhone. Teachers you can email are here.",
+        moreBody: "This Chromebook site can show news, lunch, staff, and your ID card. Sending hallway passes, quizzes, and Ask WHS chat stay on iPhone.",
         signOut: "Remove this Chromebook profile",
         admin: "Administrator",
-        adminHint: "CloudKit API token. Students can ignore this. Passes stay here so they are not on Home.",
+        adminHint: "CloudKit API token. Students can ignore this. The pass log stays in this menu.",
         token: "CloudKit API token",
         env: "Environment",
         saveToken: "Save token",
+        tokenSaved: "Token saved on this Chromebook.",
         openPasses: "Open pass log",
         refresh: "Refresh",
+        back: "Back",
+        close: "Close",
         emptyPasses: "No passes yet.",
         hallway: "HALLWAY PASS", flex: "FLEX PASS",
-        student: "STUDENT NAME", destination: "DESTINATION", dates: "DATE(S)", teacher: "TEACHER",
         search: "Name, role, or email",
         newsEmpty: "No news yet.",
-        language: "Language"
+        newsNeedToken: "News needs the school CloudKit token. An administrator can paste it in More.",
+        language: "Language",
+        email: "Email",
+        openLunch: "Open lunch menu",
+        openNews: "Open news",
+        openContacts: "Open staff directory",
+        idTitle: "Swipe Card",
+        idHint: "Cafeteria scanning still uses the iPhone. This card shows your name on Chromebook.",
+        school: "Watertown High School",
+        role: "Role",
+        grade: "Grade",
+        guest: "Guest",
+        passesHint: "Teachers send Hallway and Flex passes on iPhone. Students accept them there. The administrator log is in More.",
+        askTitle: "Ask WHS",
+        askPlaceholder: "Lunch, news, a teacher name…",
+        askGo: "Ask",
+        askEmpty: "Try lunch, news, a teacher name, or attendance.",
+        aideTitle: "Warrior's Aide",
+        aideBody: "Need a staff email, this week’s lunch, or school news? Use the buttons below. Attendance is whsattendance@watertownps.org.",
+        attendance: "Email attendance"
       },
       es: {
         welcome: "Bienvenido",
@@ -221,31 +302,52 @@
         gateHint: "Está en la app de iPhone: Cuenta → Chromebook.",
         gateFail: "No se encontró ese código. Revisa las letras. El token de CloudKit en Más → Administrador hace falta la primera vez.",
         swipe: "Tarjeta Swipe",
-        swipeSub: "Se abre en iPhone",
+        swipeSub: "Muestra tu ID de Chromebook",
         passesTile: "Pases de maestros",
-        passesSub: "Acepta y envía en iPhone",
+        passesSub: "Pasillo y Flex se quedan en iPhone",
         news: "Noticias", lunch: "Almuerzo", contacts: "Contactos", classes: "Clases", more: "Más", home: "Inicio",
         calendar: "Calendario", agenda: "Agenda",
-        calendarEmpty: "Las fechas escolares se quedan en iPhone. Las noticias están en este sitio.",
+        calendarEmpty: "Abre las noticias de la escuela de esta semana.",
         lunchSub: "Esta semana",
-        ask: "Ask WHS", aide: "Warrior's Aide", iphoneOnly: "iPhone",
+        ask: "Ask WHS", aide: "Warrior's Aide",
         shortcuts: "Atajos",
-        classesBody: "Las clases, quizzes y juegos se quedan en la app WHS de iPhone.",
-        moreBody: "En este sitio: noticias, almuerzo y el directorio. En iPhone: ID, clases, quizzes y enviar pases.",
+        classesBody: "Los quizzes y juegos se quedan en iPhone. Aquí están los maestros para escribirles.",
+        moreBody: "Este sitio muestra noticias, almuerzo, personal y tu ID. Enviar pases, quizzes y el chat se quedan en iPhone.",
         signOut: "Quitar este perfil de Chromebook",
         admin: "Administrador",
-        adminHint: "Token de API de CloudKit. Los estudiantes pueden ignorar esto. Los pases están aquí, no en Inicio.",
+        adminHint: "Token de API de CloudKit. Los estudiantes pueden ignorar esto. El registro de pases está en este menú.",
         token: "Token de API de CloudKit",
         env: "Entorno",
         saveToken: "Guardar token",
+        tokenSaved: "Token guardado en este Chromebook.",
         openPasses: "Abrir registro de pases",
         refresh: "Actualizar",
+        back: "Atrás",
+        close: "Cerrar",
         emptyPasses: "Aún no hay pases.",
         hallway: "PASE DE PASILLO", flex: "PASE FLEX",
-        student: "NOMBRE DEL ESTUDIANTE", destination: "DESTINO", dates: "FECHA(S)", teacher: "MAESTRO",
         search: "Nombre, rol o correo",
         newsEmpty: "Aún no hay noticias.",
-        language: "Idioma"
+        newsNeedToken: "Las noticias necesitan el token de CloudKit. Un administrador puede pegarlo en Más.",
+        language: "Idioma",
+        email: "Correo",
+        openLunch: "Abrir menú de almuerzo",
+        openNews: "Abrir noticias",
+        openContacts: "Abrir directorio",
+        idTitle: "Tarjeta Swipe",
+        idHint: "El escaneo de cafetería sigue en iPhone. Esta tarjeta muestra tu nombre en Chromebook.",
+        school: "Watertown High School",
+        role: "Rol",
+        grade: "Grado",
+        guest: "Invitado",
+        passesHint: "Los maestros envían pases en iPhone. Los estudiantes los aceptan allí. El registro de administrador está en Más.",
+        askTitle: "Ask WHS",
+        askPlaceholder: "Almuerzo, noticias, un maestro…",
+        askGo: "Preguntar",
+        askEmpty: "Prueba almuerzo, noticias, un maestro o asistencia.",
+        aideTitle: "Warrior's Aide",
+        aideBody: "¿Correo del personal, almuerzo o noticias? Usa los botones. Asistencia: whsattendance@watertownps.org.",
+        attendance: "Escribir a asistencia"
       }
     };
 
@@ -254,6 +356,7 @@
     let configured = false;
     let staff = [];
     let profile = JSON.parse(localStorage.getItem("whsWebProfile") || "null");
+    let lunchReady = false;
     function t() { return copy[lang]; }
     function schoolToken() {
       return localStorage.getItem("whsAdminToken") || window.WHS_SCHOOL_TOKEN || "";
@@ -283,6 +386,14 @@
       const parts = String(name || "W").trim().split(/\s+/);
       return ((parts[0] || "W")[0] + (parts[1] ? parts[1][0] : "")).toUpperCase();
     }
+    function roleLabel() {
+      const role = (profile && profile.role) || "guest";
+      if (role === "administrator") return t().admin;
+      if (role === "teacher") return lang === "es" ? "Maestro" : "Teacher";
+      if (role === "parent") return lang === "es" ? "Padre" : "Parent";
+      if (role === "student") return lang === "es" ? "Estudiante" : "Student";
+      return t().guest;
+    }
     function unwrapField(field) {
       if (field == null) return "";
       if (typeof field !== "object") return String(field);
@@ -311,6 +422,14 @@
     }
     function normalizeCode(value) {
       return String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    }
+    function closeSheet() {
+      sheet.classList.add("hidden");
+      sheetCard.innerHTML = "";
+    }
+    function openSheet(html) {
+      sheetCard.innerHTML = html;
+      sheet.classList.remove("hidden");
     }
 
     async function ensureCloud() {
@@ -350,6 +469,7 @@
 
     function showGate() {
       gate.classList.toggle("hidden", !!profile);
+      gate.toggleAttribute("hidden", !!profile);
       applyChrome();
     }
 
@@ -373,84 +493,125 @@
         ["contacts", "👤", c.contacts],
         ["more", "•••", c.more]
       ].map(([id, ico, label]) => `<button type="button" data-view="${id}" class="${view === id ? "on" : ""}"><span class="ico">${ico}</span>${label}</button>`).join("");
-      renderAll();
     }
 
     function show(id) {
       view = id;
+      closeSheet();
       ["home", "news", "lunch", "contacts", "classes", "more", "passes"].forEach((name) => {
         document.getElementById("view-" + name).classList.toggle("hidden", name !== id);
       });
       applyChrome();
+      if (id === "home") renderHome();
       if (id === "news") loadNews();
+      if (id === "lunch") renderLunch();
+      if (id === "contacts") renderStaff(document.getElementById("staffQuery") ? document.getElementById("staffQuery").value : "");
+      if (id === "classes") renderClasses();
+      if (id === "more") renderMore();
       if (id === "passes") loadPasses();
     }
 
-    function renderAll() {
+    function backBar() {
+      return `<div class="toolbar"><button class="ghost" type="button" data-view="home">${t().back}</button></div>`;
+    }
+
+    function renderHome() {
       const c = t();
       const swipeName = profile ? profile.displayName : "Warrior";
-      const swipeGrade = profile && profile.grade ? "Grade " + String(profile.grade) : "";
+      const swipeGrade = profile && profile.grade ? `${c.grade} ${profile.grade}` : "";
       document.getElementById("view-home").innerHTML = `
-        <div class="card" data-go="news">
-          <div class="card-title"><b>${c.calendar}</b><span class="link">${c.agenda} ›</span></div>
-          <div class="row-item"><div class="plate">📅</div><div><div class="t">${c.news}</div><div class="s">${c.calendarEmpty}</div></div></div>
-        </div>
-        <div class="card">
-          <div class="row-item">
-            <div class="wmark">W</div>
-            <div><div class="t">${c.swipe}</div><div class="s">${escapeHtml(swipeName)}${swipeGrade ? " · " + escapeHtml(swipeGrade) : ""} · ${c.swipeSub}</div></div>
-            <span class="lock">🔒</span>
+        <div class="home-grid">
+          <button class="card action calendar wide" type="button" data-go="news">
+            <div class="card-title"><b>${c.calendar}</b><span class="link">${c.agenda} ›</span></div>
+            <div class="row-item"><div class="plate">📅</div><div><div class="t">${c.news}</div><div class="s">${c.calendarEmpty}</div></div></div>
+          </button>
+          <button class="card action" type="button" data-action="swipe">
+            <div class="row-item">
+              <div class="wmark">W</div>
+              <div><div class="t">${c.swipe}</div><div class="s">${escapeHtml(swipeName)}${swipeGrade ? " · " + escapeHtml(swipeGrade) : ""}</div></div>
+              <span class="lock">🔒</span>
+            </div>
+          </button>
+          <button class="card action" type="button" data-action="passesInfo">
+            <div class="row-item">
+              <div class="wmark">W</div>
+              <div><div class="t">${c.passesTile}</div><div class="s">${c.passesSub}</div></div>
+              <span class="chev">›</span>
+            </div>
+          </button>
+          <div class="pair wide">
+            <button class="mini" type="button" data-action="ask"><div class="wmark">W</div><b>${c.ask}</b></button>
+            <div class="split"></div>
+            <button class="mini" type="button" data-action="aide"><div class="wmark" style="background:#111">🦜</div><b>${c.aide}</b></button>
           </div>
-        </div>
-        <div class="card">
-          <div class="row-item">
-            <div class="wmark">W</div>
-            <div><div class="t">${c.passesTile}</div><div class="s">${c.passesSub}</div></div>
-            <span class="chev">›</span>
+          <div class="section">${c.shortcuts}</div>
+          <div class="shortcuts wide">
+            <button class="shortcut" type="button" data-go="lunch"><div class="plate">🍴</div><b>${c.lunch}</b></button>
+            <button class="shortcut" type="button" data-go="contacts"><div class="wmark">W</div><b>${c.contacts}</b></button>
+            <button class="shortcut" type="button" data-go="news"><div class="plate">🔔</div><b>${c.news}</b></button>
+            <button class="shortcut" type="button" data-go="classes"><div class="plate">📚</div><b>${c.classes}</b></button>
           </div>
-        </div>
-        <div class="pair">
-          <div class="mini"><div class="wmark">W</div><b>${c.ask}</b></div>
-          <div class="split"></div>
-          <div class="mini"><div class="wmark" style="background:#111">🦜</div><b>${c.aide}</b></div>
-        </div>
-        <div class="section">${c.shortcuts}</div>
-        <div class="shortcuts">
-          <button class="shortcut" data-go="lunch"><div class="plate">🍴</div></button>
-          <button class="shortcut" data-go="contacts"><div class="wmark">W</div></button>
         </div>`;
-      document.getElementById("view-lunch").innerHTML = `<iframe class="lunch" title="Lunch" src="${LUNCH}"></iframe>`;
-      document.getElementById("view-classes").innerHTML = `<div class="card"><p class="muted">${c.classesBody}</p></div>`;
+    }
+
+    function renderLunch() {
+      const node = document.getElementById("view-lunch");
+      if (!lunchReady) {
+        node.innerHTML = `${backBar()}<iframe class="lunch" title="Lunch" src="${LUNCH}"></iframe>`;
+        lunchReady = true;
+      } else if (!node.querySelector("iframe")) {
+        node.innerHTML = `${backBar()}<iframe class="lunch" title="Lunch" src="${LUNCH}"></iframe>`;
+      } else if (!node.querySelector(".toolbar")) {
+        node.insertAdjacentHTML("afterbegin", backBar());
+      }
+    }
+
+    function renderMore() {
+      const c = t();
       document.getElementById("view-more").innerHTML = `
-        <div class="card"><p class="muted">${c.moreBody}</p></div>
-        <div class="card">
-          <b>${c.language}</b>
-          <div class="lang" style="margin-top:10px;">
-            <button type="button" id="en">EN</button>
-            <button type="button" id="es">ES</button>
+        <div class="home-grid">
+          <div class="card"><p class="muted" style="margin:0;">${c.moreBody}</p></div>
+          <div class="card">
+            <b>${c.language}</b>
+            <div class="lang" style="margin-top:10px;">
+              <button type="button" id="en" class="${lang === "en" ? "on" : ""}">EN</button>
+              <button type="button" id="es" class="${lang === "es" ? "on" : ""}">ES</button>
+            </div>
           </div>
-        </div>
-        <button class="card" type="button" id="signOutProfile">${c.signOut}</button>
-        <details class="admin">
-          <summary>${c.admin}</summary>
-          <p class="muted" style="margin-top:10px;">${c.adminHint}</p>
-          <label class="muted">${c.token}</label>
-          <input id="token" type="password" style="margin:8px 0;">
-          <label class="muted">${c.env}</label>
-          <select id="env" style="margin:8px 0;">
-            <option value="development">Development</option>
-            <option value="production">Production</option>
-          </select>
-          <button class="primary" type="button" id="saveToken">${c.saveToken}</button>
-          <button class="ghost" type="button" id="openPasses" style="width:100%;margin-top:8px;">${c.openPasses}</button>
-          <div id="apple-sign-in-placeholder"></div>
-          <div id="apple-sign-out-placeholder"></div>
-        </details>`;
+          <button class="card action" type="button" data-action="swipe"><b>${c.swipe}</b><div class="s">${c.idHint}</div></button>
+          <button class="card action" type="button" data-go="news"><b>${c.news}</b></button>
+          <button class="card action" type="button" data-go="lunch"><b>${c.lunch}</b></button>
+          <button class="card action" type="button" id="signOutProfile">${c.signOut}</button>
+          <details class="admin wide">
+            <summary>${c.admin}</summary>
+            <p class="muted" style="margin-top:10px;">${c.adminHint}</p>
+            <label class="muted">${c.token}</label>
+            <input id="token" type="password" style="margin:8px 0;">
+            <label class="muted">${c.env}</label>
+            <select id="env" style="margin:8px 0;">
+              <option value="development">Development</option>
+              <option value="production">Production</option>
+            </select>
+            <button class="primary" type="button" id="saveToken">${c.saveToken}</button>
+            <p class="ok hidden" id="tokenSaved"></p>
+            <button class="ghost" type="button" id="openPasses" style="width:100%;margin-top:8px;">${c.openPasses}</button>
+            <div id="apple-sign-in-placeholder"></div>
+            <div id="apple-sign-out-placeholder"></div>
+          </details>
+        </div>`;
       const tokenEl = document.getElementById("token");
       const envEl = document.getElementById("env");
       if (tokenEl) tokenEl.value = schoolToken();
       if (envEl) envEl.value = schoolEnv();
-      renderStaff(document.getElementById("staffQuery") ? document.getElementById("staffQuery").value : "");
+    }
+
+    function personButton(person) {
+      const mail = person.email ? `mailto:${person.email}` : "";
+      return `<button class="staff" type="button" data-mail="${escapeHtml(mail)}">
+        <span><div class="t">${escapeHtml(person.name)}</div>
+        <div class="s">${escapeHtml(person.group || "")}${person.email ? " · " + escapeHtml(person.email) : ""}</div></span>
+        <span class="s">${person.email ? t().email + " ›" : ""}</span>
+      </button>`;
     }
 
     function renderStaff(query) {
@@ -460,39 +621,124 @@
         return !q || blob.includes(q);
       });
       document.getElementById("view-contacts").innerHTML = `
+        ${view === "contacts" ? backBar() : ""}
         <input class="search" id="staffQuery" placeholder="${t().search}" value="${escapeHtml(query || "")}">
-        <div class="card">${list.slice(0, 80).map((person) => `
-          <div class="staff">
-            <div class="t">${escapeHtml(person.name)}</div>
-            <div class="s">${escapeHtml(person.group || "")}${person.email ? " · " + escapeHtml(person.email) : ""}</div>
-          </div>`).join("") || `<p class="muted">${t().search}</p>`}</div>`;
+        <div class="people-grid">${list.slice(0, 120).map((person) => `<div class="card">${personButton(person)}</div>`).join("") || `<div class="card"><p class="muted">${t().search}</p></div>`}</div>`;
+    }
+
+    function renderClasses() {
+      const teachers = staff.filter((person) => /teacher/i.test(person.group || ""));
+      document.getElementById("view-classes").innerHTML = `
+        ${backBar()}
+        <p class="muted" style="margin:0 0 14px;">${t().classesBody}</p>
+        <div class="people-grid">${teachers.slice(0, 120).map((person) => `<div class="card">${personButton(person)}</div>`).join("")}</div>`;
+    }
+
+    function openSwipe() {
+      const c = t();
+      const name = profile ? profile.displayName : "Warrior";
+      const grade = profile && profile.grade ? `${c.grade} ${profile.grade}` : "";
+      openSheet(`
+        <div class="card-title"><b>${c.idTitle}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
+        <div class="id-card">
+          <div class="school">${c.school.toUpperCase()}</div>
+          <h2 style="margin:10px 0 4px;font-size:28px;">${escapeHtml(name)}</h2>
+          <div>${escapeHtml(roleLabel())}${grade ? " · " + escapeHtml(grade) : ""}</div>
+        </div>
+        <p class="muted">${c.idHint}</p>`);
+    }
+
+    function openPassesInfo() {
+      const c = t();
+      openSheet(`
+        <div class="card-title"><b>${c.passesTile}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
+        <p class="muted">${c.passesHint}</p>
+        <button class="primary" type="button" data-go="contacts">${c.openContacts}</button>`);
+    }
+
+    function openAsk(preset) {
+      const c = t();
+      openSheet(`
+        <div class="card-title"><b>${c.askTitle}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
+        <input id="askBox" placeholder="${c.askPlaceholder}" value="${escapeHtml(preset || "")}">
+        <button class="primary" type="button" data-action="askGo">${c.askGo}</button>
+        <div id="askOut" class="muted" style="margin-top:12px;">${c.askEmpty}</div>`);
+      if (preset) answerAsk(preset);
+    }
+
+    function answerAsk(raw) {
+      const q = String(raw || "").trim().toLowerCase();
+      const out = document.getElementById("askOut");
+      if (!out) return;
+      const c = t();
+      if (!q) { out.textContent = c.askEmpty; return; }
+      if (/lunch|almuerzo|menu|menú/.test(q)) {
+        out.innerHTML = `<button class="primary" type="button" data-go="lunch">${c.openLunch}</button>`;
+        return;
+      }
+      if (/news|noticia|agenda|calendar|calendario/.test(q)) {
+        out.innerHTML = `<button class="primary" type="button" data-go="news">${c.openNews}</button>`;
+        return;
+      }
+      if (/pass|pase|hallway|flex/.test(q)) {
+        out.textContent = c.passesHint;
+        return;
+      }
+      if (/attendance|asistencia/.test(q)) {
+        out.innerHTML = `<a class="primary" style="display:block;text-align:center;text-decoration:none;" href="mailto:whsattendance@watertownps.org">${c.attendance}</a>`;
+        return;
+      }
+      const hits = staff.filter((person) => `${person.name} ${person.group} ${person.email}`.toLowerCase().includes(q)).slice(0, 6);
+      if (hits.length) {
+        out.innerHTML = hits.map(personButton).join("");
+        return;
+      }
+      out.textContent = c.askEmpty;
+    }
+
+    function openAide() {
+      const c = t();
+      openSheet(`
+        <div class="card-title"><b>${c.aideTitle}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
+        <p class="muted">${c.aideBody}</p>
+        <button class="primary" type="button" data-go="contacts">${c.openContacts}</button>
+        <button class="ghost" type="button" data-go="lunch" style="width:100%;margin-top:8px;">${c.openLunch}</button>
+        <button class="ghost" type="button" data-go="news" style="width:100%;margin-top:8px;">${c.openNews}</button>
+        <a class="ghost" style="display:block;text-align:center;margin-top:8px;text-decoration:none;" href="mailto:whsattendance@watertownps.org">${c.attendance}</a>`);
     }
 
     async function loadNews() {
       const node = document.getElementById("view-news");
-      node.innerHTML = `<p class="muted">${t().newsEmpty}</p>`;
-      if (!(await ensureCloud())) return;
+      const c = t();
+      node.innerHTML = `${backBar()}<p class="muted">${c.newsEmpty}</p>`;
+      if (!(await ensureCloud())) {
+        node.innerHTML = `${backBar()}<div class="card"><p class="muted">${c.newsNeedToken}</p><button class="primary" type="button" data-go="more">${c.more}</button></div>`;
+        return;
+      }
       try {
         const queried = await CloudKit.getDefaultContainer().publicCloudDatabase.performQuery({ recordType: NEWS_TYPE });
         const usable = recordsFrom(queried).filter((r) => Number(fieldValue(r, "published") || 1) !== 0);
-        if (!usable.length) return;
-        node.innerHTML = usable.map((record) => {
+        if (!usable.length) {
+          node.innerHTML = `${backBar()}<div class="card"><p class="muted">${c.newsEmpty}</p></div>`;
+          return;
+        }
+        node.innerHTML = backBar() + `<div class="news-grid">` + usable.map((record) => {
           const heading = lang === "es" ? (fieldValue(record, "titleES") || fieldValue(record, "titleEN")) : (fieldValue(record, "titleEN") || fieldValue(record, "titleES"));
           const body = lang === "es" ? (fieldValue(record, "subtitleES") || fieldValue(record, "subtitleEN")) : (fieldValue(record, "subtitleEN") || fieldValue(record, "subtitleES"));
           const image = fieldValue(record, "image");
           return `<article class="card"><b>${escapeHtml(heading)}</b><p class="muted">${escapeHtml(body)}</p>${image ? `<img class="news-img" alt="" src="${escapeHtml(image)}">` : ""}</article>`;
-        }).join("");
+        }).join("") + `</div>`;
       } catch (error) {
-        node.innerHTML = `<p class="error">${escapeHtml(error.message)}</p>`;
+        node.innerHTML = `${backBar()}<p class="error">${escapeHtml(error.message)}</p>`;
       }
     }
 
     async function loadPasses() {
       const node = document.getElementById("view-passes");
       const c = t();
-      node.innerHTML = `<button class="ghost" data-view="more">${c.more} ‹</button><p class="muted">${c.refresh}</p><div id="passes"></div>`;
+      node.innerHTML = `<div class="toolbar"><button class="ghost" type="button" data-view="more">${c.back}</button><button class="ghost" type="button" id="refreshPasses">${c.refresh}</button></div><div id="passes"></div>`;
       if (!(await ensureCloud())) {
-        node.insertAdjacentHTML("beforeend", `<p class="error">${c.adminHint}</p>`);
+        node.insertAdjacentHTML("beforeend", `<div class="card"><p class="muted">${c.adminHint}</p></div>`);
         return;
       }
       const seen = new Map();
@@ -504,7 +750,7 @@
         (await fetchByNames(db, raw.split(",").map((part) => part.trim()))).forEach(remember);
         try { recordsFrom(await db.performQuery({ recordType: PASS_TYPE })).forEach(remember); } catch (_) {}
         const usable = [...seen.values()].filter((r) => r.recordName !== MANIFEST && (fieldValue(r, "studentName") || fieldValue(r, "teacherName")));
-        document.getElementById("passes").innerHTML = usable.length ? usable.map((record) => {
+        document.getElementById("passes").innerHTML = usable.length ? `<div class="pass-grid">` + usable.map((record) => {
           const kind = fieldValue(record, "kind") === "flex" ? c.flex : c.hallway;
           const signature = fieldValue(record, "signature");
           return `<article class="card"><p class="pass-kind">${kind}</p>
@@ -512,7 +758,7 @@
             <div class="s">${escapeHtml(fieldValue(record, "destination"))}</div>
             <div class="s">${escapeHtml(fieldValue(record, "teacherName"))}</div>
             ${signature ? `<img class="sig" alt="" src="${escapeHtml(signature)}">` : ""}</article>`;
-        }).join("") : `<p class="muted">${c.emptyPasses}</p>`;
+        }).join("") + `</div>` : `<div class="card"><p class="muted">${c.emptyPasses}</p></div>`;
       } catch (error) {
         node.insertAdjacentHTML("beforeend", `<p class="error">${escapeHtml(error.message)}</p>`);
       }
@@ -553,15 +799,31 @@
     fetch("./staff.json").then((res) => res.json()).then((data) => {
       staff = data;
       if (view === "contacts") renderStaff("");
+      if (view === "classes") renderClasses();
     }).catch(() => {});
 
     document.body.addEventListener("click", (event) => {
+      const mail = event.target.closest("[data-mail]");
+      if (mail && mail.dataset.mail) {
+        window.location.href = mail.dataset.mail;
+        return;
+      }
+      const action = event.target.closest("[data-action]");
+      if (action) {
+        const name = action.dataset.action;
+        if (name === "swipe") openSwipe();
+        if (name === "passesInfo") openPassesInfo();
+        if (name === "ask") openAsk("");
+        if (name === "aide") openAide();
+        if (name === "askGo") answerAsk(document.getElementById("askBox") && document.getElementById("askBox").value);
+        if (name === "closeSheet") closeSheet();
+      }
       const go = event.target.closest("[data-go]");
       if (go) show(go.dataset.go);
       const tab = event.target.closest("button[data-view]");
       if (tab) show(tab.dataset.view);
-      if (event.target.id === "en") { lang = "en"; localStorage.setItem("whsAdminLang", lang); applyChrome(); }
-      if (event.target.id === "es") { lang = "es"; localStorage.setItem("whsAdminLang", lang); applyChrome(); }
+      if (event.target.id === "en") { lang = "en"; localStorage.setItem("whsAdminLang", lang); show(view); }
+      if (event.target.id === "es") { lang = "es"; localStorage.setItem("whsAdminLang", lang); show(view); }
       if (event.target.id === "signOutProfile") {
         localStorage.removeItem("whsWebProfile");
         profile = null;
@@ -571,21 +833,41 @@
         localStorage.setItem("whsAdminToken", document.getElementById("token").value.trim());
         localStorage.setItem("whsAdminEnv", document.getElementById("env").value);
         configured = false;
+        const note = document.getElementById("tokenSaved");
+        if (note) { note.textContent = t().tokenSaved; note.classList.remove("hidden"); }
       }
       if (event.target.id === "openPasses") show("passes");
+      if (event.target.id === "refreshPasses") loadPasses();
       if (event.target.id === "bell") show("news");
       if (event.target.id === "me") show("more");
+      if (event.target.id === "skipSite" || event.target.closest("#skipSite")) enterGuest();
+      if (event.target.id === "enterSite" || event.target.closest("#enterSite")) enterWithCode();
     });
     document.body.addEventListener("input", (event) => {
       if (event.target.id === "staffQuery") renderStaff(event.target.value);
     });
-    enterSite.addEventListener("click", enterWithCode);
-    skipSite.addEventListener("click", () => {
+    document.body.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" && event.target.id === "askBox") {
+        event.preventDefault();
+        answerAsk(event.target.value);
+      }
+      if (event.key === "Escape") closeSheet();
+    });
+    sheet.addEventListener("click", (event) => {
+      if (event.target === sheet) closeSheet();
+    });
+    function enterGuest() {
       profile = { displayName: "Warrior", role: "guest", grade: "", key: "" };
       localStorage.setItem("whsWebProfile", JSON.stringify(profile));
       showGate();
       show("home");
-    });
+    }
+    window.show = show;
+    window.openSwipe = openSwipe;
+    window.openAsk = openAsk;
+    window.openAide = openAide;
+    window.openPassesInfo = openPassesInfo;
+    window.enterGuest = enterGuest;
     showGate();
     if (profile) show("home");
   </script>
