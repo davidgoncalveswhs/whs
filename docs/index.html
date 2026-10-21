@@ -2,13 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#F2F2F7">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="WHS">
   <title>WHS</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./favicon.png" type="image/png" sizes="32x32">
   <link rel="icon" href="./app-icon.png" type="image/png" sizes="1024x1024">
-  <link rel="apple-touch-icon" href="./app-icon-192.png">
+  <link rel="apple-touch-icon" href="./app-icon.png">
   <link rel="preconnect" href="https://cdn.apple-cloudkit.com">
   <script src="./config.js"></script>
   <style>
@@ -369,6 +373,8 @@
     .gate-hint { margin: 12px 0 0; font-size: 12px; }
     .sheet { background: rgba(0,0,0,0.28); display: grid; place-items: center; padding: 24px; }
     .sheet-card { width: min(560px, 100%); background: white; border-radius: 28px; padding: 22px; }
+    .home-steps { margin: 12px 0 0; padding-left: 18px; }
+    .home-steps li { margin: 0 0 10px; color: var(--muted); font-size: 15px; }
     .id-card {
       background: linear-gradient(160deg, #111 0%, #2A2A2A 100%);
       color: white; border-radius: 22px; padding: 22px; margin: 12px 0 16px;
@@ -492,6 +498,14 @@
               <input id="guestName" autocomplete="name" spellcheck="false">
             </div>
             <div class="gate-row">
+              <label id="rolePickLabel" for="guestRole">Role</label>
+              <select id="guestRole">
+                <option value="student" id="roleOptStudent">Student</option>
+                <option value="teacher" id="roleOptTeacher">Teacher</option>
+                <option value="administrator" id="roleOptAdmin">Administrator</option>
+              </select>
+            </div>
+            <div class="gate-row" id="guestGradeRow">
               <label id="gradeLabel" for="guestGrade">Grade</label>
               <select id="guestGrade">
                 <option value="9">9</option>
@@ -499,6 +513,10 @@
                 <option value="11">11</option>
                 <option value="12">12</option>
               </select>
+            </div>
+            <div class="gate-row hidden" id="guestAccessRow">
+              <label id="staffCodeLabel" for="guestAccess">Staff access code</label>
+              <input id="guestAccess" type="password" inputmode="numeric" autocomplete="off" spellcheck="false">
             </div>
           </div>
           <div class="gate-actions">
@@ -520,6 +538,7 @@
     const NEWS_TYPE = "WHSAnnouncement";
     const MANIFEST = "whs-teacher-pass-manifest";
     const LUNCH = "https://drive.google.com/file/d/1FcyUw6LwftfJC6cDnOQrlXgBXC4UjB57/preview";
+    const STAFF_GATE = "105310";
     const copy = {
       en: {
         welcome: "Welcome",
@@ -532,9 +551,23 @@
         nameLabel: "Name",
         gradeLabel: "Grade",
         guestNeedInfo: "Enter your name and grade.",
+        guestNeedRole: "Choose student, teacher, or administrator.",
+        guestNeedStaff: "Enter your name and the staff access code.",
+        staffCodeWrong: "That access code is not correct.",
+        staffCodeLabel: "Staff access code",
+        roleStudent: "Student",
+        roleTeacher: "Teacher",
         gateHint: "",
-        dashGuest: "Guest view. News and lunch are here. Sign in with a WHS Web Code for your full role.",
         useCode: "Use my WHS Web Code",
+        addHome: "Add to Home Screen",
+        addHomeSub: "Open WHS as its own app, without the browser bar",
+        addHomeOnDevice: "WHS is on this Home Screen",
+        addHomeOnDeviceSub: "Open the WHS icon like an app.",
+        addHomeTitle: "Add WHS to Home Screen",
+        addHomeIPhone: "On iPhone or iPad: tap Share, then Add to Home Screen.",
+        addHomeAndroid: "On Android: tap the browser menu, then Install app or Add to Home screen.",
+        addHomeChrome: "On a Chromebook: open the Chrome menu, then Install WHS, or Create shortcut and turn on Open as window.",
+        addHomeInstall: "Install WHS",
         gateFail: "Could not find that code. Check the letters. Open the iPhone app so it can save your code, then try again.",
         dashStudent: "Your Chromebook dashboard. Swipe Card, classes, and accepted hallway and Flex passes sync from your iPhone with this web code.",
         yourPasses: "Your passes",
@@ -653,9 +686,23 @@
         nameLabel: "Nombre",
         gradeLabel: "Grado",
         guestNeedInfo: "Escribe tu nombre y grado.",
+        guestNeedRole: "Elige estudiante, maestro o administrador.",
+        guestNeedStaff: "Escribe tu nombre y el código de acceso del personal.",
+        staffCodeWrong: "Ese código de acceso no es correcto.",
+        staffCodeLabel: "Código de acceso del personal",
+        roleStudent: "Estudiante",
+        roleTeacher: "Maestro",
         gateHint: "",
-        dashGuest: "Vista de invitado. Noticias y almuerzo están aquí. Entra con un código web WHS para tu rol.",
         useCode: "Usar mi código web WHS",
+        addHome: "Añadir a inicio",
+        addHomeSub: "Abre WHS como una app, sin la barra del navegador",
+        addHomeOnDevice: "WHS está en esta pantalla de inicio",
+        addHomeOnDeviceSub: "Abre el icono de WHS como una app.",
+        addHomeTitle: "Añadir WHS a inicio",
+        addHomeIPhone: "En iPhone o iPad: toca Compartir y luego Añadir a pantalla de inicio.",
+        addHomeAndroid: "En Android: toca el menú del navegador y luego Instalar app o Añadir a pantalla de inicio.",
+        addHomeChrome: "En un Chromebook: abre el menú de Chrome, luego Instalar WHS, o Crear acceso directo y activa Abrir como ventana.",
+        addHomeInstall: "Instalar WHS",
         gateFail: "No se encontró ese código. Revisa las letras. Abre la app de iPhone para que guarde el código y vuelve a intentar.",
         dashStudent: "Tu panel de Chromebook. Tarjeta Swipe, las clases y los pases aceptados se sincronizan desde iPhone con este código web.",
         yourPasses: "Tus pases",
@@ -771,6 +818,7 @@
     let staff = [];
     let profile = JSON.parse(localStorage.getItem("whsWebProfile") || "null");
     let lunchReady = false;
+    let deferredInstall = null;
     function normalizeRole(value) {
       const raw = String(value || "").toLowerCase().trim();
       if (raw === "administrator" || raw === "admin") return "administrator";
@@ -781,7 +829,63 @@
       return "";
     }
     function currentRole() { return normalizeRole(profile && profile.role); }
-    function isGuest() { return currentRole() === "guest"; }
+    function isGuest() {
+      if (!profile) return false;
+      if (profile.guest) return true;
+      if (currentRole() === "guest") return true;
+      return !String(profile.key || "").trim();
+    }
+    function isPairedStudent() {
+      return currentRole() === "student" && !!(profile && String(profile.key || "").trim());
+    }
+    function isStandaloneApp() {
+      return window.matchMedia("(display-mode: standalone)").matches
+        || window.matchMedia("(display-mode: window-controls-overlay)").matches
+        || window.navigator.standalone === true;
+    }
+    window.addEventListener("beforeinstallprompt", (event) => {
+      event.preventDefault();
+      deferredInstall = event;
+    });
+    window.addEventListener("appinstalled", () => {
+      deferredInstall = null;
+      closeSheet();
+      if (view === "more") renderMore();
+    });
+    function guestHomeCard() {
+      const c = t();
+      if (isStandaloneApp()) {
+        return `<div class="card wide"><div class="t">${c.addHomeOnDevice}</div><div class="s">${c.addHomeOnDeviceSub}</div></div>`;
+      }
+      return `<button class="card action" type="button" data-action="addHome"><div class="t">${c.addHome}</div><div class="s">${c.addHomeSub}</div></button>`;
+    }
+    function showAddHome() {
+      const c = t();
+      const install = deferredInstall
+        ? `<button class="primary" type="button" data-action="installHome" style="width:100%;margin-top:12px;">${c.addHomeInstall}</button>`
+        : "";
+      openSheet(`
+        <div class="card-title"><b>${c.addHomeTitle}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
+        <ul class="home-steps">
+          <li>${c.addHomeIPhone}</li>
+          <li>${c.addHomeAndroid}</li>
+          <li>${c.addHomeChrome}</li>
+        </ul>
+        ${install}`);
+    }
+    async function promptInstallHome() {
+      if (!deferredInstall) {
+        showAddHome();
+        return;
+      }
+      const prompt = deferredInstall;
+      deferredInstall = null;
+      try {
+        await prompt.prompt();
+      } catch (_) {}
+      closeSheet();
+      if (view === "more") renderMore();
+    }
     function canSeePassLog() {
       const role = currentRole();
       return role === "administrator" || role === "teacher";
@@ -838,9 +942,9 @@
     function roleLabel() {
       const role = currentRole();
       if (role === "administrator") return t().admin;
-      if (role === "teacher") return lang === "es" ? "Maestro" : "Teacher";
+      if (role === "teacher") return t().roleTeacher;
       if (role === "parent") return lang === "es" ? "Padre" : "Parent";
-      if (role === "student") return lang === "es" ? "Estudiante" : "Student";
+      if (role === "student") return t().roleStudent;
       if (role === "guest") return t().guest;
       return "";
     }
@@ -1026,8 +1130,19 @@
       codeLabel.textContent = c.codeLabel;
       const nameLabel = document.getElementById("nameLabel");
       const gradeLabel = document.getElementById("gradeLabel");
+      const rolePickLabel = document.getElementById("rolePickLabel");
+      const staffCodeLabel = document.getElementById("staffCodeLabel");
+      const roleOptStudent = document.getElementById("roleOptStudent");
+      const roleOptTeacher = document.getElementById("roleOptTeacher");
+      const roleOptAdmin = document.getElementById("roleOptAdmin");
       if (nameLabel) nameLabel.textContent = c.nameLabel;
       if (gradeLabel) gradeLabel.textContent = c.gradeLabel;
+      if (rolePickLabel) rolePickLabel.textContent = c.role;
+      if (staffCodeLabel) staffCodeLabel.textContent = c.staffCodeLabel;
+      if (roleOptStudent) roleOptStudent.textContent = c.roleStudent;
+      if (roleOptTeacher) roleOptTeacher.textContent = c.roleTeacher;
+      if (roleOptAdmin) roleOptAdmin.textContent = c.admin;
+      syncGuestRoleFields();
       const guestFinish = document.getElementById("guestFinish");
       if (guestFinish) guestFinish.textContent = c.enter;
       enterSite.textContent = c.enter;
@@ -1057,7 +1172,7 @@
       if (id === "home") {
         renderHome();
         loadNewsFeed();
-        if (currentRole() === "student") {
+        if (isPairedStudent()) {
           loadSwipeCard();
           loadStudentPasses();
           loadStudy();
@@ -1111,8 +1226,8 @@
           ${dashCard("contacts", c.openContacts, "")}`;
       } else {
         cards = `
-          <div class="card wide"><p class="muted" style="margin:0;">${isGuest() ? c.dashGuest : c.dashStudent}</p></div>
-          ${currentRole() === "student" ? `<button class="card action hero-pass wide" type="button" data-go="swipe">
+          ${isGuest() ? "" : `<div class="card wide"><p class="muted" style="margin:0;">${c.dashStudent}</p></div>`}
+          ${isPairedStudent() ? `<button class="card action hero-pass wide" type="button" data-go="swipe">
             <div class="row-item">
               <img class="tile-swipe" id="swipeTileMark" src="./SwipeCard.png" alt="">
               <div><div class="t">${c.swipe}</div><div class="s" id="swipeTileSub">${c.swipeSub}</div></div>
@@ -1189,7 +1304,7 @@
         <div class="dash">
           <div class="card wide"><div class="more-face">${face}<div><div class="t">${escapeHtml(profile ? profile.displayName : "")}</div><div class="s">${escapeHtml(roleLabel())}</div></div></div></div>
           ${adminTools}
-          ${isGuest() ? `<button class="card action" type="button" data-action="useCode"><div class="t">${c.useCode}</div></button>` : ""}
+          ${isGuest() ? `${guestHomeCard()}<button class="card action" type="button" data-action="useCode"><div class="t">${c.useCode}</div></button>` : ""}
           <button class="card action" type="button" id="signOutProfile">${c.signOut}</button>
         </div>`;
       const tokenEl = document.getElementById("token");
@@ -2097,6 +2212,8 @@
           }
         }
         if (name === "useCode") returnToCodeGate();
+        if (name === "addHome") showAddHome();
+        if (name === "installHome") promptInstallHome();
         if (name === "openPass" || name === "openStudentPass") openPass(action.dataset.passId || "");
         if (name === "openClass") {
           window._classID = action.dataset.classId || "";
@@ -2208,6 +2325,13 @@
     document.body.addEventListener("input", (event) => {
       if (event.target.id === "staffQuery") renderStaff(event.target.value);
     });
+    document.body.addEventListener("change", (event) => {
+      if (event.target.id === "guestRole") {
+        const err = document.getElementById("setupError");
+        if (err) err.textContent = "";
+        syncGuestRoleFields();
+      }
+    });
     document.body.addEventListener("keydown", (event) => {
       if (event.key === "Enter" && event.target.id === "askBox") {
         event.preventDefault();
@@ -2217,7 +2341,7 @@
         event.preventDefault();
         enterWithCode();
       }
-      if (event.key === "Enter" && (event.target.id === "guestName" || event.target.id === "guestGrade")) {
+      if (event.key === "Enter" && (event.target.id === "guestName" || event.target.id === "guestGrade" || event.target.id === "guestAccess")) {
         event.preventDefault();
         enterGuest();
       }
@@ -2237,20 +2361,47 @@
       window._gateStep = "guest";
       document.getElementById("gatePair").classList.add("hidden");
       document.getElementById("gateSetup").classList.remove("hidden");
+      const access = document.getElementById("guestAccess");
+      if (access) access.value = "";
       applyChrome();
       const name = document.getElementById("guestName");
       if (name) name.focus();
     }
+    function syncGuestRoleFields() {
+      const role = normalizeRole((document.getElementById("guestRole") || {}).value);
+      const staff = role === "teacher" || role === "administrator";
+      const gradeRow = document.getElementById("guestGradeRow");
+      const accessRow = document.getElementById("guestAccessRow");
+      if (gradeRow) gradeRow.classList.toggle("hidden", staff);
+      if (accessRow) accessRow.classList.toggle("hidden", !staff);
+    }
     function enterGuest() {
       const name = String((document.getElementById("guestName") || {}).value || "").trim();
+      const role = normalizeRole((document.getElementById("guestRole") || {}).value);
       const grade = String((document.getElementById("guestGrade") || {}).value || "").trim();
+      const code = String((document.getElementById("guestAccess") || {}).value || "").trim();
       const err = document.getElementById("setupError");
-      if (!name || !grade) {
+      const staff = role === "teacher" || role === "administrator";
+      if (!name) {
+        if (err) err.textContent = staff ? t().guestNeedStaff : t().guestNeedInfo;
+        return;
+      }
+      if (role !== "student" && role !== "teacher" && role !== "administrator") {
+        if (err) err.textContent = t().guestNeedRole;
+        return;
+      }
+      if (role === "student" && !grade) {
         if (err) err.textContent = t().guestNeedInfo;
         return;
       }
+      if (staff && code !== STAFF_GATE) {
+        if (err) err.textContent = code ? t().staffCodeWrong : t().guestNeedStaff;
+        return;
+      }
       if (err) err.textContent = "";
-      profile = { displayName: name, firstName: name, role: "guest", grade, key: "" };
+      profile = staff
+        ? { displayName: name, firstName: name, role, key: "", guest: true }
+        : { displayName: name, firstName: name, role: "student", grade, key: "", guest: true };
       localStorage.setItem("whsWebProfile", JSON.stringify(profile));
       applyAvatar("");
       showGate();
@@ -2260,6 +2411,9 @@
     window.openAsk = openAsk;
     window.openAide = openAide;
     window.openPassesInfo = openPassesInfo;
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("./sw.js").catch(() => {});
+    }
     showGate();
     if (signedIn()) show("home");
   </script>
