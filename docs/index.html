@@ -3,226 +3,295 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#E87722">
+  <meta name="theme-color" content="#F2F2F7">
   <title>WHS</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icon.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://cdn.apple-cloudkit.com">
+  <script src="./config.js"></script>
   <style>
     :root {
       --orange: #E87722;
-      --ink: #0F172A;
-      --muted: #64748B;
-      --line: #E2E8F0;
+      --ink: #000;
+      --muted: #8E8E93;
+      --line: rgba(0,0,0,0.06);
       --paper: #FFFFFF;
-      --bg: #F8FAFC;
+      --bg: #F2F2F7;
+      --tab: rgba(255,255,255,0.92);
     }
     * { box-sizing: border-box; }
     html, body { margin: 0; min-height: 100%; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
       background: var(--bg);
       color: var(--ink);
-      padding-bottom: 84px;
+      padding-bottom: 88px;
     }
-    .wrap { max-width: 860px; margin: 0 auto; padding: 22px 18px 24px; }
-    header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
-    .brand { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--orange); }
-    h1 { font-size: 26px; margin: 4px 0 6px; }
-    .sub { color: var(--muted); font-size: 15px; line-height: 1.45; }
-    button, .btn {
-      appearance: none; border: 0; border-radius: 12px; padding: 10px 14px;
-      font: inherit; font-weight: 600; cursor: pointer; background: var(--orange); color: white;
+    .wrap { max-width: 430px; margin: 0 auto; padding: 8px 20px 28px; }
+    .top {
+      display: flex; justify-content: flex-end; align-items: center;
+      min-height: 52px; margin-bottom: 4px;
     }
-    button.ghost { background: white; color: var(--ink); border: 1px solid var(--line); }
-    .row { display: flex; gap: 8px; flex-wrap: wrap; }
-    label { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
-    input, select {
-      width: 100%; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line);
-      font: inherit; background: white; color: var(--ink);
+    .pill {
+      display: flex; align-items: center; gap: 2px;
+      background: white; border-radius: 999px; padding: 6px 8px 6px 10px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.06);
     }
+    .pill button {
+      width: 34px; height: 34px; border: 0; background: transparent; border-radius: 50%;
+      font-size: 18px; cursor: pointer;
+    }
+    .avatar {
+      width: 34px; height: 34px; border-radius: 50%; background: #111;
+      color: white; display: grid; place-items: center; font-weight: 700; font-size: 13px;
+    }
+    h1 {
+      font-size: 34px; letter-spacing: -0.04em; margin: 0 0 6px;
+      font-weight: 800; line-height: 1.05;
+    }
+    .date { color: var(--muted); font-size: 16px; font-weight: 500; margin-bottom: 18px; }
     .card {
-      background: var(--paper); border: 1px solid var(--line); border-radius: 18px;
-      padding: 18px; margin: 12px 0;
+      background: var(--paper);
+      border-radius: 28px;
+      padding: 16px;
+      margin: 0 0 14px;
+      box-shadow: 0 1px 0 rgba(0,0,0,0.02);
     }
-    .home-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-    .tile { text-align: left; width: 100%; background: white; color: var(--ink); border: 1px solid var(--line); padding: 18px; }
-    .tile b { display: block; font-size: 17px; margin-bottom: 4px; }
-    .tile span { color: var(--muted); font-weight: 500; font-size: 14px; }
-    .pass-kind { font-size: 18px; font-weight: 800; letter-spacing: 0.05em; margin: 0 0 12px; }
-    .field { margin: 10px 0; }
-    .field span { display: block; font-size: 11px; font-weight: 650; color: var(--muted); letter-spacing: 0.04em; }
-    .field strong { font-size: 16px; font-weight: 650; }
-    .sig, .news-img { max-width: 100%; max-height: 180px; margin-top: 8px; border-radius: 10px; }
-    .empty, .error { color: var(--muted); line-height: 1.5; }
+    .card-title {
+      display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px;
+    }
+    .card-title b { font-size: 17px; }
+    .card-title .link { color: var(--orange); font-size: 15px; font-weight: 600; }
+    .row-item { display: flex; gap: 12px; align-items: center; }
+    .plate {
+      width: 30px; height: 30px; border-radius: 8px; background: #FFF1E6;
+      color: var(--orange); display: grid; place-items: center; font-size: 16px; flex: none;
+    }
+    .row-item .t { font-size: 16px; font-weight: 500; }
+    .row-item .s { font-size: 13px; color: var(--muted); }
+    .pair {
+      display: grid; grid-template-columns: 1fr 1px 1fr;
+      background: white; border-radius: 28px; margin-bottom: 14px; min-height: 88px;
+      align-items: center;
+    }
+    .pair .mini { padding: 16px; display: flex; align-items: center; gap: 10px; }
+    .pair .split { width: 1px; height: 48px; background: rgba(0,0,0,0.12); justify-self: center; }
+    .lock { margin-left: auto; color: var(--muted); font-size: 18px; }
+    .chev { margin-left: auto; color: var(--muted); }
+    .wmark {
+      width: 28px; height: 28px; border-radius: 8px; background: var(--orange);
+      color: white; font-weight: 800; display: grid; place-items: center;
+    }
+    .section { font-size: 22px; font-weight: 800; margin: 22px 0 12px; }
+    .shortcuts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .shortcut {
+      background: white; border-radius: 28px; padding: 16px; min-height: 92px;
+      border: 0; text-align: left; font: inherit; cursor: pointer;
+    }
+    .shortcut .plate { margin-bottom: 10px; }
+    button, .btn {
+      appearance: none; border: 0; background: none; font: inherit; color: inherit; cursor: pointer;
+    }
+    input, select {
+      width: 100%; padding: 14px; border-radius: 16px; border: 1px solid #E5E5EA;
+      font: inherit; background: #F2F2F7;
+    }
+    .primary {
+      background: var(--orange); color: white; width: 100%; border-radius: 16px;
+      padding: 14px; font-weight: 700; margin-top: 10px;
+    }
+    .ghost {
+      background: white; border-radius: 16px; padding: 12px 14px; font-weight: 600;
+    }
+    .muted { color: var(--muted); line-height: 1.45; font-size: 15px; }
     .error { color: #B42318; }
-    ol.setup-steps { color: var(--muted); padding-left: 20px; line-height: 1.55; }
-    #status { font-size: 13px; color: var(--muted); margin-top: 10px; }
-    .hidden { display: none !important; }
-    .lang { display: flex; gap: 6px; }
-    .lang button { padding: 8px 10px; font-size: 13px; }
-    iframe.lunch { width: 100%; min-height: 72vh; border: 1px solid var(--line); border-radius: 18px; background: white; }
+    .pass-kind { font-size: 18px; font-weight: 800; letter-spacing: 0.04em; margin: 0 0 10px; }
+    .sig, .news-img { max-width: 100%; max-height: 160px; margin-top: 8px; border-radius: 12px; }
+    .lunch { width: 100%; min-height: 70vh; border: 0; border-radius: 24px; background: white; }
+    .search { margin-bottom: 12px; }
     nav.tabs {
-      position: fixed; left: 0; right: 0; bottom: 0; background: white;
-      border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(4, 1fr);
-      padding: 6px 8px 10px;
+      position: fixed; left: 0; right: 0; bottom: 0;
+      background: var(--tab); backdrop-filter: blur(18px);
+      border-top: 1px solid var(--line);
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      padding: 8px 10px 14px;
     }
-    nav.tabs button {
-      background: transparent; color: var(--muted); box-shadow: none; font-size: 12px; padding: 8px 4px;
-    }
+    nav.tabs button { color: #8E8E93; font-size: 10px; font-weight: 600; }
     nav.tabs button.on { color: var(--orange); }
-    @media (max-width: 560px) { .home-grid { grid-template-columns: 1fr; } }
+    nav.tabs .ico { font-size: 20px; display: block; margin-bottom: 2px; }
+    .hidden { display: none !important; }
+    .overlay {
+      position: fixed; inset: 0; background: var(--bg); z-index: 20; overflow: auto;
+    }
+    .lang { display: flex; gap: 6px; }
+    .lang button { padding: 6px 10px; border-radius: 999px; background: white; font-size: 13px; font-weight: 700; }
+    .staff { padding: 10px 0; border-bottom: 1px solid var(--line); }
+    .staff:last-child { border-bottom: 0; }
+    details.admin { background: white; border-radius: 28px; padding: 16px; }
+    details.admin summary { cursor: pointer; font-weight: 700; color: var(--muted); font-size: 14px; }
   </style>
 </head>
 <body>
+  <div class="overlay" id="gate">
+    <div class="wrap" style="padding-top: 48px;">
+      <div class="brand" style="color: var(--orange); font-size: 12px; font-weight: 800; letter-spacing: .08em;">WATERTOWN HIGH SCHOOL</div>
+      <h1 id="gateTitle">Welcome</h1>
+      <p class="muted" id="gateBody"></p>
+      <div class="card">
+        <label class="muted" id="codeLabel"></label>
+        <input id="webCode" autocomplete="off" spellcheck="false" placeholder="XXXXX-XXXXX" style="margin-top:8px;">
+        <button class="primary" type="button" id="enterSite"></button>
+        <button class="ghost" type="button" id="skipSite" style="width:100%;margin-top:8px;"></button>
+        <p class="error" id="gateError"></p>
+      </div>
+      <p class="muted" id="gateHint"></p>
+    </div>
+  </div>
+
   <div class="wrap">
-    <header>
-      <div>
-        <div class="brand">Watertown High School</div>
-        <h1 id="title">WHS</h1>
-        <p class="sub" id="subtitle"></p>
+    <div class="top">
+      <div class="pill">
+        <button type="button" id="bell" aria-label="News">🔔</button>
+        <button type="button" id="me" aria-label="More"><span class="avatar" id="avatar">W</span></button>
       </div>
-      <div class="lang">
-        <button class="ghost" type="button" id="en">EN</button>
-        <button class="ghost" type="button" id="es">ES</button>
-      </div>
-    </header>
+    </div>
+    <h1 id="hello"></h1>
+    <div class="date" id="dateLine"></div>
 
     <section id="view-home"></section>
     <section id="view-news" class="hidden"></section>
     <section id="view-lunch" class="hidden"></section>
-    <section id="view-passes" class="hidden">
-      <section class="card" id="setup">
-        <p id="setupIntro"></p>
-        <ol class="setup-steps" id="steps"></ol>
-        <div class="field">
-          <label for="token" id="tokenLabel">CloudKit API token</label>
-          <input id="token" type="password" autocomplete="off" spellcheck="false">
-        </div>
-        <div class="field">
-          <label for="env" id="envLabel">Environment</label>
-          <select id="env">
-            <option value="development">Development</option>
-            <option value="production">Production</option>
-          </select>
-        </div>
-        <div class="row">
-          <button type="button" id="save">Open</button>
-        </div>
-      </section>
-      <section id="log" class="hidden">
-        <div class="row">
-          <button type="button" id="refresh">Refresh</button>
-          <button class="ghost" type="button" id="signout">Change token</button>
-          <div id="apple-sign-in"></div>
-          <div id="apple-sign-out"></div>
-        </div>
-        <p id="status"></p>
-        <div id="passes"></div>
-      </section>
-    </section>
+    <section id="view-contacts" class="hidden"></section>
+    <section id="view-classes" class="hidden"></section>
+    <section id="view-more" class="hidden"></section>
+    <section id="view-passes" class="hidden"></section>
   </div>
-
   <nav class="tabs" id="tabs"></nav>
+
   <script src="https://cdn.apple-cloudkit.com/ck/2/cloudkit.js"></script>
   <script>
     const CONTAINER = "iCloud.com.davidgoncalvespersonalteam.UntitledProject";
     const PASS_TYPE = "WHSTeacherPass";
     const NEWS_TYPE = "WHSAnnouncement";
+    const PROFILE_TYPE = "WHSWebProfile";
     const MANIFEST = "whs-teacher-pass-manifest";
     const LUNCH = "https://drive.google.com/file/d/1FcyUw6LwftfJC6cDnOQrlXgBXC4UjB57/preview";
     const copy = {
       en: {
-        homeTitle: "Home",
-        homeSub: "News, lunch, and administrator passes on Chromebook. Study games and hallway passes stay on iPhone.",
-        news: "News", newsSub: "School announcements from the WHS app.",
-        lunch: "Lunch", lunchSub: "This week’s menu.",
-        passes: "Passes", passesSub: "Administrator log of hallway and Flex passes.",
-        chromebook: "On a Chromebook, use Chrome → More → Save and share → Create shortcut → Open as window.",
-        newsEmpty: "No news yet. Paste the CloudKit token under Passes first, then open News.",
-        setup: "Paste the CloudKit API token once on this Chromebook. It stays in this browser. Lunch does not need a token.",
-        steps: [
-          "CloudKit Dashboard → Tokens & Keys → WHS Admin Portal.",
-          "Keep Development selected while testing with Xcode.",
-          "World Read must be on for WHSTeacherPass and WHSAnnouncement."
-        ],
+        welcome: "Welcome",
+        gateBody: "Paste the WHS Web Code from Account on the iPhone app. It loads your name and role on this Chromebook.",
+        codeLabel: "WHS Web Code",
+        enter: "Continue",
+        skip: "Continue without a code",
+        gateHint: "Find it in the iPhone app: Account → Chromebook.",
+        gateFail: "Could not find that code. Check the letters, then try again. The school CloudKit token in More → Administrator is needed the first time.",
+        swipe: "Swipe Card",
+        swipeSub: "Opens on iPhone",
+        passesTile: "Teacher Passes",
+        passesSub: "Accept and send on iPhone",
+        news: "News", lunch: "Lunch", contacts: "Contacts", classes: "Classes", more: "More", home: "Home",
+        calendar: "Calendar", agenda: "Agenda",
+        calendarEmpty: "School dates stay on iPhone. News is on this site.",
+        lunchSub: "This week",
+        ask: "Ask WHS", aide: "Warrior's Aide", iphoneOnly: "iPhone",
+        shortcuts: "Shortcuts",
+        classesBody: "Classes, quizzes, and study games stay on the WHS iPhone app.",
+        moreBody: "On this site: news, lunch, and the staff directory. On iPhone: student ID, classes, quizzes, and sending hallway passes.",
+        signOut: "Remove this Chromebook profile",
+        admin: "Administrator",
+        adminHint: "CloudKit API token. Students can ignore this. Passes stay here so they are not on Home.",
         token: "CloudKit API token",
         env: "Environment",
-        open: "Save and load",
+        saveToken: "Save token",
+        openPasses: "Open pass log",
         refresh: "Refresh",
-        change: "Change token",
-        loading: "Loading…",
-        empty: "No passes yet. Sign in with Apple ID if the list stays empty, then Refresh.",
-        indexHint: "CloudKit: World Read on WHSTeacherPass, QUERYABLE index on recordName.",
-        hallway: "HALLWAY PASS",
-        flex: "FLEX PASS",
-        student: "STUDENT NAME",
-        destination: "DESTINATION",
-        dates: "DATE(S)",
-        teacher: "TEACHER",
-        failed: "Could not load CloudKit data. Check the token and environment."
+        emptyPasses: "No passes yet.",
+        hallway: "HALLWAY PASS", flex: "FLEX PASS",
+        student: "STUDENT NAME", destination: "DESTINATION", dates: "DATE(S)", teacher: "TEACHER",
+        search: "Name, role, or email",
+        newsEmpty: "No news yet.",
+        language: "Language"
       },
       es: {
-        homeTitle: "Inicio",
-        homeSub: "Noticias, almuerzo y pases de administrador en Chromebook. Los juegos y los pases de pasillo se quedan en iPhone.",
-        news: "Noticias", newsSub: "Anuncios escolares de la app WHS.",
-        lunch: "Almuerzo", lunchSub: "El menú de esta semana.",
-        passes: "Pases", passesSub: "Registro de pases de pasillo y Flex.",
-        chromebook: "En un Chromebook: Chrome → Más → Guardar y compartir → Crear acceso directo → Abrir como ventana.",
-        newsEmpty: "Aún no hay noticias. Pega el token de CloudKit en Pases y luego abre Noticias.",
-        setup: "Pega el token de CloudKit una vez en este Chromebook. Se queda en este navegador. El almuerzo no necesita token.",
-        steps: [
-          "CloudKit Dashboard → Tokens & Keys → WHS Admin Portal.",
-          "Deja Development si estás probando con Xcode.",
-          "World Read debe estar activo para WHSTeacherPass y WHSAnnouncement."
-        ],
+        welcome: "Bienvenido",
+        gateBody: "Pega el código web WHS desde Cuenta en la app de iPhone. Carga tu nombre y rol en este Chromebook.",
+        codeLabel: "Código web WHS",
+        enter: "Continuar",
+        skip: "Continuar sin código",
+        gateHint: "Está en la app de iPhone: Cuenta → Chromebook.",
+        gateFail: "No se encontró ese código. Revisa las letras. El token de CloudKit en Más → Administrador hace falta la primera vez.",
+        swipe: "Tarjeta Swipe",
+        swipeSub: "Se abre en iPhone",
+        passesTile: "Pases de maestros",
+        passesSub: "Acepta y envía en iPhone",
+        news: "Noticias", lunch: "Almuerzo", contacts: "Contactos", classes: "Clases", more: "Más", home: "Inicio",
+        calendar: "Calendario", agenda: "Agenda",
+        calendarEmpty: "Las fechas escolares se quedan en iPhone. Las noticias están en este sitio.",
+        lunchSub: "Esta semana",
+        ask: "Ask WHS", aide: "Warrior's Aide", iphoneOnly: "iPhone",
+        shortcuts: "Atajos",
+        classesBody: "Las clases, quizzes y juegos se quedan en la app WHS de iPhone.",
+        moreBody: "En este sitio: noticias, almuerzo y el directorio. En iPhone: ID, clases, quizzes y enviar pases.",
+        signOut: "Quitar este perfil de Chromebook",
+        admin: "Administrador",
+        adminHint: "Token de API de CloudKit. Los estudiantes pueden ignorar esto. Los pases están aquí, no en Inicio.",
         token: "Token de API de CloudKit",
         env: "Entorno",
-        open: "Guardar y cargar",
+        saveToken: "Guardar token",
+        openPasses: "Abrir registro de pases",
         refresh: "Actualizar",
-        change: "Cambiar token",
-        loading: "Cargando…",
-        empty: "Aún no hay pases. Inicia sesión con Apple ID si la lista sigue vacía y actualiza.",
-        indexHint: "CloudKit: World Read en WHSTeacherPass, índice QUERYABLE en recordName.",
-        hallway: "PASE DE PASILLO",
-        flex: "PASE FLEX",
-        student: "NOMBRE DEL ESTUDIANTE",
-        destination: "DESTINO",
-        dates: "FECHA(S)",
-        teacher: "MAESTRO",
-        failed: "No se pudieron cargar los datos. Revisa el token y el entorno."
+        emptyPasses: "Aún no hay pases.",
+        hallway: "PASE DE PASILLO", flex: "PASE FLEX",
+        student: "NOMBRE DEL ESTUDIANTE", destination: "DESTINO", dates: "FECHA(S)", teacher: "MAESTRO",
+        search: "Nombre, rol o correo",
+        newsEmpty: "Aún no hay noticias.",
+        language: "Idioma"
       }
     };
 
     let lang = localStorage.getItem("whsAdminLang") || "en";
-    let configured = false;
     let view = "home";
+    let configured = false;
+    let staff = [];
+    let profile = JSON.parse(localStorage.getItem("whsWebProfile") || "null");
     function t() { return copy[lang]; }
-
+    function schoolToken() {
+      return localStorage.getItem("whsAdminToken") || window.WHS_SCHOOL_TOKEN || "";
+    }
+    function schoolEnv() {
+      return localStorage.getItem("whsAdminEnv") || window.WHS_CK_ENV || "development";
+    }
     function escapeHtml(value) {
       return String(value || "").replace(/[&<>"']/g, (ch) => ({
         "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
       }[ch]));
     }
-
-    function field(label, value) {
-      if (!value) return "";
-      return `<div class="field"><span>${label}</span><strong>${escapeHtml(value)}</strong></div>`;
+    function greeting(name) {
+      const hour = new Date().getHours();
+      const n = name || "Warrior";
+      if (lang === "es") {
+        if (hour >= 5 && hour < 12) return "Buenos días, " + n;
+        if (hour >= 12 && hour < 21) return "Buenas tardes, " + n;
+        return "Buenas noches, " + n;
+      }
+      if (hour >= 5 && hour < 12) return "Good morning, " + n;
+      if (hour >= 12 && hour < 17) return "Good afternoon, " + n;
+      if (hour >= 17 && hour < 21) return "Good evening, " + n;
+      return "Good night, " + n;
     }
-
+    function initials(name) {
+      const parts = String(name || "W").trim().split(/\s+/);
+      return ((parts[0] || "W")[0] + (parts[1] ? parts[1][0] : "")).toUpperCase();
+    }
     function unwrapField(field) {
       if (field == null) return "";
       if (typeof field !== "object") return String(field);
       const value = Object.prototype.hasOwnProperty.call(field, "value") ? field.value : field;
       if (value == null) return "";
-      if (typeof value === "number" && (field.type === "TIMESTAMP" || field.type === "DATE" || value > 1000000000000)) {
-        const date = new Date(value);
-        return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleString();
-      }
-      if (value && typeof value === "object" && value.downloadURL) return value.downloadURL;
+      if (typeof value === "number" && value > 1000000000000) return new Date(value).toLocaleString();
+      if (value && value.downloadURL) return value.downloadURL;
       return typeof value === "object" ? "" : String(value);
     }
-
     function fieldValue(record, key) {
       if (!record) return "";
       if (typeof record.get === "function") {
@@ -231,11 +300,8 @@
           if (got != null && got !== "") return unwrapField(got);
         } catch (_) {}
       }
-      const item = record.fields && record.fields[key];
-      if (item != null) return unwrapField(item);
-      return "";
+      return unwrapField(record.fields && record.fields[key]);
     }
-
     function recordsFrom(response) {
       if (!response) return [];
       if (Array.isArray(response)) return response;
@@ -243,122 +309,12 @@
       if (response.recordName) return [response];
       return [];
     }
-
-    async function fetchByNames(db, names) {
-      const unique = [...new Set(names.filter(Boolean))];
-      if (!unique.length || typeof db.fetchRecords !== "function") return [];
-      const attempts = [
-        unique,
-        unique.map((recordName) => ({ recordName })),
-        { records: unique.map((recordName) => ({ recordName })) }
-      ];
-      for (const argument of attempts) {
-        try {
-          const response = await db.fetchRecords(argument);
-          const list = recordsFrom(response);
-          if (list.length) return list;
-        } catch (_) {}
-      }
-      return [];
-    }
-
-    function applyLang() {
-      const c = t();
-      document.documentElement.lang = lang;
-      setupIntro.textContent = c.setup;
-      steps.innerHTML = c.steps.map((s) => `<li>${s}</li>`).join("");
-      tokenLabel.textContent = c.token;
-      envLabel.textContent = c.env;
-      save.textContent = c.open;
-      refresh.textContent = c.refresh;
-      signout.textContent = c.change;
-      tabs.innerHTML = ["home", "news", "lunch", "passes"].map((id) => {
-        const label = id === "home" ? c.homeTitle : c[id];
-        return `<button type="button" data-view="${id}" class="${view === id ? "on" : ""}">${label}</button>`;
-      }).join("");
-      renderView();
-    }
-
-    function show(id) {
-      view = id;
-      ["home", "news", "lunch", "passes"].forEach((name) => {
-        document.getElementById("view-" + name).classList.toggle("hidden", name !== id);
-      });
-      applyLang();
-      if (id === "news") loadNews();
-      if (id === "passes" && configured) loadPasses();
-    }
-
-    function renderView() {
-      const c = t();
-      const titles = { home: c.homeTitle, news: c.news, lunch: c.lunch, passes: c.passes };
-      const subs = { home: c.homeSub, news: c.newsSub, lunch: c.lunchSub, passes: c.passesSub };
-      title.textContent = titles[view];
-      subtitle.textContent = subs[view];
-      document.getElementById("view-home").innerHTML = `
-        <p class="sub">${c.chromebook}</p>
-        <div class="home-grid">
-          <button class="tile" data-go="news"><b>${c.news}</b><span>${c.newsSub}</span></button>
-          <button class="tile" data-go="lunch"><b>${c.lunch}</b><span>${c.lunchSub}</span></button>
-          <button class="tile" data-go="passes"><b>${c.passes}</b><span>${c.passesSub}</span></button>
-        </div>`;
-      document.getElementById("view-lunch").innerHTML = `
-        <p class="sub"><a href="${LUNCH.replace("/preview", "/view")}" target="_blank" rel="noopener">Open in Drive</a></p>
-        <iframe class="lunch" title="Lunch menu" src="${LUNCH}"></iframe>`;
-    }
-
-    function renderPasses(records) {
-      const c = t();
-      const usable = records.filter((r) => {
-        const name = r.recordName || "";
-        return name && name !== MANIFEST && (fieldValue(r, "studentName") || fieldValue(r, "teacherName"));
-      });
-      usable.sort((a, b) => new Date(fieldValue(b, "createdAt") || 0) - new Date(fieldValue(a, "createdAt") || 0));
-      if (!usable.length) {
-        passes.innerHTML = `<p class="empty">${c.empty}</p><p class="empty">${c.indexHint}</p>`;
-        return;
-      }
-      passes.innerHTML = usable.map((record) => {
-        const kind = fieldValue(record, "kind") === "flex" ? c.flex : c.hallway;
-        const signature = fieldValue(record, "signature");
-        const created = fieldValue(record, "createdAt");
-        const sig = signature ? `<img class="sig" alt="" src="${escapeHtml(signature)}">` : "";
-        return `<article class="card"><p class="pass-kind">${kind}</p>
-          ${field(c.student, fieldValue(record, "studentName"))}
-          ${field(c.destination, fieldValue(record, "destination"))}
-          ${field(c.dates, fieldValue(record, "dates"))}
-          ${field(c.teacher, fieldValue(record, "teacherName"))}
-          ${field("", created)}${sig}</article>`;
-      }).join("");
-    }
-
-    function renderNews(records) {
-      const c = t();
-      const usable = records.filter((r) => {
-        const published = Number(fieldValue(r, "published") || 1);
-        return published !== 0 && (fieldValue(r, "titleEN") || fieldValue(r, "titleES"));
-      });
-      usable.sort((a, b) => Number(fieldValue(b, "published") || 0) - Number(fieldValue(a, "published") || 0));
-      if (!usable.length) {
-        document.getElementById("view-news").innerHTML = `<p class="empty">${c.newsEmpty}</p>`;
-        return;
-      }
-      document.getElementById("view-news").innerHTML = usable.map((record) => {
-        const heading = lang === "es"
-          ? (fieldValue(record, "titleES") || fieldValue(record, "titleEN"))
-          : (fieldValue(record, "titleEN") || fieldValue(record, "titleES"));
-        const body = lang === "es"
-          ? (fieldValue(record, "subtitleES") || fieldValue(record, "subtitleEN"))
-          : (fieldValue(record, "subtitleEN") || fieldValue(record, "subtitleES"));
-        const image = fieldValue(record, "image");
-        const img = image ? `<img class="news-img" alt="" src="${escapeHtml(image)}">` : "";
-        return `<article class="card"><b>${escapeHtml(heading)}</b><p class="sub">${escapeHtml(body)}</p>${img}</article>`;
-      }).join("");
+    function normalizeCode(value) {
+      return String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
     }
 
     async function ensureCloud() {
-      const token = localStorage.getItem("whsAdminToken") || document.getElementById("token").value.trim();
-      const environment = localStorage.getItem("whsAdminEnv") || document.getElementById("env").value;
+      const token = schoolToken();
       if (!token) return false;
       if (!configured) {
         CloudKit.configure({
@@ -367,10 +323,10 @@
             apiTokenAuth: {
               apiToken: token,
               persist: true,
-              signInButton: { id: "apple-sign-in", theme: "black" },
-              signOutButton: { id: "apple-sign-out", theme: "black" }
+              signInButton: { id: "apple-sign-in-placeholder", theme: "black" },
+              signOutButton: { id: "apple-sign-out-placeholder", theme: "black" }
             },
-            environment
+            environment: schoolEnv()
           }]
         });
         configured = true;
@@ -379,80 +335,259 @@
       return true;
     }
 
+    async function fetchByNames(db, names) {
+      const unique = [...new Set(names.filter(Boolean))];
+      if (!unique.length || typeof db.fetchRecords !== "function") return [];
+      const attempts = [unique, unique.map((recordName) => ({ recordName })), { records: unique.map((recordName) => ({ recordName })) }];
+      for (const argument of attempts) {
+        try {
+          const list = recordsFrom(await db.fetchRecords(argument));
+          if (list.length) return list;
+        } catch (_) {}
+      }
+      return [];
+    }
+
+    function showGate() {
+      gate.classList.toggle("hidden", !!profile);
+      applyChrome();
+    }
+
+    function applyChrome() {
+      const c = t();
+      const name = profile ? profile.displayName : "";
+      hello.textContent = greeting(name);
+      dateLine.textContent = new Date().toLocaleDateString(lang === "es" ? "es" : "en", {
+        weekday: "long", month: "long", day: "numeric"
+      });
+      avatar.textContent = initials(name);
+      gateTitle.textContent = c.welcome;
+      gateBody.textContent = c.gateBody;
+      codeLabel.textContent = c.codeLabel;
+      enterSite.textContent = c.enter;
+      skipSite.textContent = c.skip;
+      gateHint.textContent = c.gateHint;
+      tabs.innerHTML = [
+        ["home", "🏠", c.home],
+        ["classes", "📚", c.classes],
+        ["contacts", "👤", c.contacts],
+        ["more", "•••", c.more]
+      ].map(([id, ico, label]) => `<button type="button" data-view="${id}" class="${view === id ? "on" : ""}"><span class="ico">${ico}</span>${label}</button>`).join("");
+      renderAll();
+    }
+
+    function show(id) {
+      view = id;
+      ["home", "news", "lunch", "contacts", "classes", "more", "passes"].forEach((name) => {
+        document.getElementById("view-" + name).classList.toggle("hidden", name !== id);
+      });
+      applyChrome();
+      if (id === "news") loadNews();
+      if (id === "passes") loadPasses();
+    }
+
+    function renderAll() {
+      const c = t();
+      const swipeName = profile ? profile.displayName : "Warrior";
+      const swipeGrade = profile && profile.grade ? "Grade " + String(profile.grade) : "";
+      document.getElementById("view-home").innerHTML = `
+        <div class="card" data-go="news">
+          <div class="card-title"><b>${c.calendar}</b><span class="link">${c.agenda} ›</span></div>
+          <div class="row-item"><div class="plate">📅</div><div><div class="t">${c.news}</div><div class="s">${c.calendarEmpty}</div></div></div>
+        </div>
+        <div class="card">
+          <div class="row-item">
+            <div class="wmark">W</div>
+            <div><div class="t">${c.swipe}</div><div class="s">${escapeHtml(swipeName)}${swipeGrade ? " · " + escapeHtml(swipeGrade) : ""} · ${c.swipeSub}</div></div>
+            <span class="lock">🔒</span>
+          </div>
+        </div>
+        <div class="card">
+          <div class="row-item">
+            <div class="wmark">W</div>
+            <div><div class="t">${c.passesTile}</div><div class="s">${c.passesSub}</div></div>
+            <span class="chev">›</span>
+          </div>
+        </div>
+        <div class="pair">
+          <div class="mini"><div class="wmark">W</div><b>${c.ask}</b></div>
+          <div class="split"></div>
+          <div class="mini"><div class="wmark" style="background:#111">🦜</div><b>${c.aide}</b></div>
+        </div>
+        <div class="section">${c.shortcuts}</div>
+        <div class="shortcuts">
+          <button class="shortcut" data-go="lunch"><div class="plate">🍴</div></button>
+          <button class="shortcut" data-go="contacts"><div class="wmark">W</div></button>
+        </div>`;
+      document.getElementById("view-lunch").innerHTML = `<iframe class="lunch" title="Lunch" src="${LUNCH}"></iframe>`;
+      document.getElementById("view-classes").innerHTML = `<div class="card"><p class="muted">${c.classesBody}</p></div>`;
+      document.getElementById("view-more").innerHTML = `
+        <div class="card"><p class="muted">${c.moreBody}</p></div>
+        <div class="card">
+          <b>${c.language}</b>
+          <div class="lang" style="margin-top:10px;">
+            <button type="button" id="en">EN</button>
+            <button type="button" id="es">ES</button>
+          </div>
+        </div>
+        <button class="card" type="button" id="signOutProfile">${c.signOut}</button>
+        <details class="admin">
+          <summary>${c.admin}</summary>
+          <p class="muted" style="margin-top:10px;">${c.adminHint}</p>
+          <label class="muted">${c.token}</label>
+          <input id="token" type="password" style="margin:8px 0;">
+          <label class="muted">${c.env}</label>
+          <select id="env" style="margin:8px 0;">
+            <option value="development">Development</option>
+            <option value="production">Production</option>
+          </select>
+          <button class="primary" type="button" id="saveToken">${c.saveToken}</button>
+          <button class="ghost" type="button" id="openPasses" style="width:100%;margin-top:8px;">${c.openPasses}</button>
+          <div id="apple-sign-in-placeholder"></div>
+          <div id="apple-sign-out-placeholder"></div>
+        </details>`;
+      const tokenEl = document.getElementById("token");
+      const envEl = document.getElementById("env");
+      if (tokenEl) tokenEl.value = schoolToken();
+      if (envEl) envEl.value = schoolEnv();
+      renderStaff(document.getElementById("staffQuery") ? document.getElementById("staffQuery").value : "");
+    }
+
+    function renderStaff(query) {
+      const q = String(query || "").trim().toLowerCase();
+      const list = staff.filter((person) => {
+        const blob = `${person.name} ${person.group} ${person.email}`.toLowerCase();
+        return !q || blob.includes(q);
+      });
+      document.getElementById("view-contacts").innerHTML = `
+        <input class="search" id="staffQuery" placeholder="${t().search}" value="${escapeHtml(query || "")}">
+        <div class="card">${list.slice(0, 80).map((person) => `
+          <div class="staff">
+            <div class="t">${escapeHtml(person.name)}</div>
+            <div class="s">${escapeHtml(person.group || "")}${person.email ? " · " + escapeHtml(person.email) : ""}</div>
+          </div>`).join("") || `<p class="muted">${t().search}</p>`}</div>`;
+    }
+
     async function loadNews() {
       const node = document.getElementById("view-news");
-      node.innerHTML = `<p class="empty">${t().loading}</p>`;
-      if (!(await ensureCloud())) {
-        node.innerHTML = `<p class="empty">${t().newsEmpty}</p>`;
-        return;
-      }
+      node.innerHTML = `<p class="muted">${t().newsEmpty}</p>`;
+      if (!(await ensureCloud())) return;
       try {
         const queried = await CloudKit.getDefaultContainer().publicCloudDatabase.performQuery({ recordType: NEWS_TYPE });
-        renderNews(recordsFrom(queried));
+        const usable = recordsFrom(queried).filter((r) => Number(fieldValue(r, "published") || 1) !== 0);
+        if (!usable.length) return;
+        node.innerHTML = usable.map((record) => {
+          const heading = lang === "es" ? (fieldValue(record, "titleES") || fieldValue(record, "titleEN")) : (fieldValue(record, "titleEN") || fieldValue(record, "titleES"));
+          const body = lang === "es" ? (fieldValue(record, "subtitleES") || fieldValue(record, "subtitleEN")) : (fieldValue(record, "subtitleEN") || fieldValue(record, "subtitleES"));
+          const image = fieldValue(record, "image");
+          return `<article class="card"><b>${escapeHtml(heading)}</b><p class="muted">${escapeHtml(body)}</p>${image ? `<img class="news-img" alt="" src="${escapeHtml(image)}">` : ""}</article>`;
+        }).join("");
       } catch (error) {
-        node.innerHTML = `<p class="error">${escapeHtml(error.message || t().failed)}</p>`;
+        node.innerHTML = `<p class="error">${escapeHtml(error.message)}</p>`;
       }
     }
 
     async function loadPasses() {
+      const node = document.getElementById("view-passes");
       const c = t();
-      status.textContent = c.loading;
+      node.innerHTML = `<button class="ghost" data-view="more">${c.more} ‹</button><p class="muted">${c.refresh}</p><div id="passes"></div>`;
+      if (!(await ensureCloud())) {
+        node.insertAdjacentHTML("beforeend", `<p class="error">${c.adminHint}</p>`);
+        return;
+      }
       const seen = new Map();
-      const remember = (record) => {
-        if (record && record.recordName && !record.serverErrorCode) seen.set(record.recordName, record);
-      };
+      const remember = (record) => { if (record && record.recordName) seen.set(record.recordName, record); };
       try {
-        if (!(await ensureCloud())) return;
         const db = CloudKit.getDefaultContainer().publicCloudDatabase;
         (await fetchByNames(db, [MANIFEST])).forEach(remember);
         const raw = seen.get(MANIFEST) ? fieldValue(seen.get(MANIFEST), "passIDs") : "";
-        (await fetchByNames(db, raw.split(",").map((part) => part.trim()).filter(Boolean))).forEach(remember);
-        try {
-          recordsFrom(await db.performQuery({ recordType: PASS_TYPE })).forEach(remember);
-        } catch (_) {}
-        status.textContent = "";
-        renderPasses([...seen.values()]);
+        (await fetchByNames(db, raw.split(",").map((part) => part.trim()))).forEach(remember);
+        try { recordsFrom(await db.performQuery({ recordType: PASS_TYPE })).forEach(remember); } catch (_) {}
+        const usable = [...seen.values()].filter((r) => r.recordName !== MANIFEST && (fieldValue(r, "studentName") || fieldValue(r, "teacherName")));
+        document.getElementById("passes").innerHTML = usable.length ? usable.map((record) => {
+          const kind = fieldValue(record, "kind") === "flex" ? c.flex : c.hallway;
+          const signature = fieldValue(record, "signature");
+          return `<article class="card"><p class="pass-kind">${kind}</p>
+            <div class="t">${escapeHtml(fieldValue(record, "studentName"))}</div>
+            <div class="s">${escapeHtml(fieldValue(record, "destination"))}</div>
+            <div class="s">${escapeHtml(fieldValue(record, "teacherName"))}</div>
+            ${signature ? `<img class="sig" alt="" src="${escapeHtml(signature)}">` : ""}</article>`;
+        }).join("") : `<p class="muted">${c.emptyPasses}</p>`;
       } catch (error) {
-        status.textContent = "";
-        passes.innerHTML = `<p class="error">${c.failed}</p><p class="error">${escapeHtml(error.message || "")}</p>`;
+        node.insertAdjacentHTML("beforeend", `<p class="error">${escapeHtml(error.message)}</p>`);
       }
     }
 
-    async function openLog() {
-      const token = document.getElementById("token").value.trim();
-      if (!token) return;
-      localStorage.setItem("whsAdminToken", token);
-      localStorage.setItem("whsAdminEnv", document.getElementById("env").value);
-      setup.classList.add("hidden");
-      log.classList.remove("hidden");
-      await loadPasses();
+    async function enterWithCode() {
+      gateError.textContent = "";
+      const key = normalizeCode(webCode.value);
+      if (key.length < 8) {
+        gateError.textContent = t().gateFail;
+        return;
+      }
+      if (!(await ensureCloud())) {
+        gateError.textContent = t().gateFail;
+        return;
+      }
+      try {
+        const records = await fetchByNames(CloudKit.getDefaultContainer().publicCloudDatabase, [key]);
+        const record = records.find((item) => normalizeCode(item.recordName) === key);
+        if (!record) {
+          gateError.textContent = t().gateFail;
+          return;
+        }
+        profile = {
+          displayName: fieldValue(record, "displayName") || fieldValue(record, "firstName") || "Warrior",
+          role: fieldValue(record, "role") || "student",
+          grade: fieldValue(record, "grade") || "",
+          key
+        };
+        localStorage.setItem("whsWebProfile", JSON.stringify(profile));
+        showGate();
+        show("home");
+      } catch (error) {
+        gateError.textContent = error.message || t().gateFail;
+      }
     }
 
-    document.getElementById("token").value = localStorage.getItem("whsAdminToken") || "";
-    document.getElementById("env").value = localStorage.getItem("whsAdminEnv") || "development";
-    if (localStorage.getItem("whsAdminToken")) {
-      setup.classList.add("hidden");
-      log.classList.remove("hidden");
-    }
+    fetch("./staff.json").then((res) => res.json()).then((data) => {
+      staff = data;
+      if (view === "contacts") renderStaff("");
+    }).catch(() => {});
 
-    tabs.addEventListener("click", (event) => {
-      const button = event.target.closest("button[data-view]");
-      if (button) show(button.dataset.view);
+    document.body.addEventListener("click", (event) => {
+      const go = event.target.closest("[data-go]");
+      if (go) show(go.dataset.go);
+      const tab = event.target.closest("button[data-view]");
+      if (tab) show(tab.dataset.view);
+      if (event.target.id === "en") { lang = "en"; localStorage.setItem("whsAdminLang", lang); applyChrome(); }
+      if (event.target.id === "es") { lang = "es"; localStorage.setItem("whsAdminLang", lang); applyChrome(); }
+      if (event.target.id === "signOutProfile") {
+        localStorage.removeItem("whsWebProfile");
+        profile = null;
+        showGate();
+      }
+      if (event.target.id === "saveToken") {
+        localStorage.setItem("whsAdminToken", document.getElementById("token").value.trim());
+        localStorage.setItem("whsAdminEnv", document.getElementById("env").value);
+        configured = false;
+      }
+      if (event.target.id === "openPasses") show("passes");
+      if (event.target.id === "bell") show("news");
+      if (event.target.id === "me") show("more");
     });
-    document.getElementById("view-home").addEventListener("click", (event) => {
-      const tile = event.target.closest("button[data-go]");
-      if (tile) show(tile.dataset.go);
+    document.body.addEventListener("input", (event) => {
+      if (event.target.id === "staffQuery") renderStaff(event.target.value);
     });
-    save.addEventListener("click", openLog);
-    refresh.addEventListener("click", loadPasses);
-    signout.addEventListener("click", () => {
-      configured = false;
-      log.classList.add("hidden");
-      setup.classList.remove("hidden");
+    enterSite.addEventListener("click", enterWithCode);
+    skipSite.addEventListener("click", () => {
+      profile = { displayName: "Warrior", role: "guest", grade: "", key: "" };
+      localStorage.setItem("whsWebProfile", JSON.stringify(profile));
+      showGate();
+      show("home");
     });
-    en.addEventListener("click", () => { lang = "en"; localStorage.setItem("whsAdminLang", lang); applyLang(); });
-    es.addEventListener("click", () => { lang = "es"; localStorage.setItem("whsAdminLang", lang); applyLang(); });
-    applyLang();
+    showGate();
+    if (profile) show("home");
   </script>
 </body>
 </html>
