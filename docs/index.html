@@ -108,14 +108,16 @@
       padding: 18px;
       box-shadow: 0 1px 0 rgba(0,0,0,0.02);
     }
-    .action { cursor: pointer; text-align: left; width: 100%; border: 0; font: inherit; color: inherit; }
+    .action { cursor: pointer; text-align: left; width: 100%; border: 0; font: inherit; color: inherit; display: block; }
+    a.card, a.action { text-decoration: none; color: inherit; }
     .action:hover { background: #FAFAFC; }
     .card-title {
       display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px;
     }
     .card-title b { font-family: var(--font-text); font-size: 17px; font-weight: 600; letter-spacing: -0.022em; }
     .card-title .link { font-family: var(--font-text); color: var(--orange); font-size: 15px; font-weight: 600; }
-    .row-item { display: flex; gap: 12px; align-items: center; }
+    .row-item { display: flex; gap: 12px; align-items: center; width: 100%; min-width: 0; }
+    .row-item > div { min-width: 0; flex: 1; }
     .plate {
       width: 34px; height: 34px; border-radius: 10px; background: var(--soft);
       color: var(--orange); display: grid; place-items: center; font-size: 16px; flex: none;
@@ -373,6 +375,8 @@
     .gate-hint { margin: 12px 0 0; font-size: 12px; }
     .sheet { background: rgba(0,0,0,0.28); display: grid; place-items: center; padding: 24px; }
     .sheet-card { width: min(560px, 100%); background: white; border-radius: 28px; padding: 22px; }
+    .sheet-field { margin: 0 0 12px; }
+    .sheet-field span { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
     .home-steps { margin: 12px 0 0; padding-left: 18px; }
     .home-steps li { margin: 0 0 10px; color: var(--muted); font-size: 15px; }
     .id-card {
@@ -392,7 +396,7 @@
     .staff:hover { color: var(--orange); }
     details.admin { background: white; border-radius: 28px; padding: 16px; }
     details.admin summary { cursor: pointer; font-weight: 700; color: var(--muted); font-size: 14px; }
-    .toolbar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+    .toolbar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; grid-column: 1 / -1; }
     .news-grid, .pass-grid, .people-grid {
       display: grid; gap: 14px; grid-template-columns: 1fr;
     }
@@ -617,6 +621,33 @@
         classesTile: "Classes",
         classesSub: "No classes yet",
         noClasses: "No classes on this device yet. Add a class on iPhone, then reload.",
+        noClassesGuest: "No classes on this device yet. Add a class here to open its resources.",
+        addClass: "Add a class",
+        editClass: "Edit class",
+        deleteClass: "Delete class",
+        deleteClassTitle: "Delete this class?",
+        deleteClassBody: "This class will leave this device. You can add it again later.",
+        saveClass: "Save",
+        classSubject: "Subject",
+        classTeacher: "Teacher",
+        classLevel: "Course level",
+        classCategory: "Category",
+        classRoom: "Room",
+        classClassroom: "Classroom link",
+        classNeedInfo: "Enter a subject and teacher.",
+        catMath: "Math",
+        catEnglish: "English",
+        catScience: "Science",
+        catSpanish: "Spanish",
+        catHistory: "History",
+        catCTE: "CTE",
+        catPublishing: "Publishing",
+        levelCP: "College Prep",
+        levelHonors: "Honors",
+        levelAP: "AP",
+        levelECE: "ECE",
+        levelDual: "Dual Enrollment",
+        levelElective: "Elective",
         resources: "Resources",
         noResources: "No resources for this class yet.",
         classroom: "Go to Classroom",
@@ -652,11 +683,11 @@
         correct: "Correct",
         classesBody: "Your classes and study lists sync from iPhone with your web code.",
         moreBody: "This device site can show news, lunch, staff, and your ID card. Sending hallway passes, quizzes, and Ask WHS chat stay on iPhone.",
-        signOut: "Remove this device profile",
-        signOutTitle: "Remove this device profile?",
+        signOut: "Delete this device profile",
+        signOutTitle: "Delete this device profile?",
         signOutBody: "This device will forget your name, WHS Web Code, and Swipe Card photo. You can sign in again after.",
         signOutCancel: "Keep profile",
-        signOutConfirm: "Remove profile",
+        signOutConfirm: "Delete profile",
         admin: "Administrator",
         adminHint: "CloudKit API token. Students can ignore this. The pass log stays in this menu.",
         token: "CloudKit API token",
@@ -764,6 +795,33 @@
         classesTile: "Clases",
         classesSub: "Aún no hay clases",
         noClasses: "Aún no hay clases en este dispositivo. Añade una clase en iPhone y recarga.",
+        noClassesGuest: "Aún no hay clases en este dispositivo. Añade una clase aquí para abrir sus recursos.",
+        addClass: "Añadir una clase",
+        editClass: "Editar clase",
+        deleteClass: "Eliminar clase",
+        deleteClassTitle: "¿Eliminar esta clase?",
+        deleteClassBody: "Esta clase saldrá de este dispositivo. Puedes añadirla de nuevo después.",
+        saveClass: "Guardar",
+        classSubject: "Materia",
+        classTeacher: "Maestro",
+        classLevel: "Nivel",
+        classCategory: "Categoría",
+        classRoom: "Salón",
+        classClassroom: "Enlace de Classroom",
+        classNeedInfo: "Escribe la materia y el maestro.",
+        catMath: "Matemáticas",
+        catEnglish: "Inglés",
+        catScience: "Ciencias",
+        catSpanish: "Español",
+        catHistory: "Historia",
+        catCTE: "CTE",
+        catPublishing: "Publishing",
+        levelCP: "College Prep",
+        levelHonors: "Honors",
+        levelAP: "AP",
+        levelECE: "ECE",
+        levelDual: "Dual Enrollment",
+        levelElective: "Electivo",
         resources: "Recursos",
         noResources: "Aún no hay recursos para esta clase.",
         classroom: "Ir a Classroom",
@@ -799,11 +857,11 @@
         correct: "Correctas",
         classesBody: "Tus clases y listas de estudio se sincronizan desde iPhone con tu código web.",
         moreBody: "Este sitio muestra noticias, almuerzo, personal y tu ID. Enviar pases, quizzes y el chat se quedan en iPhone.",
-        signOut: "Quitar este perfil de este dispositivo",
-        signOutTitle: "¿Quitar este perfil de este dispositivo?",
+        signOut: "Eliminar este perfil de este dispositivo",
+        signOutTitle: "¿Eliminar este perfil de este dispositivo?",
         signOutBody: "Este dispositivo olvidará tu nombre, código web WHS y foto de Tarjeta Swipe. Puedes entrar de nuevo después.",
         signOutCancel: "Conservar perfil",
-        signOutConfirm: "Quitar perfil",
+        signOutConfirm: "Eliminar perfil",
         admin: "Administrador",
         adminHint: "Token de API de CloudKit. Los estudiantes pueden ignorar esto. El registro de pases está en este menú.",
         token: "Token de API de CloudKit",
@@ -1303,12 +1361,14 @@
           loadStudy();
         } else if (isGuestStudent()) {
           loadSwipeCard();
+          loadStudy();
           if (!hasWebKey()) {
             ensureGuestStudentProfile().then(() => {
               if (view === "home") {
                 renderHome();
                 loadSwipeCard();
                 loadStudentPasses();
+                loadStudy();
               }
               if (view === "more") renderMore();
             });
@@ -1394,16 +1454,17 @@
               <span class="chev">›</span>
             </div>
           </button>`;
-        cards = `
-          ${isPairedStudent() ? `${swipeTile}
-          ${passTile}
-          <button class="card action hero-pass wide" type="button" data-go="classes">
+        const classesTile = `<button class="card action hero-pass wide" type="button" data-go="classes">
             <div class="row-item">
               <span class="plate"><img class="sf-glyph" src="./books-vertical.png" alt=""></span>
               <div><div class="t">${c.classesTile}</div><div class="s" id="classTileSub">${c.classesSub}</div></div>
               <span class="chev">›</span>
             </div>
-          </button>` : (isGuestStudent() ? `${swipeTile}${canSeeOwnPasses() ? passTile : ""}` : "")}
+          </button>`;
+        cards = `
+          ${isPairedStudent() ? `${swipeTile}
+          ${passTile}
+          ${classesTile}` : (isGuestStudent() ? `${swipeTile}${canSeeOwnPasses() ? passTile : ""}${classesTile}` : "")}
           ${homeLunchWireNews()}`;
       }
       document.getElementById("view-home").innerHTML = `<div class="dash">${cards}</div>`;
@@ -1675,6 +1736,17 @@
       }
     };
 
+    const CLASS_CATEGORIES = ["Math", "English", "Science", "Spanish", "History", "CTE", "Publishing"];
+    const COURSE_LEVELS = ["College Prep", "Honors", "AP", "ECE", "Dual Enrollment", "Elective"];
+    const CATEGORY_KEYS = {
+      Math: "catMath", English: "catEnglish", Science: "catScience", Spanish: "catSpanish",
+      History: "catHistory", CTE: "catCTE", Publishing: "catPublishing"
+    };
+    const LEVEL_KEYS = {
+      "College Prep": "levelCP", Honors: "levelHonors", AP: "levelAP", ECE: "levelECE",
+      "Dual Enrollment": "levelDual", Elective: "levelElective"
+    };
+
     function parseStudy(raw) {
       if (!raw) return { classes: [], spanish: {}, english: {} };
       try {
@@ -1691,6 +1763,115 @@
 
     function studyState() {
       return window._study || { classes: [], spanish: {}, english: {} };
+    }
+
+    function canEditClassesOnSite() {
+      return isGuestStudent();
+    }
+
+    function guestClassList() {
+      return Array.isArray(profile && profile.classes) ? profile.classes.slice() : [];
+    }
+
+    function persistGuestClasses(classes) {
+      if (!profile) return;
+      profile.classes = classes;
+      localStorage.setItem("whsWebProfile", JSON.stringify(profile));
+      window._study = { classes, spanish: {}, english: {} };
+    }
+
+    function applyGuestStudy() {
+      window._study = { classes: guestClassList(), spanish: {}, english: {} };
+    }
+
+    function newClassId() {
+      if (window.crypto && typeof window.crypto.randomUUID === "function") return window.crypto.randomUUID();
+      return "class-" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    }
+
+    function categoryLabel(value) {
+      return t()[CATEGORY_KEYS[value] || ""] || value;
+    }
+
+    function levelLabel(value) {
+      return t()[LEVEL_KEYS[value] || ""] || value;
+    }
+
+    function classOptionList(values, selected, labels) {
+      return values.map((value) => {
+        const picked = value === selected ? " selected" : "";
+        return `<option value="${escapeHtml(value)}"${picked}>${escapeHtml(labels(value))}</option>`;
+      }).join("");
+    }
+
+    function showClassEditor(existing) {
+      const c = t();
+      const course = existing || {};
+      openSheet(`
+        <div class="card-title"><b>${existing ? c.editClass : c.addClass}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
+        <input type="hidden" id="classEditId" value="${escapeHtml(course.id || "")}">
+        <label class="sheet-field"><span>${c.classSubject}</span><input id="classSubject" value="${escapeHtml(course.subject || "")}" autocomplete="off"></label>
+        <label class="sheet-field"><span>${c.classTeacher}</span><input id="classTeacher" value="${escapeHtml(course.teacher || "")}" autocomplete="off"></label>
+        <label class="sheet-field"><span>${c.classLevel}</span><select id="classLevel">${classOptionList(COURSE_LEVELS, course.courseLevel || "College Prep", levelLabel)}</select></label>
+        <label class="sheet-field"><span>${c.classCategory}</span><select id="classCategory">${classOptionList(CLASS_CATEGORIES, course.category || "Spanish", categoryLabel)}</select></label>
+        <label class="sheet-field"><span>${c.classRoom}</span><input id="classRoom" value="${escapeHtml(course.room || "")}" autocomplete="off"></label>
+        <label class="sheet-field"><span>${c.classClassroom}</span><input id="classClassroom" value="${escapeHtml(course.classroomURL || "")}" placeholder="https://classroom.google.com/..." autocomplete="off"></label>
+        <p class="error" id="classEditError"></p>
+        <button class="primary" type="button" data-action="saveClass">${c.saveClass}</button>`);
+    }
+
+    function saveClassFromSheet() {
+      const err = document.getElementById("classEditError");
+      const subject = (document.getElementById("classSubject") || {}).value || "";
+      const teacher = (document.getElementById("classTeacher") || {}).value || "";
+      const trimmedSubject = subject.trim();
+      const trimmedTeacher = teacher.trim();
+      if (!trimmedSubject || !trimmedTeacher) {
+        if (err) err.textContent = t().classNeedInfo;
+        return;
+      }
+      const id = ((document.getElementById("classEditId") || {}).value || "").trim() || newClassId();
+      const classes = guestClassList();
+      const next = {
+        id,
+        subject: trimmedSubject,
+        teacher: trimmedTeacher,
+        courseLevel: (document.getElementById("classLevel") || {}).value || "College Prep",
+        category: (document.getElementById("classCategory") || {}).value || "Spanish",
+        classroomURL: ((document.getElementById("classClassroom") || {}).value || "").trim(),
+        letterGrade: "",
+        room: ((document.getElementById("classRoom") || {}).value || "").trim()
+      };
+      const index = classes.findIndex((item) => item.id === id);
+      if (index >= 0) {
+        next.letterGrade = classes[index].letterGrade || "";
+        classes[index] = next;
+      } else {
+        classes.push(next);
+      }
+      persistGuestClasses(classes);
+      closeSheet();
+      applyClassTile();
+      if (view === "classes") renderClasses();
+      if (view === "class") renderClassDetail();
+    }
+
+    function confirmDeleteClass(id) {
+      const c = t();
+      openSheet(`
+        <div class="card-title"><b>${c.deleteClassTitle}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
+        <p class="muted">${c.deleteClassBody}</p>
+        <button class="primary" type="button" data-action="closeSheet">${c.signOutCancel}</button>
+        <button class="ghost" type="button" data-action="deleteClass" data-class-id="${escapeHtml(id || "")}" style="width:100%;margin-top:8px;color:#B42318;">${c.deleteClass}</button>`);
+    }
+
+    function deleteGuestClass(id) {
+      persistGuestClasses(guestClassList().filter((item) => item.id !== id));
+      closeSheet();
+      if (window._classID === id) window._classID = "";
+      applyClassTile();
+      if (view === "class") show("classes");
+      else if (view === "classes") renderClasses();
     }
 
     function classById(id) {
@@ -1742,15 +1923,19 @@
     function renderClasses() {
       const node = document.getElementById("view-classes");
       if (!(node && view === "classes")) return;
+      const c = t();
       const courses = studyState().classes;
+      const add = canEditClassesOnSite()
+        ? `<button class="card action wide" type="button" data-action="addClass"><div class="t">${c.addClass}</div></button>`
+        : "";
       if (!courses.length) {
-        node.innerHTML = `${backBar()}<div class="card wide"><p class="muted" style="margin:0;">${t().noClasses}</p></div>`;
+        node.innerHTML = `${backBar()}<div class="dash">${add}<div class="card wide"><p class="muted" style="margin:0;">${canEditClassesOnSite() ? c.noClassesGuest : c.noClasses}</p></div></div>`;
         return;
       }
-      node.innerHTML = backBar() + `<div class="dash">` + courses.map((course) => `
+      node.innerHTML = backBar() + `<div class="dash">` + add + courses.map((course) => `
         <button class="card action" type="button" data-action="openClass" data-class-id="${escapeHtml(course.id)}">
           <div class="t">${escapeHtml(course.subject || t().classesTile)}</div>
-          <div class="s">${escapeHtml([course.teacher, course.courseLevel, course.room].filter(Boolean).join(" · "))}</div>
+          <div class="s">${escapeHtml([course.teacher, levelLabel(course.courseLevel), course.room].filter(Boolean).join(" · "))}</div>
         </button>`).join("") + `</div>`;
     }
 
@@ -1766,12 +1951,16 @@
       const resources = resourcesFor(course);
       const classroom = String(course.classroomURL || "").trim();
       const classroomHref = classroom && !/^https?:/i.test(classroom) ? `https://${classroom}` : classroom;
+      const edit = canEditClassesOnSite() ? `
+          <button class="ghost" type="button" data-action="editClass" data-class-id="${escapeHtml(course.id)}" style="margin-top:10px;">${c.editClass}</button>
+          <button class="ghost" type="button" data-action="askDeleteClass" data-class-id="${escapeHtml(course.id)}" style="width:100%;margin-top:8px;color:#B42318;">${c.deleteClass}</button>` : "";
       node.innerHTML = `
         <div class="toolbar"><button class="ghost" type="button" data-go="classes">${c.back}</button></div>
         <div class="card wide">
           <div class="t">${escapeHtml(course.subject || "")}</div>
-          <div class="s">${escapeHtml([course.teacher, course.courseLevel, course.category, course.letterGrade].filter(Boolean).join(" · "))}</div>
+          <div class="s">${escapeHtml([course.teacher, levelLabel(course.courseLevel), categoryLabel(course.category), course.letterGrade].filter(Boolean).join(" · "))}</div>
           ${classroomHref ? `<p><a href="${escapeHtml(classroomHref)}" target="_blank" rel="noopener" style="color:var(--orange);font-weight:600;">${c.classroom}</a></p>` : ""}
+          ${edit}
         </div>
         <p class="section">${c.resources}</p>
         <div class="dash">${resources.length ? resources.map((resource) => `
@@ -2023,6 +2212,14 @@
 
     async function loadStudy() {
       applyClassTile();
+      if (isGuestStudent()) {
+        applyGuestStudy();
+        applyClassTile();
+        if (view === "classes") renderClasses();
+        if (view === "class") renderClassDetail();
+        if (view === "study") renderStudy();
+        return;
+      }
       if (currentRole() !== "student" || !profile || !profile.key) {
         if (view === "classes") renderClasses();
         if (view === "class") renderClassDetail();
@@ -2237,6 +2434,9 @@
         </div>
       </a>`;
     }
+    function newsPage(feedInner) {
+      return `<div class="dash">${backBar()}${wireCard()}<div class="card wide">${feedInner}</div></div>`;
+    }
     function newsRowsHTML(items) {
       const c = t();
       if (!items.length) return `<p class="muted" style="margin:8px 0 0;">${c.newsEmpty}</p>`;
@@ -2258,7 +2458,7 @@
       const home = document.getElementById("homeNews");
       if (home) home.innerHTML = `<div class="t" style="margin-bottom:8px;">${c.newsFeed}</div>${rows}`;
       if (view === "news") {
-        document.getElementById("view-news").innerHTML = `${backBar()}${wireCard()}<div class="card wide"><div class="t" style="margin-bottom:8px;">${c.newsFeed}</div>${rows}</div>`;
+        document.getElementById("view-news").innerHTML = newsPage(`<div class="t" style="margin-bottom:8px;">${c.newsFeed}</div>${rows}`);
       }
     }
     async function loadNewsFeed() {
@@ -2293,7 +2493,7 @@
     }
     async function loadNews() {
       const c = t();
-      document.getElementById("view-news").innerHTML = `${backBar()}${wireCard()}<div class="card wide"><div class="t">${c.newsFeed}</div></div>`;
+      document.getElementById("view-news").innerHTML = newsPage(`<div class="t">${c.newsFeed}</div>`);
       await loadNewsFeed();
     }
 
@@ -2428,6 +2628,11 @@
           window._classID = action.dataset.classId || "";
           show("class");
         }
+        if (name === "addClass") showClassEditor(null);
+        if (name === "editClass") showClassEditor(classById(action.dataset.classId || ""));
+        if (name === "saveClass") saveClassFromSheet();
+        if (name === "askDeleteClass") confirmDeleteClass(action.dataset.classId || "");
+        if (name === "deleteClass") deleteGuestClass(action.dataset.classId || "");
         if (name === "openResource") openResource(action.dataset.classId || "", action.dataset.resource || "");
         if (name === "openReadySet") startLearnQuiz(action.dataset.set || "");
         if (name === "qlClose") {
@@ -2617,7 +2822,7 @@
         const key = await allocateGuestStudentKey({ displayName: name, firstName: name, grade })
           || makeWebUnlockKey();
         if (finish) finish.disabled = false;
-        profile = { displayName: name, firstName: name, role: "student", grade, key, guest: true };
+        profile = { displayName: name, firstName: name, role: "student", grade, key, guest: true, classes: [] };
       }
       localStorage.setItem("whsWebProfile", JSON.stringify(profile));
       applyAvatar("");
