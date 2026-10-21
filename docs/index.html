@@ -2497,7 +2497,7 @@
       if (gradeRow) gradeRow.classList.toggle("hidden", staff);
       if (accessRow) accessRow.classList.toggle("hidden", !staff);
     }
-    function enterGuest() {
+    async function enterGuest() {
       const name = String((document.getElementById("guestName") || {}).value || "").trim();
       const role = normalizeRole((document.getElementById("guestRole") || {}).value);
       const grade = String((document.getElementById("guestGrade") || {}).value || "").trim();
