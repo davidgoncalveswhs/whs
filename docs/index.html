@@ -324,7 +324,7 @@
     }
     .gate-bar {
       display: flex; align-items: center; gap: 10px;
-      background: #163a5f; color: #fff;
+      background: #E87722; color: #fff;
       padding: 12px 16px;
       font-family: var(--font-text); font-size: 16px; font-weight: 700;
     }
@@ -344,12 +344,12 @@
       font-size: 13px; font-weight: 600; display: grid; align-items: center;
     }
     .gate-row input {
-      border: 0; border-radius: 0; background: #e8f1fb;
+      border: 0; border-radius: 0; background: #FFF1E6;
       padding: 12px; font-size: 15px;
     }
     .gate-actions { display: flex; justify-content: flex-end; margin-top: 14px; }
     .gate-signin {
-      background: #163a5f; color: #fff; border-radius: 2px;
+      background: #E87722; color: #fff; border-radius: 2px;
       padding: 8px 16px; font-size: 13px; font-weight: 700; width: auto;
     }
     .gate-guest {
@@ -458,23 +458,22 @@
       </div>
       <div class="gate-body">
         <h1 class="gate-title" id="gateTitle">Welcome</h1>
-        <p class="muted gate-copy" id="gateBody">Paste your WHS Web Code from the iPhone app. This Chromebook loads your name, grade, and role.</p>
+        <p class="muted gate-copy" id="gateBody">Pair your iPhone App via Account -> WHS Web Code</p>
         <div class="gate-row">
           <label id="codeLabel" for="webCode">WHS Web Code</label>
           <input id="webCode" autocomplete="off" spellcheck="false" placeholder="XXXXX-XXXXX">
         </div>
         <div class="gate-actions">
-          <button class="gate-signin" type="button" id="enterSite">Load my profile</button>
+          <button class="gate-signin" type="button" id="enterSite">Sign In</button>
         </div>
         <p class="error" id="gateError"></p>
         <div class="gate-guest">
-          <div class="t" id="guestTitle">Guest sign in</div>
+          <div class="t" id="guestTitle">Don't use an iPhone?</div>
           <div class="gate-guest-row">
-            <p class="muted" id="guestBody" style="margin:0;">Continue without a web code for a limited student view.</p>
-            <button class="gate-signin" type="button" id="skipSite">Continue as guest</button>
+            <p class="muted" id="guestBody" style="margin:0;">Setup WHS WebView portal and homescreen shortcut</p>
+            <button class="gate-signin" type="button" id="skipSite">Sign In</button>
           </div>
         </div>
-        <p class="muted gate-hint" id="gateHint">On iPhone: Account → Chromebook. Student, Teacher, Parent, and Administrator each get a different dashboard.</p>
       </div>
     </div>
   </div>
@@ -492,13 +491,13 @@
     const copy = {
       en: {
         welcome: "Welcome",
-        gateBody: "Paste your WHS Web Code from the iPhone app. This Chromebook loads your name, grade, and role.",
+        gateBody: "Pair your iPhone App via Account -> WHS Web Code",
         codeLabel: "WHS Web Code",
-        enter: "Load my profile",
-        skip: "Continue as guest",
-        guestTitle: "Guest sign in",
-        guestBody: "Continue without a web code for a limited student view.",
-        gateHint: "On iPhone: Account → Chromebook. Student, Teacher, Parent, and Administrator each get a different dashboard.",
+        enter: "Sign In",
+        skip: "Sign In",
+        guestTitle: "Don't use an iPhone?",
+        guestBody: "Setup WHS WebView portal and homescreen shortcut",
+        gateHint: "",
         dashGuest: "Guest view. News and lunch are here. Sign in with a WHS Web Code for your full role.",
         useCode: "Use my WHS Web Code",
         gateFail: "Could not find that code. Check the letters. Open the iPhone app so it can save your code, then try again.",
@@ -610,13 +609,13 @@
       },
       es: {
         welcome: "Bienvenido",
-        gateBody: "Pega tu código web WHS de la app de iPhone. Este Chromebook carga tu nombre, grado y rol.",
+        gateBody: "Vincula tu app de iPhone en Cuenta -> Código web WHS",
         codeLabel: "Código web WHS",
-        enter: "Cargar mi perfil",
-        skip: "Continuar como invitado",
-        guestTitle: "Entrar como invitado",
-        guestBody: "Continúa sin código web para una vista limitada de estudiante.",
-        gateHint: "En iPhone: Cuenta → Chromebook. Estudiante, maestro, padre y administrador ven un panel distinto.",
+        enter: "Entrar",
+        skip: "Entrar",
+        guestTitle: "¿No usas iPhone?",
+        guestBody: "Configura el portal WHS WebView y el atajo de inicio",
+        gateHint: "",
         dashGuest: "Vista de invitado. Noticias y almuerzo están aquí. Entra con un código web WHS para tu rol.",
         useCode: "Usar mi código web WHS",
         gateFail: "No se encontró ese código. Revisa las letras. Abre la app de iPhone para que guarde el código y vuelve a intentar.",
@@ -988,7 +987,6 @@
       const guestBody = document.getElementById("guestBody");
       if (guestTitle) guestTitle.textContent = c.guestTitle;
       if (guestBody) guestBody.textContent = c.guestBody;
-      gateHint.textContent = c.gateHint;
       document.getElementById("bell").innerHTML = icons.bell;
       tabs.innerHTML = `<button type="button" class="web-mark" data-go="home"><img src="./app-icon-192.png" alt=""><span>Web View</span></button>` + [
         ["home", icons.house, c.home],
