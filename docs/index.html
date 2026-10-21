@@ -653,6 +653,10 @@
         classesBody: "Your classes and study lists sync from iPhone with your web code.",
         moreBody: "This Chromebook site can show news, lunch, staff, and your ID card. Sending hallway passes, quizzes, and Ask WHS chat stay on iPhone.",
         signOut: "Remove this Chromebook profile",
+        signOutTitle: "Remove this Chromebook profile?",
+        signOutBody: "This Chromebook will forget your name, WHS Web Code, and Swipe Card photo. You can sign in again after.",
+        signOutCancel: "Keep profile",
+        signOutConfirm: "Remove profile",
         admin: "Administrator",
         adminHint: "CloudKit API token. Students can ignore this. The pass log stays in this menu.",
         token: "CloudKit API token",
@@ -796,6 +800,10 @@
         classesBody: "Tus clases y listas de estudio se sincronizan desde iPhone con tu código web.",
         moreBody: "Este sitio muestra noticias, almuerzo, personal y tu ID. Enviar pases, quizzes y el chat se quedan en iPhone.",
         signOut: "Quitar este perfil de Chromebook",
+        signOutTitle: "¿Quitar este perfil de Chromebook?",
+        signOutBody: "Este Chromebook olvidará tu nombre, código web WHS y foto de Tarjeta Swipe. Puedes entrar de nuevo después.",
+        signOutCancel: "Conservar perfil",
+        signOutConfirm: "Quitar perfil",
         admin: "Administrador",
         adminHint: "Token de API de CloudKit. Los estudiantes pueden ignorar esto. El registro de pases está en este menú.",
         token: "Token de API de CloudKit",
@@ -1044,6 +1052,21 @@
     function openSheet(html) {
       sheetCard.innerHTML = html;
       sheet.classList.remove("hidden");
+    }
+    function confirmRemoveProfile() {
+      const c = t();
+      openSheet(`
+        <div class="card-title"><b>${c.signOutTitle}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
+        <p class="muted">${c.signOutBody}</p>
+        <button class="primary" type="button" data-action="closeSheet">${c.signOutCancel}</button>
+        <button class="ghost" type="button" data-action="removeProfile" style="width:100%;margin-top:8px;color:#B42318;">${c.signOutConfirm}</button>`);
+    }
+    function removeChromebookProfile() {
+      closeSheet();
+      localStorage.removeItem("whsWebProfile");
+      profile = null;
+      applyAvatar("");
+      showGate();
     }
 
     async function ensureCloud() {
@@ -2408,6 +2431,7 @@
           const picker = document.getElementById("swipeFile");
           if (picker) picker.click();
         }
+        if (name === "removeProfile") removeChromebookProfile();
         if (name === "addHome") showAddHome();
         if (name === "installHome") promptInstallHome();
         if (name === "openPass" || name === "openStudentPass") openPass(action.dataset.passId || "");
@@ -2497,11 +2521,8 @@
       if (tab) show(tab.dataset.view);
       if (event.target.id === "en") { lang = "en"; localStorage.setItem("whsAdminLang", lang); show(view); }
       if (event.target.id === "es") { lang = "es"; localStorage.setItem("whsAdminLang", lang); show(view); }
-      if (event.target.id === "signOutProfile") {
-        localStorage.removeItem("whsWebProfile");
-        profile = null;
-        applyAvatar("");
-        showGate();
+      if (event.target.id === "signOutProfile" || event.target.closest("#signOutProfile")) {
+        confirmRemoveProfile();
       }
       if (event.target.id === "saveToken") {
         localStorage.setItem("whsAdminToken", document.getElementById("token").value.trim());
