@@ -37,19 +37,21 @@
       color: var(--orange); font-size: 11px; font-weight: 800; letter-spacing: .08em;
     }
     .pill {
-      display: flex; align-items: center; gap: 2px;
-      background: white; border-radius: 999px; padding: 6px 8px 6px 10px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.06); flex: none;
+      display: flex; align-items: center; justify-content: center; gap: 2px;
+      background: white; border-radius: 999px; padding: 5px 6px;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.06); flex: none; height: 44px;
     }
     .pill button {
-      width: 34px; height: 34px; border: 0; background: transparent; border-radius: 50%;
-      display: grid; place-items: center; cursor: pointer; color: #111;
+      width: 34px; height: 34px; padding: 0; margin: 0; border: 0;
+      background: transparent; border-radius: 50%;
+      display: grid; place-items: center; cursor: pointer; color: #111; flex: none;
     }
     .icon { width: 22px; height: 22px; display: block; fill: currentColor; }
     .pill .icon { width: 18px; height: 18px; }
     .avatar {
       width: 34px; height: 34px; border-radius: 50%; background: #111;
       color: white; display: grid; place-items: center; font-weight: 700; font-size: 13px;
+      line-height: 1; letter-spacing: 0; text-align: center;
     }
     h1 {
       font-size: clamp(32px, 4vw, 44px); letter-spacing: -0.04em; margin: 0 0 6px;
@@ -131,6 +133,30 @@
     .error { color: #B42318; }
     .ok { color: #1F7A3A; }
     .pass-kind { font-size: 18px; font-weight: 800; letter-spacing: 0.04em; margin: 0 0 10px; }
+    .paper {
+      background: #fff; border: 2px solid #111; border-radius: 0; padding: 16px;
+      text-align: left; width: 100%; box-shadow: none;
+    }
+    .paper.big { padding: 28px; border-width: 3px; }
+    .paper-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .paper-w {
+      width: 42px; height: 42px; background: var(--orange); color: #fff;
+      font-weight: 800; display: grid; place-items: center; font-size: 22px; flex: none;
+    }
+    .paper.big .paper-w { width: 64px; height: 64px; font-size: 32px; }
+    .paper-title {
+      font-size: 22px; font-weight: 800; letter-spacing: 0.06em; line-height: 1.1;
+    }
+    .paper.big .paper-title { font-size: 34px; }
+    .paper-field { margin-bottom: 8px; }
+    .paper-field .lab {
+      font-size: 11px; font-weight: 600; color: var(--muted); letter-spacing: 0.04em;
+    }
+    .paper-field .val { font-size: 16px; padding-bottom: 6px; border-bottom: 1px solid #111; min-height: 28px; }
+    .paper.big .paper-field .val { font-size: 20px; }
+    .paper-sign { margin-top: 8px; }
+    .paper-sign img { max-height: 54px; max-width: 100%; display: block; }
+    .paper.big .paper-sign img { max-height: 88px; }
     .sig, .news-img { max-width: 100%; max-height: 220px; margin-top: 8px; border-radius: 12px; }
     .lunch { width: 100%; min-height: 72vh; border: 0; border-radius: 24px; background: white; }
     .search { margin-bottom: 12px; }
@@ -232,6 +258,7 @@
         <label class="muted" id="codeLabel"></label>
         <input id="webCode" autocomplete="off" spellcheck="false" placeholder="XXXXX-XXXXX" style="margin-top:8px;">
         <button class="primary" type="button" id="enterSite"></button>
+        <button class="ghost" type="button" id="skipSite" style="width:100%;margin-top:8px;"></button>
         <p class="error" id="gateError"></p>
       </div>
       <p class="muted" id="gateHint"></p>
@@ -254,10 +281,18 @@
         gateBody: "Paste your WHS Web Code from the iPhone app. This Chromebook loads your name, grade, and role.",
         codeLabel: "WHS Web Code",
         enter: "Load my profile",
-        gateHint: "On iPhone: Account → Chromebook. Student, Teacher, Parent, and Administrator each get a different dashboard.",
+        skip: "Continue as guest",
+        gateHint: "On iPhone: Account → Chromebook. Student, Teacher, Parent, and Administrator each get a different dashboard. Guest is a limited student view.",
+        dashGuest: "Guest view. News, lunch, and the staff directory. Sign in with a WHS Web Code for your full role.",
         gateFail: "Could not find that code. Check the letters. An administrator may need to save the school CloudKit token after signing in.",
-        dashStudent: "Your Chromebook dashboard. News is the bell. Staff is in Contacts.",
-        dashTeacher: "Teacher dashboard. Staff directory is in Contacts. Hallway and Flex passes stay on iPhone.",
+        dashStudent: "Your Chromebook dashboard. Accepted hallway and Flex passes sync from your iPhone with this web code.",
+        yourPasses: "Your passes",
+        noStudentPasses: "No passes on this Chromebook yet. Accept a pass in Teacher Passes on iPhone, then reload.",
+        signature: "TEACHER'S SIGNATURE",
+        studentNameLabel: "STUDENT NAME",
+        destinationLabel: "DESTINATION",
+        datesLabel: "DATE(S)",
+        dashTeacher: "Teacher dashboard. The campus pass log matches the administrator log. Hallway and Flex are still sent from iPhone.",
         dashParent: "Parent dashboard. News is the bell. Staff is in Contacts.",
         dashAdmin: "Administrator dashboard. The campus pass log is here. Students do not see it.",
         openLunch: "This week’s lunch",
@@ -313,10 +348,18 @@
         gateBody: "Pega tu código web WHS de la app de iPhone. Este Chromebook carga tu nombre, grado y rol.",
         codeLabel: "Código web WHS",
         enter: "Cargar mi perfil",
-        gateHint: "En iPhone: Cuenta → Chromebook. Estudiante, maestro, padre y administrador ven un panel distinto.",
+        skip: "Continuar como invitado",
+        gateHint: "En iPhone: Cuenta → Chromebook. Estudiante, maestro, padre y administrador ven un panel distinto. Invitado es una vista limitada de estudiante.",
+        dashGuest: "Vista de invitado. Noticias, almuerzo y el directorio. Entra con un código web WHS para tu rol.",
         gateFail: "No se encontró ese código. Revisa las letras. Un administrador puede guardar el token de CloudKit después de entrar.",
-        dashStudent: "Tu panel de Chromebook. Las noticias están en la campana. El personal está en Contactos.",
-        dashTeacher: "Panel de maestro. El directorio está en Contactos. Los pases se quedan en iPhone.",
+        dashStudent: "Tu panel de Chromebook. Los pases aceptados se sincronizan desde iPhone con este código web.",
+        yourPasses: "Tus pases",
+        noStudentPasses: "Aún no hay pases en este Chromebook. Acepta un pase en Pases de maestros en iPhone y recarga.",
+        signature: "FIRMA DEL MAESTRO",
+        studentNameLabel: "NOMBRE DEL ESTUDIANTE",
+        destinationLabel: "DESTINO",
+        datesLabel: "FECHA(S)",
+        dashTeacher: "Panel de maestro. El registro de pases es el mismo que el de administrador. Los pases se envían en iPhone.",
         dashParent: "Panel de padre. Las noticias están en la campana. El personal está en Contactos.",
         dashAdmin: "Panel de administrador. El registro de pases está aquí. Los estudiantes no lo ven.",
         openLunch: "Almuerzo de esta semana",
@@ -381,10 +424,19 @@
       if (raw === "teacher") return "teacher";
       if (raw === "parent") return "parent";
       if (raw === "student") return "student";
+      if (raw === "guest") return "guest";
       return "";
     }
     function currentRole() { return normalizeRole(profile && profile.role); }
-    function signedIn() { return !!(profile && profile.key && currentRole()); }
+    function isGuest() { return currentRole() === "guest"; }
+    function canSeePassLog() {
+      const role = currentRole();
+      return role === "administrator" || role === "teacher";
+    }
+    function signedIn() {
+      if (isGuest()) return true;
+      return !!(profile && profile.key && currentRole());
+    }
     if (profile && !signedIn()) {
       localStorage.removeItem("whsWebProfile");
       profile = null;
@@ -431,6 +483,7 @@
       if (role === "teacher") return lang === "es" ? "Maestro" : "Teacher";
       if (role === "parent") return lang === "es" ? "Padre" : "Parent";
       if (role === "student") return lang === "es" ? "Estudiante" : "Student";
+      if (role === "guest") return t().guest;
       return "";
     }
     function unwrapField(field) {
@@ -450,6 +503,7 @@
           if (got != null && got !== "") return unwrapField(got);
         } catch (_) {}
       }
+      if (record[key] != null && record[key] !== "") return unwrapField(record[key]);
       return unwrapField(record.fields && record.fields[key]);
     }
     function recordsFrom(response) {
@@ -529,6 +583,8 @@
       gateBody.textContent = c.gateBody;
       codeLabel.textContent = c.codeLabel;
       enterSite.textContent = c.enter;
+      const skip = document.getElementById("skipSite");
+      if (skip) skip.textContent = c.skip;
       gateHint.textContent = c.gateHint;
       document.getElementById("bell").innerHTML = icons.bell;
       tabs.innerHTML = [
@@ -545,13 +601,16 @@
         document.getElementById("view-" + name).classList.toggle("hidden", name !== id);
       });
       applyChrome();
-      if (id === "home") renderHome();
+      if (id === "home") {
+        renderHome();
+        if (currentRole() === "student") loadStudentPasses();
+      }
       if (id === "news") loadNews();
       if (id === "lunch") renderLunch();
       if (id === "contacts") renderStaff(document.getElementById("staffQuery") ? document.getElementById("staffQuery").value : "");
       if (id === "more") renderMore();
       if (id === "passes") {
-        if (currentRole() !== "administrator") {
+        if (!canSeePassLog()) {
           show("home");
           return;
         }
@@ -579,6 +638,7 @@
       } else if (role === "teacher") {
         cards = `
           <div class="card wide"><p class="muted" style="margin:0;">${c.dashTeacher}</p></div>
+          ${dashCard("passes", c.openPasses, "")}
           ${dashCard("news", c.openNews, "")}
           ${dashCard("contacts", c.openContacts, "")}`;
       } else if (role === "parent") {
@@ -589,7 +649,8 @@
           ${dashCard("contacts", c.openContacts, "")}`;
       } else {
         cards = `
-          <div class="card wide"><p class="muted" style="margin:0;">${c.dashStudent}</p></div>
+          <div class="card wide"><p class="muted" style="margin:0;">${isGuest() ? c.dashGuest : c.dashStudent}</p></div>
+          ${currentRole() === "student" ? `<div class="wide"><div class="section">${c.yourPasses}</div><div id="studentPasses"><p class="muted">${c.noStudentPasses}</p></div></div>` : ""}
           ${dashCard("news", c.openNews, "")}
           ${dashCard("lunch", c.openLunch, "")}
           ${dashCard("contacts", c.openContacts, "")}`;
@@ -611,10 +672,10 @@
 
     function renderMore() {
       const c = t();
-      const adminTools = currentRole() === "administrator" ? `
+      const adminTools = canSeePassLog() ? `
           <div class="card wide">
-            <b>${c.admin}</b>
-            <p class="muted">${c.dashAdmin}</p>
+            <b>${c.openPasses}</b>
+            <p class="muted">${canSeePassLog() && currentRole() === "teacher" ? c.dashTeacher : c.dashAdmin}</p>
             <label class="muted">${c.token}</label>
             <input id="token" type="password" style="margin:8px 0;">
             <label class="muted">${c.env}</label>
@@ -734,6 +795,62 @@
         <a class="ghost" style="display:block;text-align:center;margin-top:8px;text-decoration:none;" href="mailto:whsattendance@watertownps.org">${c.attendance}</a>`);
     }
 
+    function passPaper(record, enlarged) {
+      const c = t();
+      const kind = fieldValue(record, "kind") === "flex" ? c.flex : c.hallway;
+      const signature = fieldValue(record, "signature");
+      return `<article class="paper${enlarged ? " big" : ""}">
+        <div class="paper-head"><div class="paper-w">W</div><div class="paper-title">${kind}</div></div>
+        <div class="paper-field"><div class="lab">${c.studentNameLabel}</div><div class="val">${escapeHtml(fieldValue(record, "studentName"))}</div></div>
+        <div class="paper-field"><div class="lab">${c.destinationLabel}</div><div class="val">${escapeHtml(fieldValue(record, "destination"))}</div></div>
+        <div class="paper-field"><div class="lab">${c.datesLabel}</div><div class="val">${escapeHtml(fieldValue(record, "dates"))}</div></div>
+        <div class="paper-sign">
+          <div class="lab">${c.signature}</div>
+          ${signature ? `<img alt="" src="${escapeHtml(signature)}">` : ""}
+          <div class="s">${escapeHtml(fieldValue(record, "teacherName"))}</div>
+        </div>
+      </article>`;
+    }
+
+    async function loadStudentPasses() {
+      const node = document.getElementById("studentPasses");
+      const c = t();
+      if (!node || currentRole() !== "student" || !profile || !profile.key) return;
+      node.innerHTML = `<p class="muted">${c.yourPasses}</p>`;
+      if (!(await ensureCloud())) {
+        node.innerHTML = `<p class="muted">${c.noStudentPasses}</p>`;
+        return;
+      }
+      try {
+        const db = CloudKit.getDefaultContainer().publicCloudDatabase;
+        const profiles = await fetchByNames(db, [profile.key]);
+        const mine = profiles.find((item) => normalizeCode(item.recordName) === profile.key);
+        const ids = String(fieldValue(mine, "passIDs") || "").split(",").map((part) => part.trim()).filter(Boolean);
+        const records = await fetchByNames(db, ids);
+        const usable = records.filter((record) => fieldValue(record, "studentName") || fieldValue(record, "teacherName"));
+        if (!usable.length) {
+          node.innerHTML = `<p class="muted">${c.noStudentPasses}</p>`;
+          return;
+        }
+        window._studentPasses = {};
+        node.innerHTML = usable.map((record) => {
+          const id = record.recordName || fieldValue(record, "recordName") || String(Math.random());
+          window._studentPasses[id] = record;
+          return `<button type="button" class="action" style="margin-bottom:12px;" data-action="openStudentPass" data-pass-id="${escapeHtml(id)}">${passPaper(record, false)}</button>`;
+        }).join("");
+      } catch (error) {
+        node.innerHTML = `<p class="error">${escapeHtml(error.message)}</p>`;
+      }
+    }
+
+    function openStudentPass(id) {
+      const record = window._studentPasses && window._studentPasses[id];
+      if (!record) return;
+      openSheet(`
+        <div class="card-title"><button type="button" data-action="closeSheet">${t().close}</button></div>
+        ${passPaper(record, true)}`);
+    }
+
     async function loadNews() {
       const node = document.getElementById("view-news");
       const c = t();
@@ -849,6 +966,7 @@
         if (name === "aide") openAide();
         if (name === "askGo") answerAsk(document.getElementById("askBox") && document.getElementById("askBox").value);
         if (name === "closeSheet") closeSheet();
+        if (name === "openStudentPass") openStudentPass(action.dataset.passId || "");
       }
       const go = event.target.closest("[data-go]");
       if (go) show(go.dataset.go);
@@ -872,6 +990,7 @@
       if (event.target.id === "refreshPasses") loadPasses();
       if (event.target.closest("#bell")) show("news");
       if (event.target.closest("#me")) show("more");
+      if (event.target.id === "skipSite" || event.target.closest("#skipSite")) enterGuest();
       if (event.target.id === "enterSite" || event.target.closest("#enterSite")) enterWithCode();
     });
     document.body.addEventListener("input", (event) => {
@@ -891,6 +1010,12 @@
     sheet.addEventListener("click", (event) => {
       if (event.target === sheet) closeSheet();
     });
+    function enterGuest() {
+      profile = { displayName: "Warrior", role: "guest", grade: "", key: "" };
+      localStorage.setItem("whsWebProfile", JSON.stringify(profile));
+      showGate();
+      show("home");
+    }
     window.show = show;
     window.openSwipe = openSwipe;
     window.openAsk = openAsk;
