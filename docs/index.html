@@ -43,8 +43,10 @@
     }
     .pill button {
       width: 34px; height: 34px; border: 0; background: transparent; border-radius: 50%;
-      font-size: 18px; cursor: pointer;
+      display: grid; place-items: center; cursor: pointer; color: #111;
     }
+    .icon { width: 22px; height: 22px; display: block; fill: currentColor; }
+    .pill .icon { width: 18px; height: 18px; }
     .avatar {
       width: 34px; height: 34px; border-radius: 50%; background: #111;
       color: white; display: grid; place-items: center; font-weight: 700; font-size: 13px;
@@ -54,6 +56,16 @@
       font-weight: 800; line-height: 1.05;
     }
     .date { color: var(--muted); font-size: 16px; font-weight: 500; }
+    .role-chip {
+      display: inline-flex; align-items: center; margin-top: 10px;
+      background: var(--soft); color: var(--orange); font-size: 13px; font-weight: 700;
+      padding: 6px 10px; border-radius: 999px;
+    }
+    .dash { display: grid; gap: 14px; grid-template-columns: 1fr; }
+    @media (min-width: 820px) {
+      .dash { grid-template-columns: 1fr 1fr; }
+      .dash .wide { grid-column: 1 / -1; }
+    }
     .card {
       background: var(--paper);
       border-radius: 28px;
@@ -126,12 +138,13 @@
       position: fixed; left: 0; right: 0; bottom: 0; z-index: 8;
       background: var(--tab); backdrop-filter: blur(18px);
       border-top: 1px solid var(--line);
-      display: grid; grid-template-columns: repeat(4, 1fr);
+      display: grid; grid-template-columns: repeat(3, 1fr);
       padding: 8px 10px 14px;
     }
     nav.tabs button { color: #8E8E93; font-size: 10px; font-weight: 600; padding: 6px; border-radius: 14px; }
     nav.tabs button.on { color: var(--orange); background: var(--soft); }
-    nav.tabs .ico { font-size: 20px; display: block; margin-bottom: 2px; }
+    nav.tabs .ico { display: grid; place-items: center; margin: 0 auto 4px; }
+    nav.tabs .ico .icon { width: 22px; height: 22px; }
     .hidden { display: none !important; }
     .overlay, .sheet {
       position: fixed; inset: 0; background: var(--bg); z-index: 30; overflow: auto;
@@ -171,7 +184,7 @@
         padding: 28px 14px;
       }
       nav.tabs button { font-size: 14px; text-align: left; padding: 12px 14px; display: flex; gap: 10px; align-items: center; }
-      nav.tabs .ico { display: inline; font-size: 18px; margin: 0; }
+      nav.tabs .ico { display: grid; margin: 0; }
       .home-grid { grid-template-columns: 1.15fr .85fr; }
       .home-grid .wide { grid-column: 1 / -1; }
       .shortcuts { grid-template-columns: repeat(4, 1fr); }
@@ -193,9 +206,10 @@
           <div class="brand">WATERTOWN HIGH SCHOOL</div>
           <h1 id="hello"></h1>
           <div class="date" id="dateLine"></div>
+          <div class="role-chip" id="roleLine"></div>
         </div>
         <div class="pill">
-          <button type="button" id="bell" aria-label="News">🔔</button>
+          <button type="button" id="bell" aria-label="News"></button>
           <button type="button" id="me" aria-label="More"><span class="avatar" id="avatar">W</span></button>
         </div>
       </div>
@@ -204,7 +218,6 @@
       <section id="view-news" class="hidden"></section>
       <section id="view-lunch" class="hidden"></section>
       <section id="view-contacts" class="hidden"></section>
-      <section id="view-classes" class="hidden"></section>
       <section id="view-more" class="hidden"></section>
       <section id="view-passes" class="hidden"></section>
     </div>
@@ -219,7 +232,6 @@
         <label class="muted" id="codeLabel"></label>
         <input id="webCode" autocomplete="off" spellcheck="false" placeholder="XXXXX-XXXXX" style="margin-top:8px;">
         <button class="primary" type="button" id="enterSite"></button>
-        <button class="ghost" type="button" id="skipSite" style="width:100%;margin-top:8px;"></button>
         <p class="error" id="gateError"></p>
       </div>
       <p class="muted" id="gateHint"></p>
@@ -239,12 +251,19 @@
     const copy = {
       en: {
         welcome: "Welcome",
-        gateBody: "Paste the WHS Web Code from Account on the iPhone app. It loads your name and role on this Chromebook.",
+        gateBody: "Paste your WHS Web Code from the iPhone app. This Chromebook loads your name, grade, and role.",
         codeLabel: "WHS Web Code",
-        enter: "Continue",
-        skip: "Continue without a code",
-        gateHint: "Find it in the iPhone app: Account → Chromebook.",
-        gateFail: "Could not find that code. Check the letters, then try again. The school CloudKit token in More → Administrator is needed the first time.",
+        enter: "Load my profile",
+        gateHint: "On iPhone: Account → Chromebook. Student, Teacher, Parent, and Administrator each get a different dashboard.",
+        gateFail: "Could not find that code. Check the letters. An administrator may need to save the school CloudKit token after signing in.",
+        dashStudent: "Your Chromebook dashboard. News is the bell. Staff is in Contacts.",
+        dashTeacher: "Teacher dashboard. Staff directory is in Contacts. Hallway and Flex passes stay on iPhone.",
+        dashParent: "Parent dashboard. News is the bell. Staff is in Contacts.",
+        dashAdmin: "Administrator dashboard. The campus pass log is here. Students do not see it.",
+        openLunch: "This week’s lunch",
+        openNews: "School news",
+        openContacts: "Staff directory",
+        openPasses: "Campus pass log",
         swipe: "Swipe Card",
         swipeSub: "Show your Chromebook ID",
         passesTile: "Teacher Passes",
@@ -264,7 +283,6 @@
         env: "Environment",
         saveToken: "Save token",
         tokenSaved: "Token saved on this Chromebook.",
-        openPasses: "Open pass log",
         refresh: "Refresh",
         back: "Back",
         close: "Close",
@@ -275,9 +293,6 @@
         newsNeedToken: "News needs the school CloudKit token. An administrator can paste it in More.",
         language: "Language",
         email: "Email",
-        openLunch: "Open lunch menu",
-        openNews: "Open news",
-        openContacts: "Open staff directory",
         idTitle: "Swipe Card",
         idHint: "Cafeteria scanning still uses the iPhone. This card shows your name on Chromebook.",
         school: "Watertown High School",
@@ -295,12 +310,19 @@
       },
       es: {
         welcome: "Bienvenido",
-        gateBody: "Pega el código web WHS desde Cuenta en la app de iPhone. Carga tu nombre y rol en este Chromebook.",
+        gateBody: "Pega tu código web WHS de la app de iPhone. Este Chromebook carga tu nombre, grado y rol.",
         codeLabel: "Código web WHS",
-        enter: "Continuar",
-        skip: "Continuar sin código",
-        gateHint: "Está en la app de iPhone: Cuenta → Chromebook.",
-        gateFail: "No se encontró ese código. Revisa las letras. El token de CloudKit en Más → Administrador hace falta la primera vez.",
+        enter: "Cargar mi perfil",
+        gateHint: "En iPhone: Cuenta → Chromebook. Estudiante, maestro, padre y administrador ven un panel distinto.",
+        gateFail: "No se encontró ese código. Revisa las letras. Un administrador puede guardar el token de CloudKit después de entrar.",
+        dashStudent: "Tu panel de Chromebook. Las noticias están en la campana. El personal está en Contactos.",
+        dashTeacher: "Panel de maestro. El directorio está en Contactos. Los pases se quedan en iPhone.",
+        dashParent: "Panel de padre. Las noticias están en la campana. El personal está en Contactos.",
+        dashAdmin: "Panel de administrador. El registro de pases está aquí. Los estudiantes no lo ven.",
+        openLunch: "Almuerzo de esta semana",
+        openNews: "Noticias",
+        openContacts: "Directorio",
+        openPasses: "Registro de pases",
         swipe: "Tarjeta Swipe",
         swipeSub: "Muestra tu ID de Chromebook",
         passesTile: "Pases de maestros",
@@ -320,7 +342,6 @@
         env: "Entorno",
         saveToken: "Guardar token",
         tokenSaved: "Token guardado en este Chromebook.",
-        openPasses: "Abrir registro de pases",
         refresh: "Actualizar",
         back: "Atrás",
         close: "Cerrar",
@@ -331,9 +352,6 @@
         newsNeedToken: "Las noticias necesitan el token de CloudKit. Un administrador puede pegarlo en Más.",
         language: "Idioma",
         email: "Correo",
-        openLunch: "Abrir menú de almuerzo",
-        openNews: "Abrir noticias",
-        openContacts: "Abrir directorio",
         idTitle: "Tarjeta Swipe",
         idHint: "El escaneo de cafetería sigue en iPhone. Esta tarjeta muestra tu nombre en Chromebook.",
         school: "Watertown High School",
@@ -357,6 +375,20 @@
     let staff = [];
     let profile = JSON.parse(localStorage.getItem("whsWebProfile") || "null");
     let lunchReady = false;
+    function normalizeRole(value) {
+      const raw = String(value || "").toLowerCase().trim();
+      if (raw === "administrator" || raw === "admin") return "administrator";
+      if (raw === "teacher") return "teacher";
+      if (raw === "parent") return "parent";
+      if (raw === "student") return "student";
+      return "";
+    }
+    function currentRole() { return normalizeRole(profile && profile.role); }
+    function signedIn() { return !!(profile && profile.key && currentRole()); }
+    if (profile && !signedIn()) {
+      localStorage.removeItem("whsWebProfile");
+      profile = null;
+    }
     function t() { return copy[lang]; }
     function schoolToken() {
       return localStorage.getItem("whsAdminToken") || window.WHS_SCHOOL_TOKEN || "";
@@ -382,17 +414,24 @@
       if (hour >= 17 && hour < 21) return "Good evening, " + n;
       return "Good night, " + n;
     }
+    const icons = {
+      house: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12.4 3.15a.7.7 0 0 0-.8 0L2.7 9.7a.75.75 0 0 0 .45 1.33h1.4v8.22c0 .7.56 1.25 1.25 1.25h3.7v-5.6c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v5.6h3.7c.7 0 1.25-.55 1.25-1.25V11h1.4a.75.75 0 0 0 .45-1.33z"/></svg>',
+      books: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6.2 3.5h3.1c.7 0 1.2.55 1.2 1.2v14.6c0 .7-.55 1.2-1.2 1.2H6.2c-.7 0-1.2-.5-1.2-1.2V4.7c0-.65.5-1.2 1.2-1.2zm8.5 0h3.1c.7 0 1.2.55 1.2 1.2v12.3c.7.15 1.2.75 1.2 1.5 0 .85-.7 1.5-1.5 1.5h-4c-.8 0-1.5-.65-1.5-1.5 0-.75.5-1.35 1.2-1.5V4.7c0-.65.5-1.2 1.2-1.2z"/></svg>',
+      person: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 12.2a4.35 4.35 0 1 0 0-8.7 4.35 4.35 0 0 0 0 8.7zM4.4 20.4c.45-3.55 3.55-6 7.6-6s7.15 2.45 7.6 6c.08.6-.4 1.1-1 1.1H5.4c-.6 0-1.08-.5-1-1.1z"/></svg>',
+      more: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="6.5" cy="12" r="1.9"/><circle cx="12" cy="12" r="1.9"/><circle cx="17.5" cy="12" r="1.9"/></svg>',
+      bell: '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22.2a2.35 2.35 0 0 0 2.3-2.2h-4.6A2.35 2.35 0 0 0 12 22.2zM19.2 16V11a7.2 7.2 0 0 0-5.1-6.85V3.7a2.1 2.1 0 1 0-4.2 0v.45A7.2 7.2 0 0 0 4.8 11v5L3.15 17.7c-.55.55-.16 1.5.62 1.5h16.46c.78 0 1.17-.95.62-1.5z"/></svg>'
+    };
     function initials(name) {
       const parts = String(name || "W").trim().split(/\s+/);
       return ((parts[0] || "W")[0] + (parts[1] ? parts[1][0] : "")).toUpperCase();
     }
     function roleLabel() {
-      const role = (profile && profile.role) || "guest";
+      const role = currentRole();
       if (role === "administrator") return t().admin;
       if (role === "teacher") return lang === "es" ? "Maestro" : "Teacher";
       if (role === "parent") return lang === "es" ? "Padre" : "Parent";
       if (role === "student") return lang === "es" ? "Estudiante" : "Student";
-      return t().guest;
+      return "";
     }
     function unwrapField(field) {
       if (field == null) return "";
@@ -468,8 +507,9 @@
     }
 
     function showGate() {
-      gate.classList.toggle("hidden", !!profile);
-      gate.toggleAttribute("hidden", !!profile);
+      const inProfile = signedIn();
+      gate.classList.toggle("hidden", inProfile);
+      gate.toggleAttribute("hidden", inProfile);
       applyChrome();
     }
 
@@ -481,24 +521,27 @@
         weekday: "long", month: "long", day: "numeric"
       });
       avatar.textContent = initials(name);
+      const roleText = roleLabel();
+      const gradeText = profile && profile.grade ? `${c.grade} ${profile.grade}` : "";
+      roleLine.textContent = [roleText, gradeText].filter(Boolean).join(" · ");
+      roleLine.classList.toggle("hidden", !roleText);
       gateTitle.textContent = c.welcome;
       gateBody.textContent = c.gateBody;
       codeLabel.textContent = c.codeLabel;
       enterSite.textContent = c.enter;
-      skipSite.textContent = c.skip;
       gateHint.textContent = c.gateHint;
+      document.getElementById("bell").innerHTML = icons.bell;
       tabs.innerHTML = [
-        ["home", "🏠", c.home],
-        ["classes", "📚", c.classes],
-        ["contacts", "👤", c.contacts],
-        ["more", "•••", c.more]
+        ["home", icons.house, c.home],
+        ["contacts", icons.person, c.contacts],
+        ["more", icons.more, c.more]
       ].map(([id, ico, label]) => `<button type="button" data-view="${id}" class="${view === id ? "on" : ""}"><span class="ico">${ico}</span>${label}</button>`).join("");
     }
 
     function show(id) {
       view = id;
       closeSheet();
-      ["home", "news", "lunch", "contacts", "classes", "more", "passes"].forEach((name) => {
+      ["home", "news", "lunch", "contacts", "more", "passes"].forEach((name) => {
         document.getElementById("view-" + name).classList.toggle("hidden", name !== id);
       });
       applyChrome();
@@ -506,52 +549,52 @@
       if (id === "news") loadNews();
       if (id === "lunch") renderLunch();
       if (id === "contacts") renderStaff(document.getElementById("staffQuery") ? document.getElementById("staffQuery").value : "");
-      if (id === "classes") renderClasses();
       if (id === "more") renderMore();
-      if (id === "passes") loadPasses();
+      if (id === "passes") {
+        if (currentRole() !== "administrator") {
+          show("home");
+          return;
+        }
+        loadPasses();
+      }
     }
 
     function backBar() {
       return `<div class="toolbar"><button class="ghost" type="button" data-view="home">${t().back}</button></div>`;
     }
 
+    function dashCard(go, title, subtitle) {
+      return `<button class="card action" type="button" data-go="${go}"><div class="t">${title}</div>${subtitle ? `<div class="s">${subtitle}</div>` : ""}</button>`;
+    }
     function renderHome() {
       const c = t();
-      const swipeName = profile ? profile.displayName : "Warrior";
-      const swipeGrade = profile && profile.grade ? `${c.grade} ${profile.grade}` : "";
-      document.getElementById("view-home").innerHTML = `
-        <div class="home-grid">
-          <button class="card action calendar wide" type="button" data-go="news">
-            <div class="card-title"><b>${c.calendar}</b><span class="link">${c.agenda} ›</span></div>
-            <div class="row-item"><div class="plate">📅</div><div><div class="t">${c.news}</div><div class="s">${c.calendarEmpty}</div></div></div>
-          </button>
-          <button class="card action" type="button" data-action="swipe">
-            <div class="row-item">
-              <div class="wmark">W</div>
-              <div><div class="t">${c.swipe}</div><div class="s">${escapeHtml(swipeName)}${swipeGrade ? " · " + escapeHtml(swipeGrade) : ""}</div></div>
-              <span class="lock">🔒</span>
-            </div>
-          </button>
-          <button class="card action" type="button" data-action="passesInfo">
-            <div class="row-item">
-              <div class="wmark">W</div>
-              <div><div class="t">${c.passesTile}</div><div class="s">${c.passesSub}</div></div>
-              <span class="chev">›</span>
-            </div>
-          </button>
-          <div class="pair wide">
-            <button class="mini" type="button" data-action="ask"><div class="wmark">W</div><b>${c.ask}</b></button>
-            <div class="split"></div>
-            <button class="mini" type="button" data-action="aide"><div class="wmark" style="background:#111">🦜</div><b>${c.aide}</b></button>
-          </div>
-          <div class="section">${c.shortcuts}</div>
-          <div class="shortcuts wide">
-            <button class="shortcut" type="button" data-go="lunch"><div class="plate">🍴</div><b>${c.lunch}</b></button>
-            <button class="shortcut" type="button" data-go="contacts"><div class="wmark">W</div><b>${c.contacts}</b></button>
-            <button class="shortcut" type="button" data-go="news"><div class="plate">🔔</div><b>${c.news}</b></button>
-            <button class="shortcut" type="button" data-go="classes"><div class="plate">📚</div><b>${c.classes}</b></button>
-          </div>
-        </div>`;
+      const role = currentRole();
+      let cards = "";
+      if (role === "administrator") {
+        cards = `
+          <div class="card wide"><p class="muted" style="margin:0;">${c.dashAdmin}</p></div>
+          ${dashCard("passes", c.openPasses, "")}
+          ${dashCard("news", c.openNews, "")}
+          ${dashCard("contacts", c.openContacts, "")}`;
+      } else if (role === "teacher") {
+        cards = `
+          <div class="card wide"><p class="muted" style="margin:0;">${c.dashTeacher}</p></div>
+          ${dashCard("news", c.openNews, "")}
+          ${dashCard("contacts", c.openContacts, "")}`;
+      } else if (role === "parent") {
+        cards = `
+          <div class="card wide"><p class="muted" style="margin:0;">${c.dashParent}</p></div>
+          ${dashCard("news", c.openNews, "")}
+          ${dashCard("lunch", c.openLunch, "")}
+          ${dashCard("contacts", c.openContacts, "")}`;
+      } else {
+        cards = `
+          <div class="card wide"><p class="muted" style="margin:0;">${c.dashStudent}</p></div>
+          ${dashCard("news", c.openNews, "")}
+          ${dashCard("lunch", c.openLunch, "")}
+          ${dashCard("contacts", c.openContacts, "")}`;
+      }
+      document.getElementById("view-home").innerHTML = `<div class="dash">${cards}</div>`;
     }
 
     function renderLunch() {
@@ -568,23 +611,10 @@
 
     function renderMore() {
       const c = t();
-      document.getElementById("view-more").innerHTML = `
-        <div class="home-grid">
-          <div class="card"><p class="muted" style="margin:0;">${c.moreBody}</p></div>
-          <div class="card">
-            <b>${c.language}</b>
-            <div class="lang" style="margin-top:10px;">
-              <button type="button" id="en" class="${lang === "en" ? "on" : ""}">EN</button>
-              <button type="button" id="es" class="${lang === "es" ? "on" : ""}">ES</button>
-            </div>
-          </div>
-          <button class="card action" type="button" data-action="swipe"><b>${c.swipe}</b><div class="s">${c.idHint}</div></button>
-          <button class="card action" type="button" data-go="news"><b>${c.news}</b></button>
-          <button class="card action" type="button" data-go="lunch"><b>${c.lunch}</b></button>
-          <button class="card action" type="button" id="signOutProfile">${c.signOut}</button>
-          <details class="admin wide">
-            <summary>${c.admin}</summary>
-            <p class="muted" style="margin-top:10px;">${c.adminHint}</p>
+      const adminTools = currentRole() === "administrator" ? `
+          <div class="card wide">
+            <b>${c.admin}</b>
+            <p class="muted">${c.dashAdmin}</p>
             <label class="muted">${c.token}</label>
             <input id="token" type="password" style="margin:8px 0;">
             <label class="muted">${c.env}</label>
@@ -597,7 +627,12 @@
             <button class="ghost" type="button" id="openPasses" style="width:100%;margin-top:8px;">${c.openPasses}</button>
             <div id="apple-sign-in-placeholder"></div>
             <div id="apple-sign-out-placeholder"></div>
-          </details>
+          </div>` : "";
+      document.getElementById("view-more").innerHTML = `
+        <div class="dash">
+          <div class="card wide"><div class="t">${escapeHtml(profile ? profile.displayName : "")}</div><div class="s">${escapeHtml(roleLabel())}</div></div>
+          ${adminTools}
+          <button class="card action" type="button" id="signOutProfile">${c.signOut}</button>
         </div>`;
       const tokenEl = document.getElementById("token");
       const envEl = document.getElementById("env");
@@ -624,14 +659,6 @@
         ${view === "contacts" ? backBar() : ""}
         <input class="search" id="staffQuery" placeholder="${t().search}" value="${escapeHtml(query || "")}">
         <div class="people-grid">${list.slice(0, 120).map((person) => `<div class="card">${personButton(person)}</div>`).join("") || `<div class="card"><p class="muted">${t().search}</p></div>`}</div>`;
-    }
-
-    function renderClasses() {
-      const teachers = staff.filter((person) => /teacher/i.test(person.group || ""));
-      document.getElementById("view-classes").innerHTML = `
-        ${backBar()}
-        <p class="muted" style="margin:0 0 14px;">${t().classesBody}</p>
-        <div class="people-grid">${teachers.slice(0, 120).map((person) => `<div class="card">${personButton(person)}</div>`).join("")}</div>`;
     }
 
     function openSwipe() {
@@ -782,9 +809,15 @@
           gateError.textContent = t().gateFail;
           return;
         }
+        const role = normalizeRole(fieldValue(record, "role"));
+        if (!role) {
+          gateError.textContent = t().gateFail;
+          return;
+        }
         profile = {
           displayName: fieldValue(record, "displayName") || fieldValue(record, "firstName") || "Warrior",
-          role: fieldValue(record, "role") || "student",
+          firstName: fieldValue(record, "firstName") || "",
+          role,
           grade: fieldValue(record, "grade") || "",
           key
         };
@@ -799,7 +832,6 @@
     fetch("./staff.json").then((res) => res.json()).then((data) => {
       staff = data;
       if (view === "contacts") renderStaff("");
-      if (view === "classes") renderClasses();
     }).catch(() => {});
 
     document.body.addEventListener("click", (event) => {
@@ -838,9 +870,8 @@
       }
       if (event.target.id === "openPasses") show("passes");
       if (event.target.id === "refreshPasses") loadPasses();
-      if (event.target.id === "bell") show("news");
-      if (event.target.id === "me") show("more");
-      if (event.target.id === "skipSite" || event.target.closest("#skipSite")) enterGuest();
+      if (event.target.closest("#bell")) show("news");
+      if (event.target.closest("#me")) show("more");
       if (event.target.id === "enterSite" || event.target.closest("#enterSite")) enterWithCode();
     });
     document.body.addEventListener("input", (event) => {
@@ -851,25 +882,22 @@
         event.preventDefault();
         answerAsk(event.target.value);
       }
+      if (event.key === "Enter" && event.target.id === "webCode") {
+        event.preventDefault();
+        enterWithCode();
+      }
       if (event.key === "Escape") closeSheet();
     });
     sheet.addEventListener("click", (event) => {
       if (event.target === sheet) closeSheet();
     });
-    function enterGuest() {
-      profile = { displayName: "Warrior", role: "guest", grade: "", key: "" };
-      localStorage.setItem("whsWebProfile", JSON.stringify(profile));
-      showGate();
-      show("home");
-    }
     window.show = show;
     window.openSwipe = openSwipe;
     window.openAsk = openAsk;
     window.openAide = openAide;
     window.openPassesInfo = openPassesInfo;
-    window.enterGuest = enterGuest;
     showGate();
-    if (profile) show("home");
+    if (signedIn()) show("home");
   </script>
 </body>
 </html>
