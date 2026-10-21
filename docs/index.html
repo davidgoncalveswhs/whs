@@ -317,15 +317,6 @@
         <input id="webCode" autocomplete="off" spellcheck="false" placeholder="XXXXX-XXXXX" style="margin-top:8px;">
         <button class="primary" type="button" id="enterSite">Load my profile</button>
         <button class="ghost" type="button" id="skipSite" style="width:100%;margin-top:8px;">Continue as guest</button>
-        <div id="gateTokenBox" class="hidden" style="margin-top:12px;">
-          <label class="muted" id="gateTokenLabel">School CloudKit token</label>
-          <input id="gateToken" type="password" autocomplete="off" style="margin-top:8px;">
-          <label class="muted" id="gateEnvLabel" style="display:block;margin-top:8px;">Environment</label>
-          <select id="gateEnv" style="margin-top:8px;">
-            <option value="development">Development</option>
-            <option value="production">Production</option>
-          </select>
-        </div>
         <p class="error" id="gateError"></p>
       </div>
       <p class="muted" id="gateHint">On iPhone: Account → Chromebook. Student, Teacher, Parent, and Administrator each get a different dashboard. Guest is a limited student view.</p>
@@ -352,9 +343,6 @@
         gateHint: "On iPhone: Account → Chromebook. Student, Teacher, Parent, and Administrator each get a different dashboard. Guest is a limited student view.",
         dashGuest: "Guest view. News, lunch, and the staff directory. Sign in with a WHS Web Code for your full role.",
         gateFail: "Could not find that code. Check the letters. Open the iPhone app so it can save your code, then try again.",
-        needToken: "This Chromebook still needs the school CloudKit token. Paste it below, then load your profile.",
-        gateTokenLabel: "School CloudKit token",
-        gateEnvLabel: "Environment",
         dashStudent: "Your Chromebook dashboard. Swipe Card, classes, and accepted hallway and Flex passes sync from your iPhone with this web code.",
         yourPasses: "Your passes",
         noneYet: "No passes yet",
@@ -447,9 +435,6 @@
         gateHint: "En iPhone: Cuenta → Chromebook. Estudiante, maestro, padre y administrador ven un panel distinto. Invitado es una vista limitada de estudiante.",
         dashGuest: "Vista de invitado. Noticias, almuerzo y el directorio. Entra con un código web WHS para tu rol.",
         gateFail: "No se encontró ese código. Revisa las letras. Abre la app de iPhone para que guarde el código y vuelve a intentar.",
-        needToken: "Este Chromebook aún necesita el token de CloudKit de la escuela. Pégalo abajo y carga tu perfil.",
-        gateTokenLabel: "Token de CloudKit de la escuela",
-        gateEnvLabel: "Entorno",
         dashStudent: "Tu panel de Chromebook. Tarjeta Swipe, las clases y los pases aceptados se sincronizan desde iPhone con este código web.",
         yourPasses: "Tus pases",
         noneYet: "Aún no hay pases",
@@ -566,7 +551,7 @@
     }
     function t() { return copy[lang] || copy.en; }
     function schoolToken() {
-      return localStorage.getItem("whsAdminToken") || window.WHS_SCHOOL_TOKEN || "";
+      return String(window.WHS_SCHOOL_TOKEN || "").trim() || localStorage.getItem("whsAdminToken") || "";
     }
     function schoolEnv() {
       return localStorage.getItem("whsAdminEnv") || window.WHS_CK_ENV || "development";
@@ -732,14 +717,6 @@
       const skip = document.getElementById("skipSite");
       if (skip) skip.textContent = c.skip;
       gateHint.textContent = c.gateHint;
-      const tokenBox = document.getElementById("gateTokenBox");
-      const tokenLabel = document.getElementById("gateTokenLabel");
-      const envLabel = document.getElementById("gateEnvLabel");
-      const envEl = document.getElementById("gateEnv");
-      if (tokenLabel) tokenLabel.textContent = c.gateTokenLabel;
-      if (envLabel) envLabel.textContent = c.gateEnvLabel;
-      if (envEl) envEl.value = schoolEnv();
-      if (tokenBox) tokenBox.classList.toggle("hidden", !!schoolToken());
       document.getElementById("bell").innerHTML = icons.bell;
       tabs.innerHTML = [
         ["home", icons.house, c.home],
@@ -1447,36 +1424,19 @@
 
     async function enterWithCode() {
       gateError.textContent = "";
-      const typedToken = document.getElementById("gateToken") && document.getElementById("gateToken").value.trim();
-      const typedEnv = document.getElementById("gateEnv") && document.getElementById("gateEnv").value;
-      if (typedToken) {
-        localStorage.setItem("whsAdminToken", typedToken);
-        configured = false;
-      }
-      if (typedEnv) localStorage.setItem("whsAdminEnv", typedEnv);
       const key = normalizeCode(webCode.value);
       if (key.length < 8) {
         gateError.textContent = t().gateFail;
         return;
       }
-      if (!schoolToken()) {
-        const box = document.getElementById("gateTokenBox");
-        if (box) box.classList.remove("hidden");
-        gateError.textContent = t().needToken;
-        return;
-      }
       if (!(await ensureCloud())) {
-        const box = document.getElementById("gateTokenBox");
-        if (box) box.classList.remove("hidden");
-        gateError.textContent = t().needToken;
+        gateError.textContent = t().gateFail;
         return;
       }
       try {
         const records = await fetchByNames(CloudKit.getDefaultContainer().publicCloudDatabase, [key]);
         const record = records.find((item) => codeNames(item.recordName).includes(key));
         if (!record) {
-          const box = document.getElementById("gateTokenBox");
-          if (box) box.classList.remove("hidden");
           gateError.textContent = t().gateFail;
           return;
         }
@@ -1496,8 +1456,6 @@
         showGate();
         show("home");
       } catch (error) {
-        const box = document.getElementById("gateTokenBox");
-        if (box) box.classList.remove("hidden");
         gateError.textContent = error.message || t().gateFail;
       }
     }
