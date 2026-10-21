@@ -182,6 +182,18 @@
     }
     .id-meta { margin-top: 14px; }
     .id-meta .t { font-size: 20px; }
+    .flash {
+      min-height: 240px; background: white; border-radius: 28px; padding: 28px;
+      display: grid; place-items: center; text-align: center; cursor: pointer;
+    }
+    .flash b { font-family: var(--font-display); font-size: 34px; font-weight: 700; letter-spacing: 0.011em; }
+    .flash .s { font-size: 20px; color: var(--ink); }
+    .study-doc { width: 100%; min-height: 72vh; border: 0; border-radius: 16px; background: white; }
+    .quiz-choice {
+      display: block; width: 100%; text-align: left; background: white; border-radius: 16px;
+      padding: 14px; margin-top: 8px; font-weight: 600;
+    }
+    .quiz-choice:hover { background: #FAFAFC; }
     .paper-title {
       font-family: var(--font-display);
       font-size: 22px; font-weight: 800; letter-spacing: 0.016em; line-height: 1.1;
@@ -289,6 +301,9 @@
       <section id="view-passes" class="hidden"></section>
       <section id="view-mypasses" class="hidden"></section>
       <section id="view-swipe" class="hidden"></section>
+      <section id="view-classes" class="hidden"></section>
+      <section id="view-class" class="hidden"></section>
+      <section id="view-study" class="hidden"></section>
     </div>
   </div>
 
@@ -328,7 +343,7 @@
         gateHint: "On iPhone: Account → Chromebook. Student, Teacher, Parent, and Administrator each get a different dashboard. Guest is a limited student view.",
         dashGuest: "Guest view. News, lunch, and the staff directory. Sign in with a WHS Web Code for your full role.",
         gateFail: "Could not find that code. Check the letters. An administrator may need to save the school CloudKit token after signing in.",
-        dashStudent: "Your Chromebook dashboard. Swipe Card and accepted hallway and Flex passes sync from your iPhone with this web code.",
+        dashStudent: "Your Chromebook dashboard. Swipe Card, classes, and accepted hallway and Flex passes sync from your iPhone with this web code.",
         yourPasses: "Your passes",
         noneYet: "No passes yet",
         noStudentPasses: "No passes on this Chromebook yet. Accept a pass in Teacher Passes on iPhone, then reload.",
@@ -354,7 +369,31 @@
         lunchSub: "This week",
         ask: "Ask WHS", aide: "Warrior's Aide",
         shortcuts: "Shortcuts",
-        classesBody: "Quizzes and study games stay on iPhone. Teachers you can email are here.",
+        classesTile: "Classes",
+        classesSub: "No classes yet",
+        noClasses: "No classes on this Chromebook yet. Add a class on iPhone, then reload.",
+        resources: "Resources",
+        noResources: "No resources for this class yet.",
+        classroom: "Go to Classroom",
+        openOnPhone: "This one stays on iPhone.",
+        studyFolder: "Spanish study folder",
+        vocabScanner: "Vocabulary Scanner",
+        studyGames: "Study games",
+        pronunciation: "Pronunciation",
+        storyReader: "Story Reader",
+        englishQuiz: "Definition Quiz",
+        quoteBank: "Quote Bank",
+        interviews: "Interview transcripts",
+        mathGames: "Math Pass",
+        flashcards: "Flashcards",
+        quiz: "Quiz",
+        tapReveal: "Tap to reveal",
+        next: "Next",
+        previous: "Previous",
+        noWords: "No words in this list yet. Scan them on iPhone, then reload.",
+        quizDone: "Quiz complete",
+        correct: "Correct",
+        classesBody: "Your classes and study lists sync from iPhone with your web code.",
         moreBody: "This Chromebook site can show news, lunch, staff, and your ID card. Sending hallway passes, quizzes, and Ask WHS chat stay on iPhone.",
         signOut: "Remove this Chromebook profile",
         admin: "Administrator",
@@ -396,7 +435,7 @@
         gateHint: "En iPhone: Cuenta → Chromebook. Estudiante, maestro, padre y administrador ven un panel distinto. Invitado es una vista limitada de estudiante.",
         dashGuest: "Vista de invitado. Noticias, almuerzo y el directorio. Entra con un código web WHS para tu rol.",
         gateFail: "No se encontró ese código. Revisa las letras. Un administrador puede guardar el token de CloudKit después de entrar.",
-        dashStudent: "Tu panel de Chromebook. Tarjeta Swipe y los pases aceptados se sincronizan desde iPhone con este código web.",
+        dashStudent: "Tu panel de Chromebook. Tarjeta Swipe, las clases y los pases aceptados se sincronizan desde iPhone con este código web.",
         yourPasses: "Tus pases",
         noneYet: "Aún no hay pases",
         noStudentPasses: "Aún no hay pases en este Chromebook. Acepta un pase en Pases de maestros en iPhone y recarga.",
@@ -422,7 +461,31 @@
         lunchSub: "Esta semana",
         ask: "Ask WHS", aide: "Warrior's Aide",
         shortcuts: "Atajos",
-        classesBody: "Los quizzes y juegos se quedan en iPhone. Aquí están los maestros para escribirles.",
+        classesTile: "Clases",
+        classesSub: "Aún no hay clases",
+        noClasses: "Aún no hay clases en este Chromebook. Añade una clase en iPhone y recarga.",
+        resources: "Recursos",
+        noResources: "Aún no hay recursos para esta clase.",
+        classroom: "Ir a Classroom",
+        openOnPhone: "Esto se queda en iPhone.",
+        studyFolder: "Carpeta de estudio de español",
+        vocabScanner: "Escáner de vocabulario",
+        studyGames: "Juegos de estudio",
+        pronunciation: "Pronunciación",
+        storyReader: "Lector de cuentos",
+        englishQuiz: "Quiz de definiciones",
+        quoteBank: "Banco de citas",
+        interviews: "Transcripciones",
+        mathGames: "Math Pass",
+        flashcards: "Tarjetas",
+        quiz: "Quiz",
+        tapReveal: "Toca para ver",
+        next: "Siguiente",
+        previous: "Anterior",
+        noWords: "Aún no hay palabras en esta lista. Escanéalas en iPhone y recarga.",
+        quizDone: "Quiz completo",
+        correct: "Correctas",
+        classesBody: "Tus clases y listas de estudio se sincronizan desde iPhone con tu código web.",
         moreBody: "Este sitio muestra noticias, almuerzo, personal y tu ID. Enviar pases, quizzes y el chat se quedan en iPhone.",
         signOut: "Quitar este perfil de Chromebook",
         admin: "Administrador",
@@ -642,7 +705,7 @@
     function show(id) {
       view = id;
       closeSheet();
-      ["home", "news", "lunch", "contacts", "more", "passes", "mypasses", "swipe"].forEach((name) => {
+      ["home", "news", "lunch", "contacts", "more", "passes", "mypasses", "swipe", "classes", "class", "study"].forEach((name) => {
         document.getElementById("view-" + name).classList.toggle("hidden", name !== id);
       });
       applyChrome();
@@ -651,10 +714,13 @@
         if (currentRole() === "student") {
           loadSwipeCard();
           loadStudentPasses();
+          loadStudy();
         }
       }
       if (id === "swipe") loadSwipeCard();
       if (id === "mypasses") loadStudentPasses();
+      if (id === "classes" || id === "class") loadStudy();
+      if (id === "study") renderStudy();
       if (id === "news") loadNews();
       if (id === "lunch") renderLunch();
       if (id === "contacts") renderStaff(document.getElementById("staffQuery") ? document.getElementById("staffQuery").value : "");
@@ -711,6 +777,13 @@
             <div class="row-item">
               <img class="tile-mark" src="./FlexHallwayMark.png" alt="">
               <div><div class="t">${c.passesTile}</div><div class="s" id="passTileSub">${c.noneYet}</div></div>
+              <span class="chev">›</span>
+            </div>
+          </button>
+          <button class="card action hero-pass wide" type="button" data-go="classes">
+            <div class="row-item">
+              <span class="plate">${icons.books}</span>
+              <div><div class="t">${c.classesTile}</div><div class="s" id="classTileSub">${c.classesSub}</div></div>
               <span class="chev">›</span>
             </div>
           </button>` : ""}
@@ -818,6 +891,306 @@
             <div class="s">${escapeHtml(c.school)}${grade ? " · " + escapeHtml(grade) : ""}</div>
           </div>
         </div>`;
+    }
+
+    const SPANISH_FILES = [
+      { id: "spanishSerEstar", file: "./study/SerVsEstar.png", kind: "image" },
+      { id: "spanishBootVerbs", file: "./study/Spanish-Boot-Verbs.pdf", kind: "pdf" },
+      { id: "spanishVocabPacket", file: "./study/Spanish-Vocab-Packet-1.pdf", kind: "pdf" },
+      { id: "spanishPreteriteSheet", file: "./study/Spanish-Preterite-Study-Sheet.pdf", kind: "pdf" },
+      { id: "spanishPreteriteImperfect", file: "./study/Spanish-Preterite-Imperfect-Uses.pdf", kind: "pdf" }
+    ];
+    const FILE_TITLES = {
+      en: {
+        spanishSerEstar: "Ser vs Estar",
+        spanishBootVerbs: "Boot verbs",
+        spanishVocabPacket: "Español 1 Vocab Packet",
+        spanishPreteriteSheet: "Preterite study sheet",
+        spanishPreteriteImperfect: "Preterite and imperfect"
+      },
+      es: {
+        spanishSerEstar: "Ser vs Estar",
+        spanishBootVerbs: "Verbos de bota",
+        spanishVocabPacket: "Paquete de vocabulario de Español 1",
+        spanishPreteriteSheet: "Hoja de pretérito",
+        spanishPreteriteImperfect: "Pretérito e imperfecto"
+      }
+    };
+
+    function parseStudy(raw) {
+      if (!raw) return { classes: [], spanish: {}, english: {} };
+      try {
+        const parsed = JSON.parse(raw);
+        return {
+          classes: Array.isArray(parsed.classes) ? parsed.classes : [],
+          spanish: parsed.spanish && typeof parsed.spanish === "object" ? parsed.spanish : {},
+          english: parsed.english && typeof parsed.english === "object" ? parsed.english : {}
+        };
+      } catch (_) {
+        return { classes: [], spanish: {}, english: {} };
+      }
+    }
+
+    function studyState() {
+      return window._study || { classes: [], spanish: {}, english: {} };
+    }
+
+    function classById(id) {
+      return studyState().classes.find((item) => item.id === id);
+    }
+
+    function notebooksFor(course) {
+      if (!course) return [];
+      const key = course.id;
+      const cat = String(course.category || "").toLowerCase();
+      const pack = cat === "spanish" ? studyState().spanish[key] : cat === "english" ? studyState().english[key] : null;
+      return (pack && pack.folders) || [];
+    }
+
+    function resourcesFor(course) {
+      const c = t();
+      const cat = String(course.category || "").toLowerCase();
+      if (cat === "spanish") {
+        return [
+          { id: "vocabularyScanner", title: c.vocabScanner, kind: "spanishVocab" },
+          { id: "spanishStudyGames", title: c.studyGames, kind: "spanishVocab" },
+          { id: "spanishStudyFolder", title: c.studyFolder, kind: "folder" },
+          { id: "spanishPronunciation", title: c.pronunciation, kind: "phone" },
+          { id: "spanishStoryReader", title: c.storyReader, kind: "phone" }
+        ];
+      }
+      if (cat === "english") {
+        return [
+          { id: "englishVocabScanner", title: c.vocabScanner, kind: "englishVocab" },
+          { id: "englishDefinitionQuiz", title: c.englishQuiz, kind: "englishQuiz" },
+          { id: "englishStudyGames", title: c.studyGames, kind: "englishVocab" },
+          { id: "englishQuoteBank", title: c.quoteBank, kind: "phone" }
+        ];
+      }
+      if (cat === "publishing") return [{ id: "publishingInterviews", title: c.interviews, kind: "phone" }];
+      if (cat === "math") return [{ id: "mathStudyGames", title: c.mathGames, kind: "phone" }];
+      return [];
+    }
+
+    function applyClassTile() {
+      const tileSub = document.getElementById("classTileSub");
+      if (!tileSub) return;
+      const courses = studyState().classes;
+      if (!courses.length) {
+        tileSub.textContent = t().classesSub;
+        return;
+      }
+      tileSub.textContent = courses.length === 1
+        ? (courses[0].subject || t().classesTile)
+        : `${courses.length} ${t().classesTile}`;
+    }
+
+    function renderClasses() {
+      const node = document.getElementById("view-classes");
+      if (!(node && view === "classes")) return;
+      const courses = studyState().classes;
+      if (!courses.length) {
+        node.innerHTML = `${backBar()}<div class="card wide"><p class="muted" style="margin:0;">${t().noClasses}</p></div>`;
+        return;
+      }
+      node.innerHTML = backBar() + `<div class="dash">` + courses.map((course) => `
+        <button class="card action" type="button" data-action="openClass" data-class-id="${escapeHtml(course.id)}">
+          <div class="t">${escapeHtml(course.subject || t().classesTile)}</div>
+          <div class="s">${escapeHtml([course.teacher, course.courseLevel, course.room].filter(Boolean).join(" · "))}</div>
+        </button>`).join("") + `</div>`;
+    }
+
+    function renderClassDetail() {
+      const node = document.getElementById("view-class");
+      if (!(node && view === "class")) return;
+      const course = classById(window._classID);
+      const c = t();
+      if (!course) {
+        node.innerHTML = `${backBar()}<div class="card wide"><p class="muted" style="margin:0;">${c.noClasses}</p></div>`;
+        return;
+      }
+      const resources = resourcesFor(course);
+      const classroom = String(course.classroomURL || "").trim();
+      const classroomHref = classroom && !/^https?:/i.test(classroom) ? `https://${classroom}` : classroom;
+      node.innerHTML = `
+        <div class="toolbar"><button class="ghost" type="button" data-go="classes">${c.back}</button></div>
+        <div class="card wide">
+          <div class="t">${escapeHtml(course.subject || "")}</div>
+          <div class="s">${escapeHtml([course.teacher, course.courseLevel, course.category, course.letterGrade].filter(Boolean).join(" · "))}</div>
+          ${classroomHref ? `<p><a href="${escapeHtml(classroomHref)}" target="_blank" rel="noopener" style="color:var(--orange);font-weight:600;">${c.classroom}</a></p>` : ""}
+        </div>
+        <p class="section">${c.resources}</p>
+        <div class="dash">${resources.length ? resources.map((resource) => `
+          <button class="card action" type="button" data-action="openResource" data-resource="${escapeHtml(resource.id)}" data-class-id="${escapeHtml(course.id)}">
+            <div class="t">${escapeHtml(resource.title)}</div>
+            <div class="s">${resource.kind === "phone" ? c.openOnPhone : c.classesBody}</div>
+          </button>`).join("") : `<div class="card wide"><p class="muted" style="margin:0;">${c.noResources}</p></div>`}</div>`;
+    }
+
+    function listCards(folders, kind) {
+      const c = t();
+      const rows = [];
+      (folders || []).forEach((folder) => {
+        (folder.lists || []).forEach((list) => {
+          const count = (list.entries || []).length;
+          rows.push(`<button class="card action" type="button" data-action="openList" data-kind="${kind}" data-folder="${escapeHtml(folder.id)}" data-list="${escapeHtml(list.id)}">
+            <div class="t">${escapeHtml(list.name || folder.name || c.flashcards)}</div>
+            <div class="s">${escapeHtml(folder.name || "")} · ${count}</div>
+          </button>`);
+        });
+      });
+      return rows.join("") || `<div class="card wide"><p class="muted" style="margin:0;">${c.noWords}</p></div>`;
+    }
+
+    function pairsFromList(kind, folderID, listID) {
+      const course = classById(window._classID);
+      const folders = notebooksFor(course);
+      const list = (folders.find((folder) => folder.id === folderID) || { lists: [] }).lists.find((item) => item.id === listID);
+      const entries = (list && list.entries) || [];
+      if (kind === "english" || kind === "englishQuiz") {
+        return entries.filter((entry) => entry.word).map((entry) => ({ front: entry.word, back: entry.definition || "" }));
+      }
+      return entries.filter((entry) => entry.spanish).map((entry) => ({ front: entry.spanish, back: entry.english || "" }));
+    }
+
+    function renderStudy() {
+      const node = document.getElementById("view-study");
+      if (!(node && view === "study")) return;
+      const c = t();
+      const back = `<div class="toolbar"><button class="ghost" type="button" data-action="openClass" data-class-id="${escapeHtml(window._classID || "")}">${c.back}</button></div>`;
+      const mode = window._studyMode || {};
+      if (mode.type === "phone") {
+        node.innerHTML = `${back}<div class="card wide"><p class="muted" style="margin:0;">${c.openOnPhone}</p></div>`;
+        return;
+      }
+      if (mode.type === "folder") {
+        const titles = FILE_TITLES[lang] || FILE_TITLES.en;
+        node.innerHTML = back + `<div class="dash">` + SPANISH_FILES.map((file) => `
+          <button class="card action" type="button" data-action="openFile" data-file="${escapeHtml(file.file)}" data-kind="${file.kind}" data-title="${escapeHtml(titles[file.id] || file.id)}">
+            <div class="t">${escapeHtml(titles[file.id] || file.id)}</div>
+          </button>`).join("") + `</div>`;
+        return;
+      }
+      if (mode.type === "file") {
+        const body = mode.kind === "image"
+          ? `<img class="id-photo" alt="" src="${escapeHtml(mode.file)}">`
+          : `<iframe class="study-doc" title="${escapeHtml(mode.title || "")}" src="${escapeHtml(mode.file)}"></iframe>`;
+        node.innerHTML = `${back}<div class="card wide"><div class="t">${escapeHtml(mode.title || "")}</div>${body}</div>`;
+        return;
+      }
+      if (mode.type === "lists") {
+        const course = classById(window._classID);
+        node.innerHTML = back + `<div class="dash">` + listCards(notebooksFor(course), mode.kind) + `</div>`;
+        return;
+      }
+      if (mode.type === "cards" || mode.type === "quiz") {
+        const pairs = window._studyPairs || [];
+        if (!pairs.length) {
+          node.innerHTML = `${back}<div class="card wide"><p class="muted" style="margin:0;">${c.noWords}</p></div>`;
+          return;
+        }
+        if (mode.type === "quiz") {
+          renderQuiz(node, back, pairs);
+          return;
+        }
+        const index = Math.max(0, Math.min(window._cardIndex || 0, pairs.length - 1));
+        window._cardIndex = index;
+        const pair = pairs[index];
+        const shown = window._cardFlip ? pair.back || " " : pair.front;
+        node.innerHTML = `${back}
+          <div class="s" style="margin-bottom:8px;">${index + 1} / ${pairs.length}</div>
+          <button class="flash action" type="button" data-action="flipCard"><b>${escapeHtml(shown)}</b><div class="s">${window._cardFlip ? "" : c.tapReveal}</div></button>
+          <div class="toolbar">
+            <button class="ghost" type="button" data-action="prevCard">${c.previous}</button>
+            <button class="ghost" type="button" data-action="nextCard">${c.next}</button>
+            <button class="ghost" type="button" data-action="startQuiz">${c.quiz}</button>
+          </div>`;
+        return;
+      }
+      node.innerHTML = `${back}<div class="card wide"><p class="muted" style="margin:0;">${c.noResources}</p></div>`;
+    }
+
+    function renderQuiz(node, back, pairs) {
+      const c = t();
+      const defined = pairs.filter((pair) => pair.back);
+      if (defined.length < 2) {
+        node.innerHTML = `${back}<div class="card wide"><p class="muted" style="margin:0;">${c.noWords}</p></div>`;
+        return;
+      }
+      const quiz = window._quiz || startQuiz(defined);
+      if (quiz.index >= quiz.order.length) {
+        node.innerHTML = `${back}<div class="card wide"><div class="t">${c.quizDone}</div><div class="s">${c.correct}: ${quiz.correct} / ${quiz.order.length}</div></div>`;
+        return;
+      }
+      const current = quiz.order[quiz.index];
+      const choices = quiz.choices[quiz.index] || [];
+      node.innerHTML = `${back}
+        <div class="s">${quiz.index + 1} / ${quiz.order.length}</div>
+        <div class="card wide"><div class="t">${escapeHtml(current.front)}</div></div>
+        ${choices.map((choice, i) => `<button class="quiz-choice" type="button" data-action="quizPick" data-pick="${i}">${escapeHtml(choice)}</button>`).join("")}
+        <p class="muted" id="quizNote"></p>`;
+    }
+
+    function startQuiz(pairs) {
+      const shuffled = pairs.slice().sort(() => Math.random() - 0.5).slice(0, 20);
+      const quiz = { order: shuffled, index: 0, correct: 0, choices: shuffled.map((item) => {
+        const others = pairs.filter((pair) => pair.back !== item.back).map((pair) => pair.back);
+        const options = [item.back];
+        while (options.length < 4 && others.length) {
+          const next = others.splice(Math.floor(Math.random() * others.length), 1)[0];
+          if (next && !options.includes(next)) options.push(next);
+        }
+        return options.sort(() => Math.random() - 0.5);
+      }) };
+      window._quiz = quiz;
+      return quiz;
+    }
+
+    function openResource(classID, resourceID) {
+      window._classID = classID;
+      const course = classById(classID);
+      const resource = resourcesFor(course || { category: "" }).find((item) => item.id === resourceID);
+      if (!resource || resource.kind === "phone") {
+        window._studyMode = { type: "phone" };
+      } else if (resource.kind === "folder") {
+        window._studyMode = { type: "folder" };
+      } else if (resource.kind === "englishQuiz") {
+        window._studyMode = { type: "lists", kind: "englishQuiz" };
+      } else if (resource.kind === "englishVocab") {
+        window._studyMode = { type: "lists", kind: "english" };
+      } else {
+        window._studyMode = { type: "lists", kind: "spanish" };
+      }
+      show("study");
+      renderStudy();
+    }
+
+    async function loadStudy() {
+      applyClassTile();
+      if (currentRole() !== "student" || !profile || !profile.key) {
+        if (view === "classes") renderClasses();
+        if (view === "class") renderClassDetail();
+        return;
+      }
+      if (!(await ensureCloud())) {
+        applyClassTile();
+        if (view === "classes") renderClasses();
+        if (view === "class") renderClassDetail();
+        return;
+      }
+      try {
+        const db = CloudKit.getDefaultContainer().publicCloudDatabase;
+        const profiles = await fetchByNames(db, [profile.key]);
+        const mine = profiles.find((item) => normalizeCode(item.recordName) === profile.key);
+        window._study = parseStudy(fieldValue(mine, "studyJSON"));
+        applyClassTile();
+        if (view === "classes") renderClasses();
+        if (view === "class") renderClassDetail();
+        if (view === "study") renderStudy();
+      } catch (error) {
+        const node = document.getElementById("view-classes");
+        if (node && view === "classes") node.innerHTML = `${backBar()}<p class="error">${escapeHtml(error.message)}</p>`;
+      }
     }
 
     async function loadSwipeCard() {
@@ -1085,6 +1458,57 @@
         if (name === "askGo") answerAsk(document.getElementById("askBox") && document.getElementById("askBox").value);
         if (name === "closeSheet") closeSheet();
         if (name === "openPass" || name === "openStudentPass") openPass(action.dataset.passId || "");
+        if (name === "openClass") {
+          window._classID = action.dataset.classId || "";
+          show("class");
+        }
+        if (name === "openResource") openResource(action.dataset.classId || "", action.dataset.resource || "");
+        if (name === "openList") {
+          window._studyPairs = pairsFromList(action.dataset.kind || "spanish", action.dataset.folder || "", action.dataset.list || "");
+          window._cardIndex = 0;
+          window._cardFlip = false;
+          window._quiz = null;
+          window._studyMode = action.dataset.kind === "englishQuiz" ? { type: "quiz" } : { type: "cards" };
+          if (window._studyMode.type === "quiz") startQuiz(window._studyPairs.filter((pair) => pair.back));
+          show("study");
+          renderStudy();
+        }
+        if (name === "openFile") {
+          window._studyMode = { type: "file", file: action.dataset.file, kind: action.dataset.kind, title: action.dataset.title };
+          show("study");
+          renderStudy();
+        }
+        if (name === "flipCard") {
+          window._cardFlip = !window._cardFlip;
+          renderStudy();
+        }
+        if (name === "nextCard") {
+          window._cardIndex = (window._cardIndex || 0) + 1;
+          if (window._cardIndex >= (window._studyPairs || []).length) window._cardIndex = 0;
+          window._cardFlip = false;
+          renderStudy();
+        }
+        if (name === "prevCard") {
+          window._cardIndex = (window._cardIndex || 0) - 1;
+          if (window._cardIndex < 0) window._cardIndex = Math.max(0, (window._studyPairs || []).length - 1);
+          window._cardFlip = false;
+          renderStudy();
+        }
+        if (name === "startQuiz") {
+          window._studyMode = { type: "quiz" };
+          startQuiz((window._studyPairs || []).filter((pair) => pair.back));
+          renderStudy();
+        }
+        if (name === "quizPick") {
+          const quiz = window._quiz;
+          if (quiz && quiz.order[quiz.index]) {
+            const pick = Number(action.dataset.pick);
+            const choices = quiz.choices[quiz.index] || [];
+            if (choices[pick] === quiz.order[quiz.index].back) quiz.correct += 1;
+            quiz.index += 1;
+            renderStudy();
+          }
+        }
       }
       const go = event.target.closest("[data-go]");
       if (go) show(go.dataset.go);
