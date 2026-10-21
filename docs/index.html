@@ -1174,8 +1174,28 @@
         });
         configured = true;
         try { await CloudKit.getDefaultContainer().setUpAuth(); } catch (_) {}
+        watchAppleSignIn();
       }
       return true;
+    }
+    function ckWebAuthToken() {
+      try {
+        const auth = CloudKit.getDefaultContainer()._auth;
+        if (auth && auth._ckSession) return String(auth._ckSession);
+        if (auth && typeof auth.getConfig === "function") {
+          const token = (auth.getConfig() || {}).ckWebAuthToken;
+          if (!token) return "";
+          try { return decodeURIComponent(token); } catch (_) { return String(token); }
+        }
+      } catch (_) {}
+      return "";
+    }
+    function restUrl(action) {
+      const token = schoolToken();
+      let url = `https://api.apple-cloudkit.com/database/1/${CONTAINER}/${schoolEnv()}/public/records/${action}?ckAPIToken=${encodeURIComponent(token)}`;
+      const web = ckWebAuthToken();
+      if (web) url += `&ckWebAuthToken=${encodeURIComponent(web)}`;
+      return url;
     }
 
     function codeNames(value) {
@@ -1196,7 +1216,7 @@
     async function restQuery(recordType) {
       const token = schoolToken();
       if (!token || !recordType) return [];
-      const url = `https://api.apple-cloudkit.com/database/1/${CONTAINER}/${schoolEnv()}/public/records/query?ckAPIToken=${encodeURIComponent(token)}`;
+      const url = restUrl("query");
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1209,7 +1229,7 @@
       const token = schoolToken();
       const unique = [...new Set(names.filter(Boolean).flatMap(lookupNames))];
       if (!token || !unique.length) return [];
-      const url = `https://api.apple-cloudkit.com/database/1/${CONTAINER}/${schoolEnv()}/public/records/lookup?ckAPIToken=${encodeURIComponent(token)}`;
+      const url = restUrl("lookup");
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1221,7 +1241,7 @@
     async function restModify(record, operationType) {
       const token = schoolToken();
       if (!token || !record || !record.recordName) return null;
-      const url = `https://api.apple-cloudkit.com/database/1/${CONTAINER}/${schoolEnv()}/public/records/modify?ckAPIToken=${encodeURIComponent(token)}`;
+      const url = restUrl("modify");
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1242,7 +1262,7 @@
     async function restModifyOps(operations) {
       const token = schoolToken();
       if (!token || !operations.length) return {};
-      const url = `https://api.apple-cloudkit.com/database/1/${CONTAINER}/${schoolEnv()}/public/records/modify?ckAPIToken=${encodeURIComponent(token)}`;
+      const url = restUrl("modify");
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1285,126 +1305,138 @@
         <button class="primary" type="button" data-action="closeSheet">${c.close}</button>
         <button class="ghost" type="button" data-action="clearPassLog" style="width:100%;margin-top:8px;color:#B42318;">${c.clearPassLog}</button>`);
     }
-    async function ckUser() {
+    function watchAppleSignIn() {
+      if (window._ckWatch) return;
+      window._ckWatch = true;
       try {
-        const container = CloudKit.getDefaultContainer();
-        if (container.userInfo && container.userInfo.userRecordName) return container.userInfo;
-        const info = await container.setUpAuth();
-        if (info && info.userRecordName) return info;
+        CloudKit.getDefaultContainer().whenUserSignsIn().then(() => {
+          const ids = window._pendingClearIds;
+          window._pendingClearIds = null;
+          if (ids && ids.length) handleClearPassBatch(ids);
+          else if (view === "passes") loadPasses();
+        }).catch(() => {});
       } catch (_) {}
-      return null;
+    }
+    function isAuthError(error, payload) {
+      const text = [
+        error && error.ckErrorCode,
+        error && error.serverErrorCode,
+        error && error.message,
+        payload && payload.serverErrorCode,
+        payload && payload.reason
+      ].filter(Boolean).join(" ");
+      return /AUTH|421|authorization|sign in/i.test(text);
+    }
+    function tombstoneName(id) {
+      return "cleared." + String(id || "").trim();
     }
     async function ckDeleteNames(names) {
       const db = cloudDb();
       if (!(db && names.length && typeof db.deleteRecords === "function")) return false;
-      await db.deleteRecords(names.map((recordName) => ({ recordName })));
+      const result = await db.deleteRecords(names);
+      if (result && result.hasErrors) return false;
       return true;
     }
-    async function ckForceSave(record) {
+    async function ckCreateRecords(records) {
       const db = cloudDb();
-      if (!(db && record && typeof db.saveRecords === "function")) return false;
-      const options = { savePolicy: "FORCE" };
-      try {
-        if (CloudKit.Record && CloudKit.Record.SavePolicy) options.savePolicy = CloudKit.Record.SavePolicy.FORCE;
-        else if (CloudKit.Database && CloudKit.Database.SavePolicy) options.savePolicy = CloudKit.Database.SavePolicy.FORCE;
-      } catch (_) {}
-      await db.saveRecords(record, options);
+      if (!(db && records.length && typeof db.saveRecords === "function")) return false;
+      const result = await db.saveRecords(records);
+      if (result && result.hasErrors) return false;
       return true;
-    }
-    function blankPassRecord(recordName) {
-      return {
-        recordType: PASS_TYPE,
-        recordName,
-        fields: {
-          studentName: { value: "" },
-          teacherName: { value: "" },
-          destination: { value: "" },
-          dates: { value: "" }
-        }
-      };
     }
     function parsePassIDs(raw) {
       return String(raw || "").split(",").map((part) => part.trim()).filter(Boolean);
     }
-    async function loadClearedIDs() {
+    async function loadClearedIDs(passIDs) {
+      const names = [CLEARED].concat((passIDs || []).map(tombstoneName));
       try {
-        const records = await fetchByNames(cloudDb(), [CLEARED]);
-        const rec = records.find((item) => item.recordName === CLEARED);
-        return new Set(parsePassIDs(fieldValue(rec, "passIDs")).map((id) => id.toLowerCase()));
+        const records = await fetchByNames(cloudDb(), names);
+        const out = new Set();
+        records.forEach((record) => {
+          const id = String(record.recordName || "");
+          if (id === CLEARED) {
+            parsePassIDs(fieldValue(record, "passIDs")).forEach((item) => out.add(item.toLowerCase()));
+          } else if (id.toLowerCase().indexOf("cleared.") === 0) {
+            out.add(id.slice("cleared.".length).toLowerCase());
+            parsePassIDs(fieldValue(record, "passIDs")).forEach((item) => out.add(item.toLowerCase()));
+          }
+        });
+        return out;
       } catch (_) {
         return new Set();
       }
     }
-    async function savePassIDs(recordName, ids) {
-      const record = {
-        recordType: PASS_TYPE,
-        recordName,
-        fields: { passIDs: { value: ids.join(",") } }
-      };
-      try {
-        if (await ckForceSave(record)) return true;
-      } catch (_) {}
-      try {
-        await restModify(record, "forceUpdate");
-        return true;
-      } catch (_) {}
-      try {
-        await restModify(record, "create");
-        return true;
-      } catch (_) {}
-      return false;
-    }
-    async function stripPassManifest(removeIDs) {
-      const drop = new Set((removeIDs || []).map((id) => String(id || "").trim().toLowerCase()).filter(Boolean));
-      const records = await fetchByNames(cloudDb(), [MANIFEST]);
-      const manifest = records.find((item) => item.recordName === MANIFEST) || records[0];
-      const current = parsePassIDs(fieldValue(manifest, "passIDs"));
-      const next = drop.size ? current.filter((id) => !drop.has(id.toLowerCase())) : [];
-      await savePassIDs(MANIFEST, next);
+    async function restDeleteNames(names) {
+      if (!names.length) return false;
+      const payload = await restModifyOps(names.map((recordName) => ({
+        operationType: "forceDelete",
+        record: { recordName }
+      })));
+      if (isAuthError(null, payload)) throw Object.assign(new Error("APPLE"), { apple: true });
+      return (payload.records || []).some((row) => row && (row.deleted || !row.serverErrorCode));
     }
     async function markPassesCleared(ids) {
       const unique = [...new Set((ids || []).map((id) => String(id || "").trim()).filter((id) => id && id !== MANIFEST && id !== CLEARED))];
       if (!unique.length) return false;
-      const current = await loadClearedIDs();
-      unique.forEach((id) => current.add(id.toLowerCase()));
-      return savePassIDs(CLEARED, [...current]);
+      const records = unique.map((id) => ({
+        recordType: PASS_TYPE,
+        recordName: tombstoneName(id),
+        fields: {
+          kind: { value: "cleared" },
+          passIDs: { value: id }
+        }
+      }));
+      try {
+        if (await ckCreateRecords(records)) return true;
+      } catch (error) {
+        if (isAuthError(error)) throw Object.assign(new Error("APPLE"), { apple: true });
+      }
+      for (const record of records) {
+        try {
+          await restModify(record, "create");
+        } catch (error) {
+          if (isAuthError(error)) throw Object.assign(new Error("APPLE"), { apple: true });
+          return false;
+        }
+      }
+      return true;
     }
     async function clearPassRecords(ids) {
-      const unique = [...new Set((ids || []).map((id) => String(id || "").trim()).filter((id) => id && id !== MANIFEST && id !== CLEARED))];
+      const unique = [...new Set((ids || []).map((id) => String(id || "").trim()).filter((id) => id && id !== MANIFEST && id !== CLEARED && id.indexOf("cleared.") !== 0))];
       if (!unique.length) return;
-      if (!(await ckUser())) throw new Error("APPLE");
+      watchAppleSignIn();
       try {
         await ckDeleteNames(unique);
-      } catch (_) {}
-      for (const recordName of unique) {
-        try { await ckForceSave(blankPassRecord(recordName)); } catch (_) {}
+      } catch (error) {
+        if (isAuthError(error) && !ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
       }
-      await stripPassManifest(unique);
-      if (!(await markPassesCleared(unique))) throw new Error("APPLE");
+      try {
+        await restDeleteNames(unique);
+      } catch (error) {
+        if (error && error.apple && !ckWebAuthToken()) throw error;
+      }
+      if (!(await markPassesCleared(unique))) {
+        throw Object.assign(new Error(ckWebAuthToken() ? "FAIL" : "APPLE"), { apple: !ckWebAuthToken() });
+      }
+    }
+    async function handleClearPassBatch(ids) {
+      if (!canClearPassLog()) return;
+      try {
+        await ensureCloud();
+        watchAppleSignIn();
+        await clearPassRecords(ids);
+        closeSheet();
+        if (view === "passes") await loadPasses();
+      } catch (error) {
+        window._pendingClearIds = ids;
+        showClearPassError((error && (error.apple || error.message === "APPLE")) ? "APPLE" : "FAIL");
+      }
     }
     async function handleClearPass(id) {
-      if (!canClearPassLog()) return;
-      try {
-        await ensureCloud();
-        await clearPassRecords([id]);
-        closeSheet();
-        if (view === "passes") await loadPasses();
-      } catch (error) {
-        showClearPassError(error && error.message === "APPLE" ? "APPLE" : "FAIL");
-      }
+      await handleClearPassBatch([id]);
     }
     async function handleClearPassLog() {
-      if (!canClearPassLog()) return;
-      try {
-        await ensureCloud();
-        const ids = Object.keys(window._passRecords || {});
-        await clearPassRecords(ids);
-        await stripPassManifest([]);
-        closeSheet();
-        if (view === "passes") await loadPasses();
-      } catch (error) {
-        showClearPassError(error && error.message === "APPLE" ? "APPLE" : "FAIL");
-      }
+      await handleClearPassBatch(Object.keys(window._passRecords || {}));
     }
     async function allocateGuestStudentKey(person) {
       if (!schoolToken()) return "";
@@ -2715,11 +2747,15 @@
         const raw = seen.get(MANIFEST) ? fieldValue(seen.get(MANIFEST), "passIDs") : "";
         (await fetchByNames(db, raw.split(",").map((part) => part.trim()))).forEach(remember);
         try { recordsFrom(await db.performQuery({ recordType: PASS_TYPE })).forEach(remember); } catch (_) {}
-        const cleared = await loadClearedIDs();
+        const allIDs = [...seen.keys()];
+        const cleared = await loadClearedIDs(allIDs);
         const usable = [...seen.values()].filter((r) => {
-          const id = String(r.recordName || "").toLowerCase();
-          if (!id || id === MANIFEST.toLowerCase() || id === CLEARED.toLowerCase()) return false;
-          if (cleared.has(id)) return false;
+          const id = String(r.recordName || "");
+          const key = id.toLowerCase();
+          if (!id || key === MANIFEST.toLowerCase() || key === CLEARED.toLowerCase()) return false;
+          if (key.indexOf("cleared.") === 0) return false;
+          if (String(fieldValue(r, "kind") || "").toLowerCase() === "cleared") return false;
+          if (cleared.has(key)) return false;
           return !!(fieldValue(r, "studentName") || fieldValue(r, "teacherName"));
         });
         window._passRecords = {};
