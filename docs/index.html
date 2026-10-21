@@ -148,8 +148,15 @@
     }
     .shortcut:hover { background: #FAFAFC; }
     .shortcut .plate { width: 34px; height: 34px; border-radius: 10px; }
-    .shortcut .plate .icon { width: 18px; height: 18px; }
+    .sf-glyph { width: 22px; height: 22px; object-fit: contain; display: block; }
     .tile-wire { width: 34px; height: 34px; object-fit: contain; flex: none; }
+    .wire-open {
+      display: inline-flex; align-items: center; justify-content: center;
+      margin-top: 10px; width: fit-content; max-width: 100%;
+      background: var(--orange); color: #fff; text-decoration: none;
+      border-radius: 12px; padding: 8px 12px; font-size: 13px; font-weight: 600;
+    }
+    .shortcut.wire-tile { cursor: default; }
     .news-row {
       display: flex; gap: 12px; align-items: center;
       width: 100%; text-align: left; padding: 12px 0;
@@ -448,7 +455,14 @@
         lunchMenu: "WHS Lunch",
         wire: "Warrior's Wire",
         wireSub: "Open the school newspaper",
+        wireOpen: "Open Warrior's Wire",
         newsFeed: "Notifications",
+        alumniTitle: "Alumni Spotlight Submissions Open Now!",
+        alumniSubtitle: "Warrior's Wire · Tap to view",
+        nthsTitle: "NTHS Applications Open Now!",
+        nthsSubtitle: "National Technical Honor Society · Tap to view",
+        publishingTitle: "Publishing Fundraiser On Now!",
+        publishingSubtitle: "Warrior's Wire · Tap to view",
         openContacts: "Staff directory",
         openPasses: "Campus pass log",
         swipe: "Swipe Card",
@@ -557,7 +571,14 @@
         lunchMenu: "Almuerzo WHS",
         wire: "Warrior's Wire",
         wireSub: "Abrir el periódico escolar",
+        wireOpen: "Abrir Warrior's Wire",
         newsFeed: "Notificaciones",
+        alumniTitle: "¡Ya están abiertas las propuestas de Alumni Spotlight!",
+        alumniSubtitle: "Warrior's Wire · Toca para ver",
+        nthsTitle: "¡Ya están abiertas las solicitudes de NTHS!",
+        nthsSubtitle: "Sociedad Nacional de Honor Técnico · Toca para ver",
+        publishingTitle: "¡La recaudación de Publishing está abierta ahora!",
+        publishingSubtitle: "Warrior's Wire · Toca para ver",
         openContacts: "Directorio",
         openPasses: "Registro de pases",
         swipe: "Tarjeta Swipe",
@@ -809,6 +830,11 @@
       if (compact.length === 10) names.push(compact.slice(0, 5) + "-" + compact.slice(5));
       return [...new Set(names.filter(Boolean))];
     }
+    function lookupNames(value) {
+      const raw = String(value || "").trim();
+      if (!raw) return [];
+      return [...new Set([raw, ...codeNames(raw)])];
+    }
     function usableRecord(record) {
       if (!record || record.deleted || record.serverErrorCode) return false;
       return !!(record.recordName || record.recordType || (record.fields && Object.keys(record.fields).length));
@@ -827,7 +853,7 @@
     }
     async function restLookup(names) {
       const token = schoolToken();
-      const unique = [...new Set(names.filter(Boolean).flatMap(codeNames))];
+      const unique = [...new Set(names.filter(Boolean).flatMap(lookupNames))];
       if (!token || !unique.length) return [];
       const url = `https://api.apple-cloudkit.com/database/1/${CONTAINER}/${schoolEnv()}/public/records/lookup?ckAPIToken=${encodeURIComponent(token)}`;
       const response = await fetch(url, {
@@ -843,7 +869,7 @@
         const rest = await restLookup(names);
         if (rest.length) return rest;
       } catch (_) {}
-      const unique = [...new Set(names.filter(Boolean).flatMap(codeNames))];
+      const unique = [...new Set(names.filter(Boolean).flatMap(lookupNames))];
       if (!unique.length) return [];
       const found = [];
       const remember = (record) => {
@@ -913,6 +939,7 @@
       if (profile && profile.key) loadProfilePhoto();
       if (id === "home") {
         renderHome();
+        loadNewsFeed();
         if (currentRole() === "student") {
           loadSwipeCard();
           loadStudentPasses();
@@ -992,16 +1019,17 @@
           </button>` : ""}
           <div class="shortcuts wide">
             <button class="shortcut" type="button" data-go="lunch">
-              <span class="plate">${icons.fork}</span>
+              <span class="plate"><img class="sf-glyph" src="./fork-knife.png" alt=""></span>
               <div class="t">${c.lunchMenu}</div>
               <div class="s">${c.lunchSub}</div>
             </button>
-            <button class="shortcut" type="button" data-go="news">
+            <div class="shortcut wire-tile">
               <img class="tile-wire" src="./WarriorsWire.png" alt="">
               <div class="t">${c.wire}</div>
-              <div class="s">${c.openNews}</div>
-            </button>
-          </div>`;
+              <a class="wire-open" href="https://whswarriorswire.com" target="_blank" rel="noopener">${c.wireOpen}</a>
+            </div>
+          </div>
+          <div class="card wide" id="homeNews"><div class="t">${c.newsFeed}</div></div>`;
       }
       document.getElementById("view-home").innerHTML = `<div class="dash">${cards}</div>`;
     }
@@ -1704,8 +1732,20 @@
         const profiles = await fetchByNames(cloudDb(), [profile.key]);
         const mine = profiles.find((item) => normalizeCode(item.recordName) === profile.key);
         const ids = String(fieldValue(mine, "passIDs") || "").split(",").map((part) => part.trim()).filter(Boolean);
-        const records = await fetchByNames(db, ids);
-        const usable = records.filter((record) => fieldValue(record, "studentName") || fieldValue(record, "teacherName"));
+        const records = await fetchByNames(cloudDb(), ids);
+        const byName = new Map(records.map((record) => [String(record.recordName || "").toLowerCase(), record]));
+        let usable = ids.map((id) => byName.get(id.toLowerCase())).filter((record) => record && (fieldValue(record, "studentName") || fieldValue(record, "teacherName")));
+        if (!usable.length) {
+          const mineName = String(profile.firstName || profile.displayName || "").trim().toLowerCase();
+          if (mineName) {
+            let all = [];
+            try { all = await restQuery(PASS_TYPE); } catch (_) {}
+            usable = all.filter((record) => {
+              const student = String(fieldValue(record, "studentName") || "").trim().toLowerCase();
+              return student && (student === mineName || student.startsWith(mineName + " "));
+            });
+          }
+        }
         if (tileSub) {
           if (!usable.length) tileSub.textContent = c.noneYet;
           else {
@@ -1755,60 +1795,82 @@
       if (!value) return 0;
       return value;
     }
+    function bundledNewsItems() {
+      const c = t();
+      return [
+        { id: "alumni-spotlight", image: "./news/AlumniSpotlight.jpg", title: c.alumniTitle, subtitle: c.alumniSubtitle, published: 3, stamp: 3 },
+        { id: "nths-applications", image: "./news/NTHSPoster.jpg", title: c.nthsTitle, subtitle: c.nthsSubtitle, published: 2, stamp: 2 },
+        { id: "publishing-fundraiser", image: "./news/PublishingFundraiser.jpg", title: c.publishingTitle, subtitle: c.publishingSubtitle, published: 1, stamp: 1 }
+      ];
+    }
     function wireCard() {
       const c = t();
-      return `<a class="card action wide" href="https://whswarriorswire.com" target="_blank" rel="noopener">
+      return `<div class="card wide">
         <div class="row-item">
           <img class="tile-wire" src="./WarriorsWire.png" alt="">
           <div><div class="t">${c.wire}</div><div class="s">${c.wireSub}</div></div>
-          <span class="chev">›</span>
         </div>
-      </a>`;
+        <a class="primary" href="https://whswarriorswire.com" target="_blank" rel="noopener" style="display:block;text-align:center;text-decoration:none;margin-top:12px;">${c.wireOpen}</a>
+      </div>`;
     }
-    function newsFeedHTML(records) {
+    function newsRowsHTML(items) {
       const c = t();
-      if (!records.length) return `<div class="card wide"><p class="muted" style="margin:0;">${c.newsEmpty}</p></div>`;
-      return `<div class="card wide"><div class="t" style="margin-bottom:8px;">${c.newsFeed}</div>` + records.map((record) => {
-        const id = record.recordName || "";
-        const image = fieldValue(record, "image");
-        const art = image
-          ? `<img class="news-art" alt="" src="${escapeHtml(image)}">`
+      if (!items.length) return `<p class="muted" style="margin:8px 0 0;">${c.newsEmpty}</p>`;
+      return items.map((item) => {
+        const art = item.image
+          ? `<img class="news-art" alt="" src="${escapeHtml(item.image)}">`
           : `<span class="news-art empty">${icons.mega}</span>`;
-        return `<button class="news-row" type="button" data-action="openNewsItem" data-news-id="${escapeHtml(id)}">
+        return `<button class="news-row" type="button" data-action="openNewsItem" data-news-id="${escapeHtml(item.id)}">
           ${art}
-          <span><div class="t">${escapeHtml(newsHeading(record))}</div><div class="s">${escapeHtml(newsBody(record))}</div></span>
+          <span><div class="t">${escapeHtml(item.title)}</div><div class="s">${escapeHtml(item.subtitle)}</div></span>
         </button>`;
-      }).join("") + `</div>`;
+      }).join("");
     }
-    async function loadNews() {
-      const node = document.getElementById("view-news");
+    function paintNews(items) {
+      window._newsItems = {};
+      items.forEach((item) => { window._newsItems[item.id] = item; });
       const c = t();
-      node.innerHTML = `${backBar()}${wireCard()}<div class="card wide"><p class="muted" style="margin:0;">${c.newsFeed}</p></div>`;
-      let usable = [];
+      const rows = newsRowsHTML(items);
+      const home = document.getElementById("homeNews");
+      if (home) home.innerHTML = `<div class="t" style="margin-bottom:8px;">${c.newsFeed}</div>${rows}`;
+      if (view === "news") {
+        document.getElementById("view-news").innerHTML = `${backBar()}${wireCard()}<div class="card wide"><div class="t" style="margin-bottom:8px;">${c.newsFeed}</div>${rows}</div>`;
+      }
+    }
+    async function loadNewsFeed() {
+      const bundled = bundledNewsItems();
+      paintNews(bundled);
+      let remote = [];
       try {
-        usable = (await restQuery(NEWS_TYPE)).filter((record) => Number(fieldValue(record, "published") || 1) !== 0);
+        remote = (await restQuery(NEWS_TYPE)).filter((record) => Number(fieldValue(record, "published") || 1) !== 0);
       } catch (_) {}
-      if (!usable.length) {
+      if (!remote.length) {
         try { await ensureCloud(); } catch (_) {}
         try {
           const db = cloudDb();
           if (db && typeof db.performQuery === "function") {
-            usable = recordsFrom(await db.performQuery({ recordType: NEWS_TYPE }))
+            remote = recordsFrom(await db.performQuery({ recordType: NEWS_TYPE }))
               .filter((record) => Number(fieldValue(record, "published") || 1) !== 0);
           }
         } catch (_) {}
       }
-      usable.sort((a, b) => {
-        const pub = Number(fieldValue(b, "published") || 0) - Number(fieldValue(a, "published") || 0);
-        if (pub) return pub;
-        return newsStamp(b) - newsStamp(a);
-      });
-      window._newsRecords = {};
-      usable.forEach((record) => {
-        const id = record.recordName || "";
-        if (id) window._newsRecords[id] = record;
-      });
-      node.innerHTML = `${backBar()}${wireCard()}${newsFeedHTML(usable)}`;
+      const remoteItems = remote.map((record) => ({
+        id: record.recordName || "",
+        image: fieldValue(record, "image"),
+        title: newsHeading(record),
+        subtitle: newsBody(record),
+        published: Number(fieldValue(record, "published") || 1),
+        stamp: newsStamp(record)
+      })).filter((item) => item.id && (item.title || item.subtitle));
+      const seen = new Set(remoteItems.map((item) => item.id));
+      const items = remoteItems.concat(bundled.filter((item) => !seen.has(item.id)));
+      items.sort((a, b) => (b.published - a.published) || (b.stamp - a.stamp));
+      paintNews(items);
+    }
+    async function loadNews() {
+      const c = t();
+      document.getElementById("view-news").innerHTML = `${backBar()}${wireCard()}<div class="card wide"><div class="t">${c.newsFeed}</div></div>`;
+      await loadNewsFeed();
     }
 
     async function loadPasses() {
@@ -1909,13 +1971,12 @@
         if (name === "askGo") answerAsk(document.getElementById("askBox") && document.getElementById("askBox").value);
         if (name === "closeSheet") closeSheet();
         if (name === "openNewsItem") {
-          const record = window._newsRecords && window._newsRecords[action.dataset.newsId || ""];
-          if (record) {
-            const image = fieldValue(record, "image");
+          const item = window._newsItems && window._newsItems[action.dataset.newsId || ""];
+          if (item) {
             openSheet(`
-              <div class="card-title"><b>${escapeHtml(newsHeading(record))}</b><button type="button" data-action="closeSheet">${t().close}</button></div>
-              ${image ? `<img class="news-full" alt="" src="${escapeHtml(image)}">` : ""}
-              <p class="muted">${escapeHtml(newsBody(record))}</p>`);
+              <div class="card-title"><b>${escapeHtml(item.title)}</b><button type="button" data-action="closeSheet">${t().close}</button></div>
+              ${item.image ? `<img class="news-full" alt="" src="${escapeHtml(item.image)}">` : ""}
+              <p class="muted">${escapeHtml(item.subtitle)}</p>`);
           }
         }
         if (name === "useCode") returnToCodeGate();
