@@ -72,8 +72,11 @@
     .avatar {
       width: 34px; height: 34px; border-radius: 50%; background: #111;
       color: white; display: grid; place-items: center; font-weight: 700; font-size: 13px;
-      line-height: 1; letter-spacing: 0; text-align: center;
+      line-height: 1; letter-spacing: 0; text-align: center; overflow: hidden;
     }
+    .avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+    .more-face { display: flex; align-items: center; gap: 12px; }
+    .more-face .avatar { width: 52px; height: 52px; font-size: 18px; flex: none; }
     h1 {
       font-family: var(--font-display);
       font-size: 34px; letter-spacing: 0.011em; margin: 0 0 6px;
@@ -257,6 +260,16 @@
     .sig, .news-img { max-width: 100%; max-height: 220px; margin-top: 8px; border-radius: 12px; }
     .lunch { width: 100%; min-height: 72vh; border: 0; border-radius: 24px; background: white; }
     .search { margin-bottom: 12px; }
+    .web-mark {
+      display: flex; align-items: center; gap: 10px;
+      padding: 0; margin: 0 0 10px; border: 0; background: transparent;
+      font-family: var(--font-display); font-size: 20px; font-weight: 800;
+      letter-spacing: -0.022em; color: var(--ink); cursor: pointer; text-align: left;
+    }
+    .web-mark img {
+      width: 34px; height: 34px; border-radius: 9px; object-fit: cover; flex: none;
+    }
+    nav.tabs .web-mark { display: none; }
     nav.tabs {
       position: fixed; left: 0; right: 0; bottom: 0; z-index: 8;
       background: var(--tab); backdrop-filter: blur(18px);
@@ -314,6 +327,8 @@
       }
       nav.tabs button { font-size: 17px; font-weight: 600; letter-spacing: -0.022em; text-align: left; padding: 12px 14px; display: flex; gap: 10px; align-items: center; }
       nav.tabs .ico { display: grid; margin: 0; }
+      nav.tabs .web-mark { display: flex; padding: 0 14px 18px; margin: 0; }
+      .web-mark-inline { display: none; }
       .home-grid { grid-template-columns: 1.15fr .85fr; }
       .home-grid .wide { grid-column: 1 / -1; }
       .shortcuts { grid-template-columns: repeat(4, 1fr); }
@@ -332,6 +347,10 @@
     <div class="wrap">
       <div class="top">
         <div>
+          <button type="button" class="web-mark web-mark-inline" data-go="home">
+            <img src="./app-icon-192.png" alt="">
+            <span>Web View</span>
+          </button>
           <div class="brand">WATERTOWN HIGH SCHOOL</div>
           <h1 id="hello"></h1>
           <div class="date" id="dateLine"></div>
@@ -428,7 +447,6 @@
         classroom: "Go to Classroom",
         openOnPhone: "This one stays on iPhone.",
         studyFolder: "Spanish study folder",
-        vocabScanner: "Vocabulary Scanner",
         studyGames: "Study games",
         readySets: "Ready Grammar Sets",
         readyHint: "Play Ready Grammar Sets. Choose a set, then pick the answer.",
@@ -445,8 +463,6 @@
         continueBtn: "Continue",
         practiceAgain: "Practice again",
         aspectDone: "All sentences done",
-        pronunciation: "Pronunciation",
-        storyReader: "Story Reader",
         englishQuiz: "Definition Quiz",
         quoteBank: "Quote Bank",
         interviews: "Interview transcripts",
@@ -536,7 +552,6 @@
         classroom: "Ir a Classroom",
         openOnPhone: "Esto se queda en iPhone.",
         studyFolder: "Carpeta de estudio de español",
-        vocabScanner: "Escáner de vocabulario",
         studyGames: "Juegos de estudio",
         readySets: "Conjuntos de gramática listos",
         readyHint: "Juega conjuntos de gramática listos. Elige un conjunto y luego la respuesta.",
@@ -553,8 +568,6 @@
         continueBtn: "Continuar",
         practiceAgain: "Practicar de nuevo",
         aspectDone: "Oraciones terminadas",
-        pronunciation: "Pronunciación",
-        storyReader: "Lector de cuentos",
         englishQuiz: "Quiz de definiciones",
         quoteBank: "Banco de citas",
         interviews: "Transcripciones",
@@ -807,7 +820,7 @@
       dateLine.textContent = new Date().toLocaleDateString(lang === "es" ? "es" : "en", {
         weekday: "long", month: "long", day: "numeric"
       });
-      avatar.textContent = initials(name);
+      applyAvatar(window._profilePhoto || "");
       const roleText = roleLabel();
       const gradeText = profile && profile.grade ? `${c.grade} ${profile.grade}` : "";
       roleLine.textContent = [roleText, gradeText].filter(Boolean).join(" · ");
@@ -820,7 +833,7 @@
       if (skip) skip.textContent = c.skip;
       gateHint.textContent = c.gateHint;
       document.getElementById("bell").innerHTML = icons.bell;
-      tabs.innerHTML = [
+      tabs.innerHTML = `<button type="button" class="web-mark" data-go="home"><img src="./app-icon-192.png" alt=""><span>Web View</span></button>` + [
         ["home", icons.house, c.home],
         ["contacts", icons.person, c.contacts],
         ["more", icons.more, c.more]
@@ -837,6 +850,7 @@
       applyChrome();
       if (id === "home") {
         renderHome();
+        loadProfilePhoto();
         if (currentRole() === "student") {
           loadSwipeCard();
           loadStudentPasses();
@@ -952,9 +966,12 @@
             <div id="apple-sign-in-placeholder"></div>
             <div id="apple-sign-out-placeholder"></div>
           </div>` : "";
+      const face = window._profilePhoto
+        ? `<span class="avatar"><img alt="" src="${escapeHtml(window._profilePhoto)}"></span>`
+        : `<span class="avatar">${escapeHtml(initials(profile ? profile.displayName : ""))}</span>`;
       document.getElementById("view-more").innerHTML = `
         <div class="dash">
-          <div class="card wide"><div class="t">${escapeHtml(profile ? profile.displayName : "")}</div><div class="s">${escapeHtml(roleLabel())}</div></div>
+          <div class="card wide"><div class="more-face">${face}<div><div class="t">${escapeHtml(profile ? profile.displayName : "")}</div><div class="s">${escapeHtml(roleLabel())}</div></div></div></div>
           ${adminTools}
           <button class="card action" type="button" id="signOutProfile">${c.signOut}</button>
         </div>`;
@@ -991,6 +1008,32 @@
       const name = (profile && (profile.firstName || profile.displayName)) || "";
       const grade = profile && profile.grade ? `${c.grade} ${profile.grade}` : "";
       return [name, grade].filter(Boolean).join(" · ") || c.swipe;
+    }
+
+    function applyAvatar(url) {
+      window._profilePhoto = url || "";
+      const node = document.getElementById("avatar");
+      if (!node) return;
+      if (url) {
+        node.innerHTML = `<img alt="" src="${escapeHtml(url)}">`;
+      } else {
+        node.textContent = initials(profile ? profile.displayName : "");
+      }
+    }
+
+    async function loadProfilePhoto() {
+      if (!profile || !profile.key) {
+        applyAvatar("");
+        return;
+      }
+      if (!schoolToken()) return;
+      try { await ensureCloud(); } catch (_) {}
+      try {
+        const profiles = await fetchByNames(cloudDb(), [profile.key]);
+        const mine = profiles.find((item) => normalizeCode(item.recordName) === profile.key);
+        applyAvatar(fieldValue(mine, "profilePhoto"));
+        if (view === "more") renderMore();
+      } catch (_) {}
     }
 
     function applySwipeTile(url) {
@@ -1139,16 +1182,12 @@
       const cat = String(course.category || "").toLowerCase();
       if (cat === "spanish") {
         return [
-          { id: "vocabularyScanner", title: c.vocabScanner, kind: "spanishVocab" },
           { id: "spanishStudyGames", title: c.readySets, kind: "readySets" },
-          { id: "spanishStudyFolder", title: c.studyFolder, kind: "folder" },
-          { id: "spanishPronunciation", title: c.pronunciation, kind: "phone" },
-          { id: "spanishStoryReader", title: c.storyReader, kind: "phone" }
+          { id: "spanishStudyFolder", title: c.studyFolder, kind: "folder" }
         ];
       }
       if (cat === "english") {
         return [
-          { id: "englishVocabScanner", title: c.vocabScanner, kind: "englishVocab" },
           { id: "englishDefinitionQuiz", title: c.englishQuiz, kind: "englishQuiz" },
           { id: "englishStudyGames", title: c.studyGames, kind: "englishVocab" },
           { id: "englishQuoteBank", title: c.quoteBank, kind: "phone" }
@@ -1685,6 +1724,7 @@
     function returnToCodeGate() {
       localStorage.removeItem("whsWebProfile");
       profile = null;
+      applyAvatar("");
       showGate();
     }
 
@@ -1722,6 +1762,7 @@
           key
         };
         localStorage.setItem("whsWebProfile", JSON.stringify(profile));
+        applyAvatar(fieldValue(record, "profilePhoto"));
         showGate();
         show("home");
       } catch (error) {
@@ -1840,6 +1881,7 @@
       if (event.target.id === "signOutProfile") {
         localStorage.removeItem("whsWebProfile");
         profile = null;
+        applyAvatar("");
         showGate();
       }
       if (event.target.id === "saveToken") {
@@ -1876,6 +1918,7 @@
     function enterGuest() {
       profile = { displayName: "Warrior", role: "guest", grade: "", key: "" };
       localStorage.setItem("whsWebProfile", JSON.stringify(profile));
+      applyAvatar("");
       showGate();
       show("home");
     }
