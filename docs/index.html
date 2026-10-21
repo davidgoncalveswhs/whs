@@ -264,8 +264,9 @@
       display: flex; align-items: center; gap: 10px;
       padding: 0; margin: 0 0 10px; border: 0; background: transparent;
       font-family: var(--font-display); font-size: 20px; font-weight: 800;
-      letter-spacing: -0.022em; color: var(--ink); cursor: pointer; text-align: left;
+      letter-spacing: -0.022em; color: #000; cursor: pointer; text-align: left;
     }
+    .web-mark span { color: #000; }
     .web-mark img {
       width: 34px; height: 34px; border-radius: 9px; object-fit: cover; flex: none;
     }
@@ -327,7 +328,8 @@
       }
       nav.tabs button { font-size: 17px; font-weight: 600; letter-spacing: -0.022em; text-align: left; padding: 12px 14px; display: flex; gap: 10px; align-items: center; }
       nav.tabs .ico { display: grid; margin: 0; }
-      nav.tabs .web-mark { display: flex; padding: 0 14px 18px; margin: 0; }
+      nav.tabs .web-mark { display: flex; padding: 0 14px 18px; margin: 0; color: #000; }
+      nav.tabs button.web-mark, nav.tabs button.web-mark span { color: #000; }
       .web-mark-inline { display: none; }
       .home-grid { grid-template-columns: 1.15fr .85fr; }
       .home-grid .wide { grid-column: 1 / -1; }
@@ -692,13 +694,34 @@
       if (role === "guest") return t().guest;
       return "";
     }
+    function withApiToken(url) {
+      const token = schoolToken();
+      if (!url) return "";
+      if (!token) return url;
+      return String(url)
+        .replace(/\$\{apiToken\}/g, encodeURIComponent(token))
+        .replace(/%24%7BapiToken%7D/gi, encodeURIComponent(token));
+    }
+    function findDownloadURL(node) {
+      if (!node || typeof node !== "object") return "";
+      if (typeof node.downloadURL === "string" && node.downloadURL) return node.downloadURL;
+      if (typeof node.getDownloadURL === "function") {
+        try {
+          const got = node.getDownloadURL();
+          if (got) return String(got);
+        } catch (_) {}
+      }
+      if (node.value && node.value !== node) return findDownloadURL(node.value);
+      return "";
+    }
     function unwrapField(field) {
       if (field == null) return "";
       if (typeof field !== "object") return String(field);
+      const asset = findDownloadURL(field);
+      if (asset) return withApiToken(asset);
       const value = Object.prototype.hasOwnProperty.call(field, "value") ? field.value : field;
       if (value == null) return "";
       if (typeof value === "number" && value > 1000000000000) return new Date(value).toLocaleString();
-      if (value && value.downloadURL) return value.downloadURL;
       return typeof value === "object" ? "" : String(value);
     }
     function fieldValue(record, key) {
@@ -848,9 +871,9 @@
         document.getElementById("view-" + name).classList.toggle("hidden", name !== id);
       });
       applyChrome();
+      if (profile && profile.key) loadProfilePhoto();
       if (id === "home") {
         renderHome();
-        loadProfilePhoto();
         if (currentRole() === "student") {
           loadSwipeCard();
           loadStudentPasses();
