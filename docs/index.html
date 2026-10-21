@@ -403,6 +403,7 @@
       display: grid; gap: 14px; grid-template-columns: 1fr;
     }
     .pass-grid .action { text-align: left; width: 100%; }
+    .pass-slot { display: grid; gap: 8px; }
     .page-head { margin-bottom: 16px; }
     @media (min-width: 820px) {
       body {
@@ -698,6 +699,13 @@
         back: "Back",
         close: "Close",
         emptyPasses: "No passes yet.",
+        clearPass: "Clear pass",
+        clearPassLog: "Clear pass log",
+        clearPassTitle: "Clear this pass?",
+        clearPassBody: "This pass will leave the campus log.",
+        clearPassLogTitle: "Clear the pass log?",
+        clearPassLogBody: "Every pass in this log will leave the campus log. Teachers cannot do this.",
+        clearPassFail: "Could not clear the pass log.",
         hallway: "HALLWAY PASS", flex: "FLEX PASS",
         search: "Name, role, or email",
         newsEmpty: "No news yet.",
@@ -869,6 +877,13 @@
         back: "Atrás",
         close: "Cerrar",
         emptyPasses: "Aún no hay pases.",
+        clearPass: "Quitar pase",
+        clearPassLog: "Vaciar registro de pases",
+        clearPassTitle: "¿Quitar este pase?",
+        clearPassBody: "Este pase saldrá del registro del campus.",
+        clearPassLogTitle: "¿Vaciar el registro de pases?",
+        clearPassLogBody: "Todos los pases de este registro saldrán del registro del campus. Los maestros no pueden hacer esto.",
+        clearPassFail: "No se pudo vaciar el registro de pases.",
         hallway: "PASE DE PASILLO", flex: "PASE FLEX",
         search: "Nombre, rol o correo",
         newsEmpty: "Aún no hay noticias.",
@@ -990,6 +1005,9 @@
     function canSeePassLog() {
       const role = currentRole();
       return role === "administrator" || role === "teacher";
+    }
+    function canClearPassLog() {
+      return currentRole() === "administrator";
     }
     function signedIn() {
       if (isGuest()) return true;
@@ -1207,6 +1225,110 @@
       if (errors) throw new Error(String(errors));
       return null;
     }
+    async function restModifyOps(operations) {
+      const token = schoolToken();
+      if (!token || !operations.length) return {};
+      const url = `https://api.apple-cloudkit.com/database/1/${CONTAINER}/${schoolEnv()}/public/records/modify?ckAPIToken=${encodeURIComponent(token)}`;
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ operations })
+      });
+      return response.json();
+    }
+    function passRecordName(record) {
+      return String((record && record.recordName) || fieldValue(record, "recordName") || "").trim();
+    }
+    function confirmClearPass(id) {
+      if (!canClearPassLog()) return;
+      const c = t();
+      openSheet(`
+        <div class="card-title"><b>${c.clearPassTitle}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
+        <p class="muted">${c.clearPassBody}</p>
+        <button class="primary" type="button" data-action="closeSheet">${c.close}</button>
+        <button class="ghost" type="button" data-action="clearPass" data-pass-id="${escapeHtml(id || "")}" style="width:100%;margin-top:8px;color:#B42318;">${c.clearPass}</button>`);
+    }
+    function confirmClearPassLog() {
+      if (!canClearPassLog()) return;
+      const c = t();
+      openSheet(`
+        <div class="card-title"><b>${c.clearPassLogTitle}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
+        <p class="muted">${c.clearPassLogBody}</p>
+        <button class="primary" type="button" data-action="closeSheet">${c.close}</button>
+        <button class="ghost" type="button" data-action="clearPassLog" style="width:100%;margin-top:8px;color:#B42318;">${c.clearPassLog}</button>`);
+    }
+    async function stripPassManifest(removeIDs) {
+      const drop = new Set((removeIDs || []).map((id) => String(id || "").trim()).filter(Boolean));
+      const records = await fetchByNames(cloudDb(), [MANIFEST]);
+      const manifest = records.find((item) => item.recordName === MANIFEST) || records[0];
+      const current = String(fieldValue(manifest, "passIDs") || "").split(",").map((part) => part.trim()).filter(Boolean);
+      const next = drop.size ? current.filter((id) => !drop.has(id)) : [];
+      await restModify({
+        recordType: PASS_TYPE,
+        recordName: MANIFEST,
+        fields: { passIDs: { value: next.join(",") } }
+      }, "forceUpdate");
+    }
+    async function clearPassRecords(ids) {
+      const unique = [...new Set((ids || []).map((id) => String(id || "").trim()).filter((id) => id && id !== MANIFEST))];
+      if (!unique.length) return;
+      for (let i = 0; i < unique.length; i += 20) {
+        const chunk = unique.slice(i, i + 20);
+        let payload = {};
+        try {
+          payload = await restModifyOps(chunk.map((recordName) => ({
+            operationType: "forceDelete",
+            record: { recordName }
+          })));
+        } catch (_) {
+          payload = {};
+        }
+        const failed = chunk.filter((recordName) => {
+          const row = (payload.records || []).find((item) => item.recordName === recordName);
+          return !(row && !row.serverErrorCode && (row.deleted || row.recordName));
+        });
+        if (failed.length) {
+          await restModifyOps(failed.map((recordName) => ({
+            operationType: "forceUpdate",
+            record: {
+              recordType: PASS_TYPE,
+              recordName,
+              fields: {
+                studentName: { value: "" },
+                teacherName: { value: "" },
+                destination: { value: "" },
+                dates: { value: "" }
+              }
+            }
+          })));
+        }
+      }
+      await stripPassManifest(unique);
+    }
+    async function handleClearPass(id) {
+      if (!canClearPassLog()) return;
+      try {
+        await ensureCloud();
+        await clearPassRecords([id]);
+        closeSheet();
+        if (view === "passes") await loadPasses();
+      } catch (_) {
+        openSheet(`<div class="card-title"><b>${t().clearPassFail}</b><button type="button" data-action="closeSheet">${t().close}</button></div>`);
+      }
+    }
+    async function handleClearPassLog() {
+      if (!canClearPassLog()) return;
+      try {
+        await ensureCloud();
+        const ids = Object.keys(window._passRecords || {});
+        await clearPassRecords(ids);
+        await stripPassManifest([]);
+        closeSheet();
+        if (view === "passes") await loadPasses();
+      } catch (_) {
+        openSheet(`<div class="card-title"><b>${t().clearPassFail}</b><button type="button" data-action="closeSheet">${t().close}</button></div>`);
+      }
+    }
     async function allocateGuestStudentKey(person) {
       if (!schoolToken()) return "";
       try { await ensureCloud(); } catch (_) {}
@@ -1334,9 +1456,10 @@
       if (guestBody) guestBody.textContent = c.guestBody;
       document.getElementById("bell").innerHTML = icons.bell;
       const booksIco = '<img class="tab-glyph" src="./books-vertical.png" alt="">';
+      const contactsIco = '<img class="tab-glyph" src="./person-crop-rectangle-stack.png" alt="">';
       const tabItems = [["home", icons.house, c.home]];
       if (isPairedStudent() || isGuestStudent()) tabItems.push(["classes", booksIco, c.classes]);
-      tabItems.push(["contacts", icons.person, c.contacts], ["more", icons.more, c.more]);
+      tabItems.push(["contacts", contactsIco, c.contacts], ["more", icons.more, c.more]);
       tabs.classList.toggle("with-classes", tabItems.length > 3);
       const tabOn = (id) => {
         if (id === "classes") return view === "classes" || view === "class" || view === "study";
@@ -2386,9 +2509,14 @@
     function openPass(id) {
       const record = window._passRecords && window._passRecords[id];
       if (!record) return;
+      const c = t();
+      const clear = canClearPassLog()
+        ? `<button class="ghost" type="button" data-action="askClearPass" data-pass-id="${escapeHtml(id)}" style="width:100%;margin-top:12px;color:#B42318;">${c.clearPass}</button>`
+        : "";
       openSheet(`
-        <div class="card-title"><button type="button" data-action="closeSheet">${t().close}</button></div>
-        ${passPaper(record, true)}`);
+        <div class="card-title"><button type="button" data-action="closeSheet">${c.close}</button></div>
+        ${passPaper(record, true)}
+        ${clear}`);
     }
 
     function newsHeading(record) {
@@ -2491,7 +2619,10 @@
     async function loadPasses() {
       const node = document.getElementById("view-passes");
       const c = t();
-      node.innerHTML = `<div class="toolbar"><button class="ghost" type="button" data-view="home">${c.back}</button><button class="ghost" type="button" id="refreshPasses">${c.refresh}</button></div><div id="passes"></div>`;
+      const clearAll = canClearPassLog()
+        ? `<button class="ghost" type="button" data-action="askClearPassLog">${c.clearPassLog}</button>`
+        : "";
+      node.innerHTML = `<div class="toolbar"><button class="ghost" type="button" data-view="home">${c.back}</button><button class="ghost" type="button" id="refreshPasses">${c.refresh}</button>${clearAll}</div><div id="passes"></div>`;
       if (!(await ensureCloud())) {
         node.insertAdjacentHTML("beforeend", `<div class="card"><p class="muted">${c.adminHint}</p></div>`);
         return;
@@ -2507,9 +2638,12 @@
         const usable = [...seen.values()].filter((r) => r.recordName !== MANIFEST && (fieldValue(r, "studentName") || fieldValue(r, "teacherName")));
         window._passRecords = {};
         document.getElementById("passes").innerHTML = usable.length ? `<div class="pass-grid">` + usable.map((record) => {
-          const id = record.recordName || fieldValue(record, "recordName") || String(Math.random());
+          const id = passRecordName(record) || String(Math.random());
           window._passRecords[id] = record;
-          return `<button type="button" class="action" data-action="openPass" data-pass-id="${escapeHtml(id)}">${passPaper(record, false)}</button>`;
+          const clear = canClearPassLog()
+            ? `<button class="ghost" type="button" data-action="askClearPass" data-pass-id="${escapeHtml(id)}" style="color:#B42318;">${c.clearPass}</button>`
+            : "";
+          return `<div class="pass-slot"><button type="button" class="action" data-action="openPass" data-pass-id="${escapeHtml(id)}">${passPaper(record, false)}</button>${clear}</div>`;
         }).join("") + `</div>` : `<div class="card"><p class="muted">${c.emptyPasses}</p></div>`;
       } catch (error) {
         node.insertAdjacentHTML("beforeend", `<p class="error">${escapeHtml(error.message)}</p>`);
@@ -2615,6 +2749,10 @@
         if (name === "addHome") showAddHome();
         if (name === "installHome") promptInstallHome();
         if (name === "openPass" || name === "openStudentPass") openPass(action.dataset.passId || "");
+        if (name === "askClearPass") confirmClearPass(action.dataset.passId || "");
+        if (name === "askClearPassLog") confirmClearPassLog();
+        if (name === "clearPass") handleClearPass(action.dataset.passId || "");
+        if (name === "clearPassLog") handleClearPassLog();
         if (name === "openClass") {
           window._classID = action.dataset.classId || "";
           show("class");
