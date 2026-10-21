@@ -315,7 +315,7 @@
       display: grid; place-items: center; padding: 24px;
     }
     .gate-box {
-      width: min(640px, calc(100% - 48px));
+      width: min(720px, calc(100% - 40px));
       margin: 0;
       background: #fff;
       border-radius: 2px;
@@ -325,16 +325,16 @@
     .gate-bar {
       display: flex; align-items: center; gap: 10px;
       background: #E87722; color: #fff;
-      padding: 16px 24px;
+      padding: 18px 28px;
       font-family: var(--font-text); font-size: 18px; font-weight: 700;
     }
     .gate-bar img { width: 32px; height: 32px; border-radius: 6px; object-fit: cover; }
-    .gate-body { padding: 28px 32px 32px; }
+    .gate-body { padding: 34px 40px 40px; }
     .gate-title {
-      font-family: var(--font-text); font-size: 26px; font-weight: 700;
-      margin: 0 0 10px; letter-spacing: -0.022em;
+      font-family: var(--font-text); font-size: 28px; font-weight: 700;
+      margin: 0 0 12px; letter-spacing: -0.022em;
     }
-    .gate-copy { margin: 0 0 22px; font-size: 15px; }
+    .gate-copy { margin: 0 0 26px; font-size: 15px; }
     .gate-row {
       display: grid; grid-template-columns: 160px 1fr;
       border: 1px solid #cfd6de; overflow: hidden;
@@ -343,10 +343,12 @@
       background: #eef1f4; padding: 14px 16px;
       font-size: 14px; font-weight: 600; display: grid; align-items: center;
     }
-    .gate-row input {
+    .gate-stack { display: grid; gap: 8px; }
+    .gate-row input, .gate-row select {
       border: 0; border-radius: 0; background: #FFF1E6;
-      padding: 14px 16px; font-size: 16px;
+      padding: 14px 16px; font-size: 16px; width: 100%;
     }
+    .gate-row select { appearance: none; background-image: none; }
     .gate-actions {
       display: flex; justify-content: flex-end;
       margin-top: 16px; padding-right: 16px;
@@ -359,7 +361,7 @@
       display: inline-flex; align-items: center; justify-content: center;
     }
     .gate-guest {
-      margin-top: 22px; border: 1px solid #cfd6de; padding: 16px;
+      margin-top: 28px; border: 1px solid #cfd6de; padding: 20px;
     }
     .gate-guest .t { font-size: 18px; margin-bottom: 8px; }
     .gate-guest-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
@@ -466,20 +468,43 @@
       <div class="gate-body">
         <h1 class="gate-title" id="gateTitle">Welcome</h1>
         <p class="muted gate-copy" id="gateBody">Pair your iPhone App via Account -> WHS Web Code</p>
-        <div class="gate-row">
-          <label id="codeLabel" for="webCode">WHS Web Code</label>
-          <input id="webCode" autocomplete="off" spellcheck="false" placeholder="XXXXX-XXXXX">
-        </div>
-        <div class="gate-actions">
-          <button class="gate-signin" type="button" id="enterSite">Sign In</button>
-        </div>
-        <p class="error" id="gateError"></p>
-        <div class="gate-guest">
-          <div class="t" id="guestTitle">Don't use an iPhone?</div>
-          <div class="gate-guest-row">
-            <p class="muted" id="guestBody" style="margin:0;">Setup WHS WebView portal and homescreen shortcut</p>
-            <button class="gate-signin" type="button" id="skipSite">Sign In</button>
+        <div id="gatePair">
+          <div class="gate-row">
+            <label id="codeLabel" for="webCode">WHS Web Code</label>
+            <input id="webCode" autocomplete="off" spellcheck="false" placeholder="XXXXX-XXXXX">
           </div>
+          <div class="gate-actions">
+            <button class="gate-signin" type="button" id="enterSite">Sign In</button>
+          </div>
+          <p class="error" id="gateError"></p>
+          <div class="gate-guest">
+            <div class="t" id="guestTitle">Don't use an iPhone?</div>
+            <div class="gate-guest-row">
+              <p class="muted" id="guestBody" style="margin:0;">Setup WHS WebView portal and homescreen shortcut</p>
+              <button class="gate-signin" type="button" id="skipSite">Sign In</button>
+            </div>
+          </div>
+        </div>
+        <div id="gateSetup" class="hidden">
+          <div class="gate-stack">
+            <div class="gate-row">
+              <label id="nameLabel" for="guestName">Name</label>
+              <input id="guestName" autocomplete="name" spellcheck="false">
+            </div>
+            <div class="gate-row">
+              <label id="gradeLabel" for="guestGrade">Grade</label>
+              <select id="guestGrade">
+                <option value="9">9</option>
+                <option value="10">10</option>
+                <option value="11">11</option>
+                <option value="12">12</option>
+              </select>
+            </div>
+          </div>
+          <div class="gate-actions">
+            <button class="gate-signin" type="button" id="guestFinish">Sign In</button>
+          </div>
+          <p class="error" id="setupError"></p>
         </div>
       </div>
     </div>
@@ -504,6 +529,9 @@
         skip: "Sign In",
         guestTitle: "Don't use an iPhone?",
         guestBody: "Setup WHS WebView portal and homescreen shortcut",
+        nameLabel: "Name",
+        gradeLabel: "Grade",
+        guestNeedInfo: "Enter your name and grade.",
         gateHint: "",
         dashGuest: "Guest view. News and lunch are here. Sign in with a WHS Web Code for your full role.",
         useCode: "Use my WHS Web Code",
@@ -622,6 +650,9 @@
         skip: "Entrar",
         guestTitle: "¿No usas iPhone?",
         guestBody: "Configura el portal WHS WebView y el atajo de inicio",
+        nameLabel: "Nombre",
+        gradeLabel: "Grado",
+        guestNeedInfo: "Escribe tu nombre y grado.",
         gateHint: "",
         dashGuest: "Vista de invitado. Noticias y almuerzo están aquí. Entra con un código web WHS para tu rol.",
         useCode: "Usar mi código web WHS",
@@ -969,6 +1000,7 @@
       const inProfile = signedIn();
       gate.classList.toggle("hidden", inProfile);
       gate.toggleAttribute("hidden", inProfile);
+      if (!inProfile) showPairStep();
       applyChrome();
     }
 
@@ -984,9 +1016,20 @@
       const gradeText = profile && profile.grade ? `${c.grade} ${profile.grade}` : "";
       roleLine.textContent = [roleText, gradeText].filter(Boolean).join(" · ");
       roleLine.classList.toggle("hidden", !roleText);
-      gateTitle.textContent = c.welcome;
-      gateBody.textContent = c.gateBody;
+      if (window._gateStep === "guest") {
+        gateTitle.textContent = c.guestTitle;
+        gateBody.textContent = c.guestBody;
+      } else {
+        gateTitle.textContent = c.welcome;
+        gateBody.textContent = c.gateBody;
+      }
       codeLabel.textContent = c.codeLabel;
+      const nameLabel = document.getElementById("nameLabel");
+      const gradeLabel = document.getElementById("gradeLabel");
+      if (nameLabel) nameLabel.textContent = c.nameLabel;
+      if (gradeLabel) gradeLabel.textContent = c.gradeLabel;
+      const guestFinish = document.getElementById("guestFinish");
+      if (guestFinish) guestFinish.textContent = c.enter;
       enterSite.textContent = c.enter;
       const skip = document.getElementById("skipSite");
       if (skip) skip.textContent = c.skip;
@@ -2158,7 +2201,8 @@
       if (event.target.id === "refreshPasses") loadPasses();
       if (event.target.closest("#bell")) show("news");
       if (event.target.closest("#me")) show("more");
-      if (event.target.id === "skipSite" || event.target.closest("#skipSite")) enterGuest();
+      if (event.target.id === "skipSite" || event.target.closest("#skipSite")) showGuestStep();
+      if (event.target.id === "guestFinish" || event.target.closest("#guestFinish")) enterGuest();
       if (event.target.id === "enterSite" || event.target.closest("#enterSite")) enterWithCode();
     });
     document.body.addEventListener("input", (event) => {
@@ -2173,13 +2217,40 @@
         event.preventDefault();
         enterWithCode();
       }
+      if (event.key === "Enter" && (event.target.id === "guestName" || event.target.id === "guestGrade")) {
+        event.preventDefault();
+        enterGuest();
+      }
       if (event.key === "Escape") closeSheet();
     });
     sheet.addEventListener("click", (event) => {
       if (event.target === sheet) closeSheet();
     });
+    function showPairStep() {
+      window._gateStep = "pair";
+      document.getElementById("gatePair").classList.remove("hidden");
+      document.getElementById("gateSetup").classList.add("hidden");
+      const err = document.getElementById("setupError");
+      if (err) err.textContent = "";
+    }
+    function showGuestStep() {
+      window._gateStep = "guest";
+      document.getElementById("gatePair").classList.add("hidden");
+      document.getElementById("gateSetup").classList.remove("hidden");
+      applyChrome();
+      const name = document.getElementById("guestName");
+      if (name) name.focus();
+    }
     function enterGuest() {
-      profile = { displayName: "Warrior", role: "guest", grade: "", key: "" };
+      const name = String((document.getElementById("guestName") || {}).value || "").trim();
+      const grade = String((document.getElementById("guestGrade") || {}).value || "").trim();
+      const err = document.getElementById("setupError");
+      if (!name || !grade) {
+        if (err) err.textContent = t().guestNeedInfo;
+        return;
+      }
+      if (err) err.textContent = "";
+      profile = { displayName: name, firstName: name, role: "guest", grade, key: "" };
       localStorage.setItem("whsWebProfile", JSON.stringify(profile));
       applyAvatar("");
       showGate();
