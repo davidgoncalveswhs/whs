@@ -1202,31 +1202,44 @@
     function dashCard(go, title, subtitle) {
       return `<button class="card action" type="button" data-go="${go}"><div class="t">${title}</div>${subtitle ? `<div class="s">${subtitle}</div>` : ""}</button>`;
     }
+    function homeLunchWireNews() {
+      const c = t();
+      return `<div class="shortcuts wide">
+            <button class="shortcut" type="button" data-go="lunch">
+              <span class="plate"><img class="sf-glyph" src="./fork-knife.png" alt=""></span>
+              <div class="t">${c.lunchMenu}</div>
+              <div class="s">${c.lunchSub}</div>
+            </button>
+            <a class="shortcut" href="https://whswarriorswire.com" target="_blank" rel="noopener">
+              <img class="tile-wire" src="./WarriorsWire.png" alt="">
+              <div class="t">${c.wire}</div>
+              <div class="s">${c.wireSub}</div>
+            </a>
+          </div>
+          <div class="card wide" id="homeNews"><div class="t">${c.newsFeed}</div></div>`;
+    }
     function renderHome() {
       const c = t();
       const role = currentRole();
       let cards = "";
-      if (role === "administrator") {
-        cards = `
-          <div class="card wide"><p class="muted" style="margin:0;">${c.dashAdmin}</p></div>
-          ${dashCard("passes", c.openPasses, "")}
-          ${dashCard("news", c.openNews, "")}
-          ${dashCard("contacts", c.openContacts, "")}`;
-      } else if (role === "teacher") {
-        cards = `
-          <div class="card wide"><p class="muted" style="margin:0;">${c.dashTeacher}</p></div>
-          ${dashCard("passes", c.openPasses, "")}
-          ${dashCard("news", c.openNews, "")}
-          ${dashCard("contacts", c.openContacts, "")}`;
-      } else if (role === "parent") {
+      if (role === "parent") {
         cards = `
           <div class="card wide"><p class="muted" style="margin:0;">${c.dashParent}</p></div>
           ${dashCard("news", c.openNews, "")}
           ${dashCard("lunch", c.openLunch, "")}
           ${dashCard("contacts", c.openContacts, "")}`;
+      } else if (canSeePassLog()) {
+        cards = `
+          <button class="card action hero-pass wide" type="button" data-go="passes">
+            <div class="row-item">
+              <img class="tile-mark" src="./FlexHallwayMark.png" alt="">
+              <div><div class="t">${c.passesTile}</div></div>
+              <span class="chev">›</span>
+            </div>
+          </button>
+          ${homeLunchWireNews()}`;
       } else {
         cards = `
-          ${isGuest() ? "" : `<div class="card wide"><p class="muted" style="margin:0;">${c.dashStudent}</p></div>`}
           ${isPairedStudent() ? `<button class="card action hero-pass wide" type="button" data-go="swipe">
             <div class="row-item">
               <img class="tile-swipe" id="swipeTileMark" src="./SwipeCard.png" alt="">
@@ -1248,19 +1261,7 @@
               <span class="chev">›</span>
             </div>
           </button>` : ""}
-          <div class="shortcuts wide">
-            <button class="shortcut" type="button" data-go="lunch">
-              <span class="plate"><img class="sf-glyph" src="./fork-knife.png" alt=""></span>
-              <div class="t">${c.lunchMenu}</div>
-              <div class="s">${c.lunchSub}</div>
-            </button>
-            <a class="shortcut" href="https://whswarriorswire.com" target="_blank" rel="noopener">
-              <img class="tile-wire" src="./WarriorsWire.png" alt="">
-              <div class="t">${c.wire}</div>
-              <div class="s">${c.wireSub}</div>
-            </a>
-          </div>
-          <div class="card wide" id="homeNews"><div class="t">${c.newsFeed}</div></div>`;
+          ${homeLunchWireNews()}`;
       }
       document.getElementById("view-home").innerHTML = `<div class="dash">${cards}</div>`;
     }
@@ -2108,7 +2109,7 @@
     async function loadPasses() {
       const node = document.getElementById("view-passes");
       const c = t();
-      node.innerHTML = `<div class="toolbar"><button class="ghost" type="button" data-view="more">${c.back}</button><button class="ghost" type="button" id="refreshPasses">${c.refresh}</button></div><div id="passes"></div>`;
+      node.innerHTML = `<div class="toolbar"><button class="ghost" type="button" data-view="home">${c.back}</button><button class="ghost" type="button" id="refreshPasses">${c.refresh}</button></div><div id="passes"></div>`;
       if (!(await ensureCloud())) {
         node.insertAdjacentHTML("beforeend", `<div class="card"><p class="muted">${c.adminHint}</p></div>`);
         return;
