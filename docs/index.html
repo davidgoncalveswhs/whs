@@ -333,7 +333,7 @@
       font-family: var(--font-text); font-size: 18px; font-weight: 700;
     }
     .gate-bar img { width: 32px; height: 32px; border-radius: 6px; object-fit: cover; }
-    .gate-body { padding: 34px 40px 40px; }
+    .gate-body { padding: 34px 40px 40px; --sign-inset: 20px; }
     .gate-title {
       font-family: var(--font-text); font-size: 28px; font-weight: 700;
       margin: 0 0 12px; letter-spacing: -0.022em;
@@ -355,7 +355,7 @@
     .gate-row select { appearance: none; background-image: none; }
     .gate-actions {
       display: flex; justify-content: flex-end;
-      margin-top: 16px; padding-right: 16px;
+      margin-top: 16px; padding-right: var(--sign-inset);
     }
     .gate-signin {
       background: #E87722; color: #fff; border-radius: 4px;
@@ -365,7 +365,7 @@
       display: inline-flex; align-items: center; justify-content: center;
     }
     .gate-guest {
-      margin-top: 28px; border: 1px solid #cfd6de; padding: 20px;
+      margin-top: 28px; border: 1px solid #cfd6de; padding: var(--sign-inset);
     }
     .gate-guest .t { font-size: 18px; margin-bottom: 8px; }
     .gate-guest-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
