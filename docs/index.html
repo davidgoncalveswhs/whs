@@ -167,8 +167,19 @@
     .paper-w-img { width: 42px; height: 42px; object-fit: contain; flex: none; }
     .paper.big .paper-w-img { width: 64px; height: 64px; }
     .tile-mark { width: 42px; height: 42px; object-fit: contain; flex: none; }
+    .tile-swipe { width: 65px; height: 42px; object-fit: contain; flex: none; }
+    .tile-id {
+      width: 56px; height: 38px; object-fit: cover; flex: none;
+      border-radius: 6px; border: 1px solid var(--line); background: #fff;
+    }
     .hero-pass { min-height: 88px; }
     .hero-pass .row-item { min-height: 56px; }
+    .id-photo {
+      width: 100%; max-width: 420px; display: block;
+      border-radius: 22px; border: 1px solid var(--line); background: #fff;
+    }
+    .id-meta { margin-top: 14px; }
+    .id-meta .t { font-size: 20px; }
     .paper-title {
       font-family: var(--font-display);
       font-size: 22px; font-weight: 800; letter-spacing: 0.016em; line-height: 1.1;
@@ -274,6 +285,7 @@
       <section id="view-more" class="hidden"></section>
       <section id="view-passes" class="hidden"></section>
       <section id="view-mypasses" class="hidden"></section>
+      <section id="view-swipe" class="hidden"></section>
     </div>
   </div>
 
@@ -313,7 +325,7 @@
         gateHint: "On iPhone: Account → Chromebook. Student, Teacher, Parent, and Administrator each get a different dashboard. Guest is a limited student view.",
         dashGuest: "Guest view. News, lunch, and the staff directory. Sign in with a WHS Web Code for your full role.",
         gateFail: "Could not find that code. Check the letters. An administrator may need to save the school CloudKit token after signing in.",
-        dashStudent: "Your Chromebook dashboard. Accepted hallway and Flex passes sync from your iPhone with this web code.",
+        dashStudent: "Your Chromebook dashboard. Swipe Card and accepted hallway and Flex passes sync from your iPhone with this web code.",
         yourPasses: "Your passes",
         noneYet: "No passes yet",
         noStudentPasses: "No passes on this Chromebook yet. Accept a pass in Teacher Passes on iPhone, then reload.",
@@ -329,7 +341,8 @@
         openContacts: "Staff directory",
         openPasses: "Campus pass log",
         swipe: "Swipe Card",
-        swipeSub: "Show your Chromebook ID",
+        swipeSub: "Add your ID photo to use Swipe",
+        noSwipe: "No Swipe Card on this Chromebook yet. Add your ID photo in Swipe Card on iPhone, then reload.",
         passesTile: "Teacher Passes",
         passesSub: "Hallway and Flex stay on iPhone",
         news: "News", lunch: "Lunch", contacts: "Contacts", classes: "Classes", more: "More", home: "Home",
@@ -358,7 +371,7 @@
         language: "Language",
         email: "Email",
         idTitle: "Swipe Card",
-        idHint: "Cafeteria scanning still uses the iPhone. This card shows your name on Chromebook.",
+        idHint: "Cafeteria scanning still uses the iPhone. This is the same ID photo from Swipe Card.",
         school: "Watertown High School",
         role: "Role",
         grade: "Grade",
@@ -381,7 +394,7 @@
         gateHint: "En iPhone: Cuenta → Chromebook. Estudiante, maestro, padre y administrador ven un panel distinto. Invitado es una vista limitada de estudiante.",
         dashGuest: "Vista de invitado. Noticias, almuerzo y el directorio. Entra con un código web WHS para tu rol.",
         gateFail: "No se encontró ese código. Revisa las letras. Un administrador puede guardar el token de CloudKit después de entrar.",
-        dashStudent: "Tu panel de Chromebook. Los pases aceptados se sincronizan desde iPhone con este código web.",
+        dashStudent: "Tu panel de Chromebook. Tarjeta Swipe y los pases aceptados se sincronizan desde iPhone con este código web.",
         yourPasses: "Tus pases",
         noneYet: "Aún no hay pases",
         noStudentPasses: "Aún no hay pases en este Chromebook. Acepta un pase en Pases de maestros en iPhone y recarga.",
@@ -397,7 +410,8 @@
         openContacts: "Directorio",
         openPasses: "Registro de pases",
         swipe: "Tarjeta Swipe",
-        swipeSub: "Muestra tu ID de Chromebook",
+        swipeSub: "Añade la foto de tu ID para usar Swipe",
+        noSwipe: "Aún no hay Tarjeta Swipe en este Chromebook. Añade la foto de tu ID en Tarjeta Swipe en iPhone y recarga.",
         passesTile: "Pases de maestros",
         passesSub: "Pasillo y Flex se quedan en iPhone",
         news: "Noticias", lunch: "Almuerzo", contacts: "Contactos", classes: "Clases", more: "Más", home: "Inicio",
@@ -426,7 +440,7 @@
         language: "Idioma",
         email: "Correo",
         idTitle: "Tarjeta Swipe",
-        idHint: "El escaneo de cafetería sigue en iPhone. Esta tarjeta muestra tu nombre en Chromebook.",
+        idHint: "El escaneo de cafetería sigue en iPhone. Esta es la misma foto de Tarjeta Swipe.",
         school: "Watertown High School",
         role: "Rol",
         grade: "Grado",
@@ -627,14 +641,18 @@
     function show(id) {
       view = id;
       closeSheet();
-      ["home", "news", "lunch", "contacts", "more", "passes", "mypasses"].forEach((name) => {
+      ["home", "news", "lunch", "contacts", "more", "passes", "mypasses", "swipe"].forEach((name) => {
         document.getElementById("view-" + name).classList.toggle("hidden", name !== id);
       });
       applyChrome();
       if (id === "home") {
         renderHome();
-        if (currentRole() === "student") loadStudentPasses();
+        if (currentRole() === "student") {
+          loadSwipeCard();
+          loadStudentPasses();
+        }
       }
+      if (id === "swipe") loadSwipeCard();
       if (id === "mypasses") loadStudentPasses();
       if (id === "news") loadNews();
       if (id === "lunch") renderLunch();
@@ -681,7 +699,14 @@
       } else {
         cards = `
           <div class="card wide"><p class="muted" style="margin:0;">${isGuest() ? c.dashGuest : c.dashStudent}</p></div>
-          ${currentRole() === "student" ? `<button class="card action hero-pass wide" type="button" data-go="mypasses">
+          ${currentRole() === "student" ? `<button class="card action hero-pass wide" type="button" data-go="swipe">
+            <div class="row-item">
+              <img class="tile-swipe" id="swipeTileMark" src="./SwipeCard.png" alt="">
+              <div><div class="t">${c.swipe}</div><div class="s" id="swipeTileSub">${c.swipeSub}</div></div>
+              <span class="chev">›</span>
+            </div>
+          </button>
+          <button class="card action hero-pass wide" type="button" data-go="mypasses">
             <div class="row-item">
               <img class="tile-mark" src="./FlexHallwayMark.png" alt="">
               <div><div class="t">${c.passesTile}</div><div class="s" id="passTileSub">${c.noneYet}</div></div>
@@ -759,18 +784,63 @@
         <div class="people-grid">${list.slice(0, 120).map((person) => `<div class="card">${personButton(person)}</div>`).join("") || `<div class="card"><p class="muted">${t().search}</p></div>`}</div>`;
     }
 
-    function openSwipe() {
+    function swipeSubtitle(hasPhoto) {
       const c = t();
-      const name = profile ? profile.displayName : "Warrior";
+      if (!hasPhoto) return c.swipeSub;
+      const name = (profile && (profile.firstName || profile.displayName)) || "";
       const grade = profile && profile.grade ? `${c.grade} ${profile.grade}` : "";
-      openSheet(`
-        <div class="card-title"><b>${c.idTitle}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
-        <div class="id-card">
-          <div class="school">${c.school.toUpperCase()}</div>
-          <h2 style="margin:10px 0 4px;font-size:28px;">${escapeHtml(name)}</h2>
-          <div>${escapeHtml(roleLabel())}${grade ? " · " + escapeHtml(grade) : ""}</div>
-        </div>
-        <p class="muted">${c.idHint}</p>`);
+      return [name, grade].filter(Boolean).join(" · ") || c.swipe;
+    }
+
+    function applySwipeTile(url) {
+      const tileSub = document.getElementById("swipeTileSub");
+      const mark = document.getElementById("swipeTileMark");
+      if (tileSub) tileSub.textContent = swipeSubtitle(!!url);
+      if (mark) {
+        mark.src = url || "./SwipeCard.png";
+        mark.className = url ? "tile-id" : "tile-swipe";
+      }
+    }
+
+    function swipePage(url) {
+      const c = t();
+      const name = (profile && (profile.firstName || profile.displayName)) || "Warrior";
+      const grade = profile && profile.grade ? `${c.grade} ${profile.grade}` : "";
+      if (!url) {
+        return `${backBar()}<div class="card wide"><p class="muted" style="margin:0;">${c.noSwipe}</p></div>`;
+      }
+      return `${backBar()}
+        <div class="card wide" style="max-width:480px;">
+          <img class="id-photo" alt="" src="${escapeHtml(url)}">
+          <div class="id-meta">
+            <div class="t">${escapeHtml(name)}</div>
+            <div class="s">${escapeHtml(c.school)}${grade ? " · " + escapeHtml(grade) : ""}</div>
+          </div>
+          <p class="muted">${c.idHint}</p>
+        </div>`;
+    }
+
+    async function loadSwipeCard() {
+      const list = document.getElementById("view-swipe");
+      if (currentRole() !== "student" || !profile || !profile.key) return;
+      if (list && view === "swipe") list.innerHTML = `${backBar()}<p class="muted">${t().swipe}</p>`;
+      applySwipeTile("");
+      if (!(await ensureCloud())) {
+        if (list && view === "swipe") list.innerHTML = swipePage("");
+        return;
+      }
+      try {
+        const db = CloudKit.getDefaultContainer().publicCloudDatabase;
+        const profiles = await fetchByNames(db, [profile.key]);
+        const mine = profiles.find((item) => normalizeCode(item.recordName) === profile.key);
+        const url = fieldValue(mine, "swipeCard");
+        applySwipeTile(url);
+        if (list && view === "swipe") list.innerHTML = swipePage(url);
+      } catch (error) {
+        if (list && view === "swipe") {
+          list.innerHTML = `${backBar()}<p class="error">${escapeHtml(error.message)}</p>`;
+        }
+      }
     }
 
     function openPassesInfo() {
@@ -1011,7 +1081,7 @@
       const action = event.target.closest("[data-action]");
       if (action) {
         const name = action.dataset.action;
-        if (name === "swipe") openSwipe();
+        if (name === "swipe") show("swipe");
         if (name === "passesInfo") openPassesInfo();
         if (name === "ask") openAsk("");
         if (name === "aide") openAide();
