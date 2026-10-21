@@ -312,6 +312,8 @@
     nav.tabs button.on { color: var(--orange); background: var(--soft); }
     nav.tabs .ico { display: grid; place-items: center; margin: 0 auto 4px; }
     nav.tabs .ico .icon { width: 22px; height: 22px; }
+    nav.tabs .tab-glyph { width: 22px; height: 22px; object-fit: contain; display: block; }
+    nav.tabs.with-classes { grid-template-columns: repeat(4, 1fr); }
     .hidden { display: none !important; }
     .overlay, .sheet {
       position: fixed; inset: 0; background: var(--bg); z-index: 30; overflow: auto;
@@ -418,6 +420,7 @@
       }
       nav.tabs button { font-size: 17px; font-weight: 600; letter-spacing: -0.022em; text-align: left; padding: 12px 14px; display: flex; gap: 10px; align-items: center; }
       nav.tabs .ico { display: grid; margin: 0; }
+      nav.tabs.with-classes { grid-template-columns: 1fr; }
       nav.tabs .web-mark { display: flex; padding: 0 14px 18px; margin: 0; color: #000; }
       nav.tabs button.web-mark, nav.tabs button.web-mark span { color: #000; }
       .web-mark-inline { display: none; }
@@ -670,9 +673,6 @@
         practiceAgain: "Practice again",
         aspectDone: "All sentences done",
         englishQuiz: "Definition Quiz",
-        quoteBank: "Quote Bank",
-        interviews: "Interview transcripts",
-        mathGames: "Math Pass",
         flashcards: "Flashcards",
         quiz: "Quiz",
         tapReveal: "Tap to reveal",
@@ -844,9 +844,6 @@
         practiceAgain: "Practicar de nuevo",
         aspectDone: "Oraciones terminadas",
         englishQuiz: "Quiz de definiciones",
-        quoteBank: "Banco de citas",
-        interviews: "Transcripciones",
-        mathGames: "Math Pass",
         flashcards: "Tarjetas",
         quiz: "Quiz",
         tapReveal: "Toca para ver",
@@ -1336,11 +1333,16 @@
       if (guestTitle) guestTitle.textContent = c.guestTitle;
       if (guestBody) guestBody.textContent = c.guestBody;
       document.getElementById("bell").innerHTML = icons.bell;
-      tabs.innerHTML = `<button type="button" class="web-mark" data-go="home"><img src="./app-icon-192.png" alt=""><span>WebView</span></button>` + [
-        ["home", icons.house, c.home],
-        ["contacts", icons.person, c.contacts],
-        ["more", icons.more, c.more]
-      ].map(([id, ico, label]) => `<button type="button" data-view="${id}" class="${view === id ? "on" : ""}"><span class="ico">${ico}</span>${label}</button>`).join("");
+      const booksIco = '<img class="tab-glyph" src="./books-vertical.png" alt="">';
+      const tabItems = [["home", icons.house, c.home]];
+      if (isPairedStudent() || isGuestStudent()) tabItems.push(["classes", booksIco, c.classes]);
+      tabItems.push(["contacts", icons.person, c.contacts], ["more", icons.more, c.more]);
+      tabs.classList.toggle("with-classes", tabItems.length > 3);
+      const tabOn = (id) => {
+        if (id === "classes") return view === "classes" || view === "class" || view === "study";
+        return view === id;
+      };
+      tabs.innerHTML = `<button type="button" class="web-mark" data-go="home"><img src="./app-icon-192.png" alt=""><span>WebView</span></button>` + tabItems.map(([id, ico, label]) => `<button type="button" data-view="${id}" class="${tabOn(id) ? "on" : ""}"><span class="ico">${ico}</span>${label}</button>`).join("");
     }
 
     function show(id) {
@@ -1454,17 +1456,9 @@
               <span class="chev">›</span>
             </div>
           </button>`;
-        const classesTile = `<button class="card action hero-pass wide" type="button" data-go="classes">
-            <div class="row-item">
-              <span class="plate"><img class="sf-glyph" src="./books-vertical.png" alt=""></span>
-              <div><div class="t">${c.classesTile}</div><div class="s" id="classTileSub">${c.classesSub}</div></div>
-              <span class="chev">›</span>
-            </div>
-          </button>`;
         cards = `
           ${isPairedStudent() ? `${swipeTile}
-          ${passTile}
-          ${classesTile}` : (isGuestStudent() ? `${swipeTile}${canSeeOwnPasses() ? passTile : ""}${classesTile}` : "")}
+          ${passTile}` : (isGuestStudent() ? `${swipeTile}${canSeeOwnPasses() ? passTile : ""}` : "")}
           ${homeLunchWireNews()}`;
       }
       document.getElementById("view-home").innerHTML = `<div class="dash">${cards}</div>`;
@@ -1898,12 +1892,9 @@
       if (cat === "english") {
         return [
           { id: "englishDefinitionQuiz", title: c.englishQuiz, kind: "englishQuiz" },
-          { id: "englishStudyGames", title: c.studyGames, kind: "englishVocab" },
-          { id: "englishQuoteBank", title: c.quoteBank, kind: "phone" }
+          { id: "englishStudyGames", title: c.studyGames, kind: "englishVocab" }
         ];
       }
-      if (cat === "publishing") return [{ id: "publishingInterviews", title: c.interviews, kind: "phone" }];
-      if (cat === "math") return [{ id: "mathStudyGames", title: c.mathGames, kind: "phone" }];
       return [];
     }
 
