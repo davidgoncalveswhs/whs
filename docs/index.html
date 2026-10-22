@@ -399,6 +399,9 @@
     .sheet-card { width: min(560px, 100%); background: white; border-radius: 28px; padding: 22px; }
     .sheet-field { margin: 0 0 12px; }
     .sheet-field span { display: block; font-size: 13px; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+    .wipe-track { height: 10px; background: #ececec; border-radius: 99px; overflow: hidden; margin: 14px 0 8px; }
+    .wipe-fill { height: 100%; width: 0; background: #eb6114; border-radius: 99px; transition: width 0.2s ease; }
+    .wipe-pct { font-variant-numeric: tabular-nums; font-weight: 700; }
     .home-steps { margin: 12px 0 0; padding-left: 18px; }
     .home-steps li { margin: 0 0 10px; color: var(--muted); font-size: 15px; }
     .id-card {
@@ -780,6 +783,14 @@
         adminPassWipeNeedApple: "Sign in with Apple in More first. Clearing the log needs the same iCloud sign-in teachers use on iPhone.",
         adminPassWipeDone: "All passes are revoked. The campus log is empty.",
         adminPassWipeFail: "Could not clear the pass log.",
+        adminPassWipeCancel: "Cancel",
+        adminPassWipeConfirm: "Clear and delete all passes",
+        adminPassWipeWorking: "Clearing the pass log",
+        adminPassWipeStepCollect: "Finding every hallway and Flex pass",
+        adminPassWipeStepRevoke: "Revoking student passes",
+        adminPassWipeStepClear: "Removing passes from the campus log",
+        adminPassWipeStepEmpty: "Emptying the live pass list",
+        adminPassWipeCount: "Pass",
         hallway: "HALLWAY PASS", flex: "FLEX PASS",
         search: "Name, role, or email",
         newsEmpty: "No news yet.",
@@ -1004,6 +1015,14 @@
         adminPassWipeNeedApple: "Entra con Apple en Mas primero. Vaciar el registro necesita la misma sesion de iCloud que usan los maestros en iPhone.",
         adminPassWipeDone: "Todos los pases estan revocados. El registro del campus esta vacio.",
         adminPassWipeFail: "No se pudo vaciar el registro.",
+        adminPassWipeCancel: "Cancelar",
+        adminPassWipeConfirm: "Vaciar y borrar todos los pases",
+        adminPassWipeWorking: "Vaciando el registro de pases",
+        adminPassWipeStepCollect: "Buscando cada pase de pasillo y Flex",
+        adminPassWipeStepRevoke: "Revocando pases de estudiantes",
+        adminPassWipeStepClear: "Quitando pases del registro del campus",
+        adminPassWipeStepEmpty: "Vaciando la lista en vivo",
+        adminPassWipeCount: "Pase",
         hallway: "PASE DE PASILLO", flex: "PASE FLEX",
         search: "Nombre, rol o correo",
         newsEmpty: "Aún no hay noticias.",
@@ -1279,6 +1298,7 @@
       box.classList.add("hidden");
     }
     function closeSheet() {
+      if (window._passWipeBusy) return;
       parkCkAuth();
       sheet.classList.add("hidden");
       sheetCard.innerHTML = "";
@@ -1652,11 +1672,28 @@
         return;
       }
       setPassWipeError("");
+      window._passWipeCode = typed;
       openSheet(`
         <div class="card-title"><b>${c.adminPassWipeConfirmTitle}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
-        <p class="muted">${c.adminPassWipeConfirmBody}</p>
-        <button class="primary" type="button" data-action="closeSheet">${c.close}</button>
-        <button class="ghost" type="button" data-action="clearPassLog" style="width:100%;margin-top:8px;color:#B42318;">${c.adminPassWipe}</button>`);
+        <p>${c.adminPassWipeConfirmBody}</p>
+        <p class="muted">${c.adminPassWipeBody}</p>
+        <button class="ghost" type="button" data-action="closeSheet" style="width:100%;">${c.adminPassWipeCancel}</button>
+        <button class="primary" type="button" data-action="clearPassLog" style="width:100%;margin-top:8px;background:#B42318;">${c.adminPassWipeConfirm}</button>`);
+    }
+    function showPassWipeProgress(percent, step, detail, finished, failed) {
+      const c = t();
+      const pct = Math.max(0, Math.min(100, Math.round(percent || 0)));
+      const title = finished ? (failed ? c.adminPassWipeFail : c.adminPassWipeDone) : c.adminPassWipeWorking;
+      const close = finished
+        ? `<button type="button" data-action="finishPassWipe">${c.close}</button>`
+        : `<span class="wipe-pct">${pct}%</span>`;
+      openSheet(`
+        <div class="card-title"><b>${title}</b>${close}</div>
+        <p class="muted">${step || ""}</p>
+        <div class="wipe-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><div class="wipe-fill" style="width:${pct}%"></div></div>
+        <p class="wipe-pct">${pct}%</p>
+        ${detail ? `<p class="muted">${escapeHtml(detail)}</p>` : ""}
+        ${finished ? `<button class="primary" type="button" data-action="finishPassWipe" style="width:100%;margin-top:8px;">${c.close}</button>` : ""}`);
     }
     async function emptyPassManifest() {
       let existing = null;
@@ -1719,28 +1756,37 @@
       return [...names].filter((id) => id && id !== MANIFEST && id !== CLEARED);
     }
     async function handleClearPassLog() {
-      if (!canClearPassLog()) return;
+      if (!canClearPassLog() || window._passWipeBusy) return;
       const c = t();
-      const typed = String((document.getElementById("passWipeCode") || {}).value || "").trim();
+      const typed = String(window._passWipeCode || (document.getElementById("passWipeCode") || {}).value || "").trim();
       if (typed !== PASS_WIPE_CODE) {
-        closeSheet();
+        window._passWipeBusy = false;
         setPassWipeError(c.adminPassWipeBadCode);
+        closeSheet();
         return;
       }
+      window._passWipeBusy = true;
+      let ids = [];
       try {
+        showPassWipeProgress(4, c.adminPassWipeStepCollect, "", false, false);
         await ensureCloud();
         watchAppleSignIn();
         if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
-        const ids = await collectCampusPassIDs();
+        showPassWipeProgress(10, c.adminPassWipeStepCollect, "", false, false);
+        ids = await collectCampusPassIDs();
         if (ids.length) {
+          showPassWipeProgress(18, c.adminPassWipeStepRevoke, `${c.adminPassWipeCount} 0 / ${ids.length}`, false, false);
           await markPassesRevoked(ids);
-          for (const id of ids) {
-            try { await revokePassRecord(id); } catch (_) {}
+          for (let i = 0; i < ids.length; i += 1) {
+            try { await revokePassRecord(ids[i]); } catch (_) {}
+            const pct = 18 + Math.round(((i + 1) / ids.length) * 62);
+            showPassWipeProgress(pct, c.adminPassWipeStepRevoke, `${c.adminPassWipeCount} ${i + 1} / ${ids.length}`, false, false);
           }
+          showPassWipeProgress(84, c.adminPassWipeStepClear, `${c.adminPassWipeCount} ${ids.length} / ${ids.length}`, false, false);
           await saveClearedPassIDs(ids);
         }
+        showPassWipeProgress(92, c.adminPassWipeStepEmpty, "", false, false);
         await emptyPassManifest();
-        closeSheet();
         window._passLogList = [];
         window._revokedPassIDs = new Set(ids.map((id) => id.toLowerCase()));
         window._clearedPassIDs = new Set(ids.map((id) => id.toLowerCase()));
@@ -1752,12 +1798,22 @@
         setPassWipeError("");
         const code = document.getElementById("passWipeCode");
         if (code) code.value = "";
+        window._passWipeCode = "";
         if (view === "passes") await loadPasses();
+        window._passWipeBusy = false;
+        showPassWipeProgress(100, c.adminPassWipeDone, "", true, false);
       } catch (error) {
-        closeSheet();
+        window._passWipeBusy = false;
         const apple = (error && error.apple) || error.message === "APPLE" || isAuthError(error);
-        setPassWipeError(apple ? c.adminPassWipeNeedApple : c.adminPassWipeFail);
+        const message = apple ? c.adminPassWipeNeedApple : c.adminPassWipeFail;
+        showPassWipeProgress(100, message, "", true, true);
+        setPassWipeError(message);
       }
+    }
+    function finishPassWipe() {
+      window._passWipeBusy = false;
+      closeSheet();
+      if (view === "more") renderMore();
     }
     async function allocateGuestStudentKey(person) {
       if (!schoolToken()) return "";
@@ -4258,6 +4314,7 @@
         if (name === "revokePass") handleRevokePass(action.dataset.passId || "");
         if (name === "askClearPassLog") confirmClearPassLog();
         if (name === "clearPassLog") handleClearPassLog();
+        if (name === "finishPassWipe") finishPassWipe();
         if (name === "openClass") {
           window._classID = action.dataset.classId || "";
           show("class");
