@@ -403,6 +403,7 @@
       display: grid; gap: 14px; grid-template-columns: 1fr;
     }
     .pass-grid .action { text-align: left; width: 100%; }
+    .pass-col { display: contents; }
     .pass-slot { display: grid; gap: 8px; }
     .paper-wrap { position: relative; display: block; }
     .paper-wrap.is-revoked .paper { filter: grayscale(1); opacity: 0.48; }
@@ -444,7 +445,9 @@
       .home-grid .wide { grid-column: 1 / -1; }
       .shortcuts { grid-template-columns: repeat(4, 1fr); }
       .dash .shortcuts { grid-template-columns: 1fr 1fr; }
-      .news-grid, .pass-grid { grid-template-columns: repeat(2, 1fr); }
+      .news-grid { grid-template-columns: repeat(2, 1fr); }
+      .pass-grid { grid-template-columns: 1fr 1fr; align-items: start; }
+      .pass-col { display: grid; gap: 14px; align-content: start; }
       .people-grid { grid-template-columns: repeat(2, 1fr); }
       .people-grid .card { padding: 8px 16px; }
     }
@@ -2798,11 +2801,19 @@
     }
     function passCreatedStamp(record) {
       const created = record && record.created;
-      if (!created) return 0;
-      if (typeof created.timestamp === "number") return created.timestamp;
-      if (typeof created === "number") return created;
-      const parsed = Date.parse(created.timestamp || created);
-      return Number.isNaN(parsed) ? 0 : parsed;
+      if (created) {
+        if (typeof created.timestamp === "number") return created.timestamp;
+        if (typeof created === "number") return created;
+        const parsed = Date.parse(created.timestamp || created);
+        if (!Number.isNaN(parsed)) return parsed;
+      }
+      const modified = record && record.modified;
+      if (modified && typeof modified.timestamp === "number") return modified.timestamp;
+      const field = record && record.fields && record.fields.createdAt;
+      const raw = field && Object.prototype.hasOwnProperty.call(field, "value") ? field.value : field;
+      if (typeof raw === "number") return raw;
+      const fromText = Date.parse(fieldValue(record, "createdAt"));
+      return Number.isNaN(fromText) ? 0 : fromText;
     }
     function passDayStamp(record) {
       const fromDates = parsePassDate(fieldValue(record, "dates"));
@@ -2842,12 +2853,23 @@
         .join(" ")
         .toLowerCase();
     }
-    function passSlotHTML(record) {
+    function passSlotHTML(record, order) {
       const c = t();
       const id = passRecordName(record) || String(Math.random());
       const revoked = passIsRevoked(record);
       const stamp = revoked ? `<span class="pass-revoked-stamp">${c.revoked}</span>` : "";
-      return `<div class="pass-slot"><button type="button" class="action" data-action="openPass" data-pass-id="${escapeHtml(id)}"><span class="paper-wrap${revoked ? " is-revoked" : ""}">${passPaper(record, false)}${stamp}</span></button></div>`;
+      const orderStyle = Number.isFinite(order) ? ` style="order:${order}"` : "";
+      return `<div class="pass-slot"${orderStyle}><button type="button" class="action" data-action="openPass" data-pass-id="${escapeHtml(id)}"><span class="paper-wrap${revoked ? " is-revoked" : ""}">${passPaper(record, false)}${stamp}</span></button></div>`;
+    }
+    function passGridHTML(records) {
+      const left = [];
+      const right = [];
+      records.forEach((record, index) => {
+        const html = passSlotHTML(record, index);
+        if (index % 2 === 0) left.push(html);
+        else right.push(html);
+      });
+      return `<div class="pass-grid"><div class="pass-col">${left.join("")}</div><div class="pass-col">${right.join("")}</div></div>`;
     }
     function paintPassLog() {
       const node = document.getElementById("passes");
@@ -2870,13 +2892,15 @@
       const days = [...groups.values()].sort((a, b) => b.stamp - a.stamp);
       days.forEach((day) => {
         day.records.sort((a, b) => {
+          const recency = passCreatedStamp(b) - passCreatedStamp(a);
+          if (recency) return recency;
           const name = fieldValue(a, "studentName").localeCompare(fieldValue(b, "studentName"));
           if (name) return name;
           return fieldValue(a, "destination").localeCompare(fieldValue(b, "destination"));
         });
       });
       node.innerHTML = days.map((day) => (
-        `<section class="pass-day"><h2 class="section">${escapeHtml(formatPassDay(day.stamp))}</h2><div class="pass-grid">${day.records.map(passSlotHTML).join("")}</div></section>`
+        `<section class="pass-day"><h2 class="section">${escapeHtml(formatPassDay(day.stamp))}</h2>${passGridHTML(day.records)}</section>`
       )).join("");
     }
     async function loadPasses() {
