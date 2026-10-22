@@ -404,6 +404,19 @@
     }
     .pass-grid .action { text-align: left; width: 100%; }
     .pass-slot { display: grid; gap: 8px; }
+    .paper-wrap { position: relative; display: block; }
+    .paper-wrap.is-revoked .paper { filter: grayscale(1); opacity: 0.48; }
+    .pass-revoked-stamp {
+      position: absolute; inset: 0;
+      display: grid; place-items: center;
+      pointer-events: none;
+      font-family: var(--font-display);
+      font-size: 28px; font-weight: 800;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: rgba(60, 60, 67, 0.92);
+      text-shadow: 0 1px 0 rgba(255,255,255,0.7);
+    }
     .pass-day { display: grid; gap: 14px; margin: 0 0 22px; }
     .pass-day .section { margin: 2px 0 0; font-size: 20px; }
     .page-head { margin-bottom: 16px; }
@@ -709,14 +722,13 @@
         passSearch: "Student name, destination, or date",
         passSearchEmpty: "No matching passes.",
         passNoDate: "No date",
-        clearPass: "Clear pass",
-        clearPassLog: "Clear pass log",
-        clearPassTitle: "Clear this pass?",
-        clearPassBody: "This pass will leave the campus log.",
-        clearPassLogTitle: "Clear the pass log?",
-        clearPassLogBody: "Every pass in this log will leave the campus log. Teachers cannot do this.",
-        clearPassFail: "Could not clear that pass.",
-        clearPassNeedApple: "Sign in with Apple in More first. The school token can read the log. Clearing a pass needs the same iCloud sign-in teachers use on iPhone.",
+        revoked: "Revoked",
+        revokePass: "Revoke pass",
+        revokePassTitle: "Revoke this pass?",
+        revokePassBody: "It will leave the student's iPhone and website. It stays in this log as revoked.",
+        revokePassFail: "Could not revoke that pass.",
+        revokePassNeedApple: "Sign in with Apple in More first. The school token can read the log. Revoking a pass needs the same iCloud sign-in teachers use on iPhone.",
+        revokePassDone: "This pass is revoked. The student cannot use it.",
         hallway: "HALLWAY PASS", flex: "FLEX PASS",
         search: "Name, role, or email",
         newsEmpty: "No news yet.",
@@ -891,14 +903,13 @@
         passSearch: "Nombre del estudiante, destino o fecha",
         passSearchEmpty: "No hay pases que coincidan.",
         passNoDate: "Sin fecha",
-        clearPass: "Quitar pase",
-        clearPassLog: "Vaciar registro de pases",
-        clearPassTitle: "¿Quitar este pase?",
-        clearPassBody: "Este pase saldrá del registro del campus.",
-        clearPassLogTitle: "¿Vaciar el registro de pases?",
-        clearPassLogBody: "Todos los pases de este registro saldrán del registro del campus. Los maestros no pueden hacer esto.",
-        clearPassFail: "No se pudo quitar ese pase.",
-        clearPassNeedApple: "Entra con Apple en Más primero. El token de la escuela puede leer el registro. Quitar un pase necesita la misma sesión de iCloud que usan los maestros en iPhone.",
+        revoked: "Revocado",
+        revokePass: "Revocar pase",
+        revokePassTitle: "¿Revocar este pase?",
+        revokePassBody: "Saldrá del iPhone y del sitio del estudiante. Se queda en este registro como revocado.",
+        revokePassFail: "No se pudo revocar ese pase.",
+        revokePassNeedApple: "Entra con Apple en Más primero. El token de la escuela puede leer el registro. Revocar un pase necesita la misma sesión de iCloud que usan los maestros en iPhone.",
+        revokePassDone: "Este pase está revocado. El estudiante no puede usarlo.",
         hallway: "PASE DE PASILLO", flex: "PASE FLEX",
         search: "Nombre, rol o correo",
         newsEmpty: "Aún no hay noticias.",
@@ -1023,6 +1034,9 @@
     }
     function canClearPassLog() {
       return currentRole() === "administrator";
+    }
+    function canRevokePass() {
+      return canSeePassLog();
     }
     function signedIn() {
       if (isGuest()) return true;
@@ -1287,38 +1301,29 @@
       parent.appendChild(box);
       box.classList.remove("hidden");
     }
-    function showClearPassError(kind) {
+    function showRevokePassError(kind) {
       const c = t();
       const needApple = kind === "APPLE";
       openSheet(`
-        <div class="card-title"><b>${needApple ? c.clearPassNeedApple : c.clearPassFail}</b><button type="button" data-action="closeSheet">${c.close}</button></div>`);
+        <div class="card-title"><b>${needApple ? c.revokePassNeedApple : c.revokePassFail}</b><button type="button" data-action="closeSheet">${c.close}</button></div>`);
     }
-    function confirmClearPass(id) {
-      if (!canClearPassLog()) return;
+    function confirmRevokePass(id) {
+      if (!canRevokePass()) return;
       const c = t();
       openSheet(`
-        <div class="card-title"><b>${c.clearPassTitle}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
-        <p class="muted">${c.clearPassBody}</p>
+        <div class="card-title"><b>${c.revokePassTitle}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
+        <p class="muted">${c.revokePassBody}</p>
         <button class="primary" type="button" data-action="closeSheet">${c.close}</button>
-        <button class="ghost" type="button" data-action="clearPass" data-pass-id="${escapeHtml(id || "")}" style="width:100%;margin-top:8px;color:#B42318;">${c.clearPass}</button>`);
-    }
-    function confirmClearPassLog() {
-      if (!canClearPassLog()) return;
-      const c = t();
-      openSheet(`
-        <div class="card-title"><b>${c.clearPassLogTitle}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
-        <p class="muted">${c.clearPassLogBody}</p>
-        <button class="primary" type="button" data-action="closeSheet">${c.close}</button>
-        <button class="ghost" type="button" data-action="clearPassLog" style="width:100%;margin-top:8px;color:#B42318;">${c.clearPassLog}</button>`);
+        <button class="ghost" type="button" data-action="revokePass" data-pass-id="${escapeHtml(id || "")}" style="width:100%;margin-top:8px;color:#B42318;">${c.revokePass}</button>`);
     }
     function watchAppleSignIn() {
       if (window._ckWatch) return;
       window._ckWatch = true;
       try {
         CloudKit.getDefaultContainer().whenUserSignsIn().then(() => {
-          const ids = window._pendingClearIds;
-          window._pendingClearIds = null;
-          if (ids && ids.length) handleClearPassBatch(ids);
+          const id = window._pendingRevokeId;
+          window._pendingRevokeId = "";
+          if (id) handleRevokePass(id);
           else if (view === "passes") loadPasses();
         }).catch(() => {});
       } catch (_) {}
@@ -1335,6 +1340,42 @@
     }
     function tombstoneName(id) {
       return "cleared." + String(id || "").trim();
+    }
+    function revokedName(id) {
+      return "revoked." + String(id || "").trim();
+    }
+    function isPassMarker(record) {
+      const id = String((record && record.recordName) || "");
+      const key = id.toLowerCase();
+      const kind = String(fieldValue(record, "kind") || "").toLowerCase();
+      if (!id || key === MANIFEST.toLowerCase() || key === CLEARED.toLowerCase()) return true;
+      if (key.indexOf("cleared.") === 0 || key.indexOf("revoked.") === 0) return true;
+      if (kind === "cleared" || kind === "revoked") return true;
+      return false;
+    }
+    function isRevokedFlag(record) {
+      const raw = String(fieldValue(record, "revoked") || "").trim().toLowerCase();
+      return raw === "1" || raw === "true" || raw === "yes" || raw === "revoked";
+    }
+    function collectRevokedIDs(records) {
+      const out = new Set();
+      (records || []).forEach((record) => {
+        const id = String(record.recordName || "");
+        const key = id.toLowerCase();
+        const kind = String(fieldValue(record, "kind") || "").toLowerCase();
+        if (key === CLEARED.toLowerCase() || kind === "cleared" || kind === "revoked") {
+          parsePassIDs(fieldValue(record, "passIDs")).forEach((item) => out.add(item.toLowerCase()));
+        }
+        if (key.indexOf("cleared.") === 0) out.add(key.slice("cleared.".length));
+        if (key.indexOf("revoked.") === 0) out.add(key.slice("revoked.".length));
+        if (!isPassMarker(record) && isRevokedFlag(record)) out.add(key);
+      });
+      return out;
+    }
+    function passIsRevoked(record) {
+      const id = passRecordName(record).toLowerCase();
+      if (isRevokedFlag(record)) return true;
+      return !!(window._revokedPassIDs && window._revokedPassIDs.has(id));
     }
     async function ckDeleteNames(names) {
       const db = cloudDb();
@@ -1354,20 +1395,11 @@
       return String(raw || "").split(",").map((part) => part.trim()).filter(Boolean);
     }
     async function loadClearedIDs(passIDs) {
-      const names = [CLEARED].concat((passIDs || []).map(tombstoneName));
+      const names = [CLEARED]
+        .concat((passIDs || []).map(tombstoneName))
+        .concat((passIDs || []).map(revokedName));
       try {
-        const records = await fetchByNames(cloudDb(), names);
-        const out = new Set();
-        records.forEach((record) => {
-          const id = String(record.recordName || "");
-          if (id === CLEARED) {
-            parsePassIDs(fieldValue(record, "passIDs")).forEach((item) => out.add(item.toLowerCase()));
-          } else if (id.toLowerCase().indexOf("cleared.") === 0) {
-            out.add(id.slice("cleared.".length).toLowerCase());
-            parsePassIDs(fieldValue(record, "passIDs")).forEach((item) => out.add(item.toLowerCase()));
-          }
-        });
-        return out;
+        return collectRevokedIDs(await fetchByNames(cloudDb(), names));
       } catch (_) {
         return new Set();
       }
@@ -1381,14 +1413,14 @@
       if (isAuthError(null, payload)) throw Object.assign(new Error("APPLE"), { apple: true });
       return (payload.records || []).some((row) => row && (row.deleted || !row.serverErrorCode));
     }
-    async function markPassesCleared(ids) {
+    async function markPassesRevoked(ids) {
       const unique = [...new Set((ids || []).map((id) => String(id || "").trim()).filter((id) => id && id !== MANIFEST && id !== CLEARED))];
       if (!unique.length) return false;
       const records = unique.map((id) => ({
         recordType: PASS_TYPE,
-        recordName: tombstoneName(id),
+        recordName: revokedName(id),
         fields: {
-          kind: { value: "cleared" },
+          kind: { value: "revoked" },
           passIDs: { value: id }
         }
       }));
@@ -1402,47 +1434,54 @@
           await restModify(record, "create");
         } catch (error) {
           if (isAuthError(error)) throw Object.assign(new Error("APPLE"), { apple: true });
-          return false;
+          try {
+            await restModify(record, "forceUpdate");
+          } catch (retry) {
+            if (isAuthError(retry)) throw Object.assign(new Error("APPLE"), { apple: true });
+            return false;
+          }
         }
       }
       return true;
     }
-    async function clearPassRecords(ids) {
-      const unique = [...new Set((ids || []).map((id) => String(id || "").trim()).filter((id) => id && id !== MANIFEST && id !== CLEARED && id.indexOf("cleared.") !== 0))];
-      if (!unique.length) return;
+    async function revokePassRecord(id) {
+      const unique = String(id || "").trim();
+      if (!unique || unique === MANIFEST || unique === CLEARED) return;
       watchAppleSignIn();
+      const existing = (window._passRecords || {})[unique];
+      const patch = {
+        recordType: PASS_TYPE,
+        recordName: unique,
+        fields: { revoked: { value: 1 } }
+      };
+      if (existing && existing.recordChangeTag) patch.recordChangeTag = existing.recordChangeTag;
       try {
-        await ckDeleteNames(unique);
+        await ckCreateRecords([patch]);
       } catch (error) {
         if (isAuthError(error) && !ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
       }
       try {
-        await restDeleteNames(unique);
+        await restModify(patch, "forceUpdate");
       } catch (error) {
-        if (error && error.apple && !ckWebAuthToken()) throw error;
+        if (isAuthError(error) && !ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
       }
-      if (!(await markPassesCleared(unique))) {
+      if (!(await markPassesRevoked([unique]))) {
         throw Object.assign(new Error(ckWebAuthToken() ? "FAIL" : "APPLE"), { apple: !ckWebAuthToken() });
       }
     }
-    async function handleClearPassBatch(ids) {
-      if (!canClearPassLog()) return;
+    async function handleRevokePass(id) {
+      if (!canRevokePass()) return;
       try {
         await ensureCloud();
         watchAppleSignIn();
-        await clearPassRecords(ids);
+        await revokePassRecord(id);
         closeSheet();
         if (view === "passes") await loadPasses();
       } catch (error) {
-        window._pendingClearIds = ids;
-        showClearPassError((error && (error.apple || error.message === "APPLE")) ? "APPLE" : "FAIL");
+        window._pendingRevokeId = id;
+        const apple = (error && error.apple) || error.message === "APPLE" || isAuthError(error);
+        showRevokePassError(apple ? "APPLE" : "FAIL");
       }
-    }
-    async function handleClearPass(id) {
-      await handleClearPassBatch([id]);
-    }
-    async function handleClearPassLog() {
-      await handleClearPassBatch(Object.keys(window._passRecords || {}));
     }
     async function allocateGuestStudentKey(person) {
       if (!schoolToken()) return "";
@@ -1732,7 +1771,7 @@
             <button class="primary" type="button" id="saveToken">${c.saveToken}</button>
             <p class="ok hidden" id="tokenSaved"></p>
             <button class="ghost" type="button" id="openPasses" style="width:100%;margin-top:8px;">${c.openPasses}</button>
-            ${canClearPassLog() ? `<div id="ck-auth-more"></div>` : ""}
+            ${canSeePassLog() ? `<div id="ck-auth-more"></div>` : ""}
           </div>` : "";
       const face = window._profilePhoto
         ? `<span class="avatar"><img alt="" src="${escapeHtml(window._profilePhoto)}"></span>`
@@ -2596,7 +2635,13 @@
         const ids = String(fieldValue(mine, "passIDs") || "").split(",").map((part) => part.trim()).filter(Boolean);
         const records = await fetchByNames(cloudDb(), ids);
         const byName = new Map(records.map((record) => [String(record.recordName || "").toLowerCase(), record]));
-        const usable = ids.map((id) => byName.get(id.toLowerCase())).filter((record) => record && (fieldValue(record, "studentName") || fieldValue(record, "teacherName")));
+        const markers = await fetchByNames(cloudDb(), ids.flatMap((id) => [revokedName(id), tombstoneName(id)]).concat([CLEARED]));
+        window._revokedPassIDs = collectRevokedIDs(records.concat(markers));
+        const usable = ids.map((id) => byName.get(id.toLowerCase())).filter((record) => {
+          if (!(record && (fieldValue(record, "studentName") || fieldValue(record, "teacherName")))) return false;
+          if (isPassMarker(record) || passIsRevoked(record)) return false;
+          return true;
+        });
         if (tileSub) {
           if (!usable.length) tileSub.textContent = c.noneYet;
           else {
@@ -2626,13 +2671,17 @@
       const record = window._passRecords && window._passRecords[id];
       if (!record) return;
       const c = t();
-      const clear = canClearPassLog()
-        ? `<button class="ghost" type="button" data-action="askClearPass" data-pass-id="${escapeHtml(id)}" style="width:100%;margin-top:12px;color:#B42318;">${c.clearPass}</button>`
-        : "";
+      const revoked = passIsRevoked(record);
+      let extra = "";
+      if (view === "passes" && canRevokePass()) {
+        extra = revoked
+          ? `<p class="muted" style="margin-top:12px;">${c.revokePassDone}</p>`
+          : `<button class="ghost" type="button" data-action="askRevokePass" data-pass-id="${escapeHtml(id)}" style="width:100%;margin-top:12px;color:#B42318;">${c.revokePass}</button>`;
+      }
       openSheet(`
         <div class="card-title"><button type="button" data-action="closeSheet">${c.close}</button></div>
         ${passPaper(record, true)}
-        ${clear}`);
+        ${extra}`);
     }
 
     function newsHeading(record) {
@@ -2796,10 +2845,9 @@
     function passSlotHTML(record) {
       const c = t();
       const id = passRecordName(record) || String(Math.random());
-      const clear = canClearPassLog()
-        ? `<button class="ghost" type="button" data-action="askClearPass" data-pass-id="${escapeHtml(id)}" style="color:#B42318;">${c.clearPass}</button>`
-        : "";
-      return `<div class="pass-slot"><button type="button" class="action" data-action="openPass" data-pass-id="${escapeHtml(id)}">${passPaper(record, false)}</button>${clear}</div>`;
+      const revoked = passIsRevoked(record);
+      const stamp = revoked ? `<span class="pass-revoked-stamp">${c.revoked}</span>` : "";
+      return `<div class="pass-slot"><button type="button" class="action" data-action="openPass" data-pass-id="${escapeHtml(id)}"><span class="paper-wrap${revoked ? " is-revoked" : ""}">${passPaper(record, false)}${stamp}</span></button></div>`;
     }
     function paintPassLog() {
       const node = document.getElementById("passes");
@@ -2836,10 +2884,7 @@
       const c = t();
       const query = String((document.getElementById("passQuery") || {}).value || window._passQuery || "");
       window._passQuery = query;
-      const clearAll = canClearPassLog()
-        ? `<button class="ghost" type="button" data-action="askClearPassLog">${c.clearPassLog}</button>`
-        : "";
-      node.innerHTML = `<div class="toolbar"><button class="ghost" type="button" id="refreshPasses">${c.refresh}</button>${clearAll}</div><input class="search" id="passQuery" placeholder="${c.passSearch}" value="${escapeHtml(query)}"><div id="passes"></div>`;
+      node.innerHTML = `<div class="toolbar"><button class="ghost" type="button" id="refreshPasses">${c.refresh}</button></div><input class="search" id="passQuery" placeholder="${c.passSearch}" value="${escapeHtml(query)}"><div id="passes"></div>`;
       if (!(await ensureCloud())) {
         node.insertAdjacentHTML("beforeend", `<div class="card"><p class="muted">${c.adminHint}</p></div>`);
         return;
@@ -2853,14 +2898,10 @@
         (await fetchByNames(db, raw.split(",").map((part) => part.trim()))).forEach(remember);
         try { recordsFrom(await db.performQuery({ recordType: PASS_TYPE })).forEach(remember); } catch (_) {}
         const allIDs = [...seen.keys()];
-        const cleared = await loadClearedIDs(allIDs);
+        const marked = await loadClearedIDs(allIDs);
+        window._revokedPassIDs = new Set([...marked, ...collectRevokedIDs([...seen.values()])]);
         const usable = [...seen.values()].filter((r) => {
-          const id = String(r.recordName || "");
-          const key = id.toLowerCase();
-          if (!id || key === MANIFEST.toLowerCase() || key === CLEARED.toLowerCase()) return false;
-          if (key.indexOf("cleared.") === 0) return false;
-          if (String(fieldValue(r, "kind") || "").toLowerCase() === "cleared") return false;
-          if (cleared.has(key)) return false;
+          if (isPassMarker(r)) return false;
           return !!(fieldValue(r, "studentName") || fieldValue(r, "teacherName"));
         });
         window._passRecords = {};
@@ -2974,10 +3015,8 @@
         if (name === "addHome") showAddHome();
         if (name === "installHome") promptInstallHome();
         if (name === "openPass" || name === "openStudentPass") openPass(action.dataset.passId || "");
-        if (name === "askClearPass") confirmClearPass(action.dataset.passId || "");
-        if (name === "askClearPassLog") confirmClearPassLog();
-        if (name === "clearPass") handleClearPass(action.dataset.passId || "");
-        if (name === "clearPassLog") handleClearPassLog();
+        if (name === "askRevokePass") confirmRevokePass(action.dataset.passId || "");
+        if (name === "revokePass") handleRevokePass(action.dataset.passId || "");
         if (name === "openClass") {
           window._classID = action.dataset.classId || "";
           show("class");
