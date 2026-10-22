@@ -183,6 +183,17 @@
     }
     .admin-post { cursor: default; }
     .news-delete { flex: none; color: #B42318; padding: 8px 12px; }
+    .sig-pad {
+      width: 100%; height: 140px; border: 1px solid #111; background: #fff;
+      border-radius: 8px; touch-action: none; display: block; cursor: crosshair;
+    }
+    .pass-type {
+      display: flex; gap: 8px; margin: 0 0 12px;
+    }
+    .pass-type button {
+      flex: 1; background: #F2F2F7; border-radius: 16px; padding: 12px; font-weight: 700;
+    }
+    .pass-type button.on { background: var(--orange); color: #fff; }
     button, .btn { appearance: none; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
     input, select, textarea {
       width: 100%; padding: 14px; border-radius: 16px; border: 1px solid #E5E5EA;
@@ -490,6 +501,7 @@
       <section id="view-more" class="hidden"></section>
       <section id="view-posts" class="hidden"></section>
       <section id="view-passes" class="hidden"></section>
+      <section id="view-issuepass" class="hidden"></section>
       <section id="view-mypasses" class="hidden"></section>
       <section id="view-swipe" class="hidden"></section>
       <section id="view-classes" class="hidden"></section>
@@ -621,7 +633,7 @@
         studentNameLabel: "STUDENT NAME",
         destinationLabel: "DESTINATION",
         datesLabel: "DATE(S)",
-        dashTeacher: "Teacher dashboard. The campus pass log matches the administrator log. Hallway and Flex are still sent from iPhone.",
+        dashTeacher: "Teacher dashboard. The campus pass log matches the administrator log. Issue a Pass here if you do not have an iPhone.",
         dashParent: "Parent dashboard. News is the bell. Staff is in Contacts.",
         dashAdmin: "Administrator dashboard. The campus pass log is here. Students do not see it.",
         openLunch: "WHS Lunch",
@@ -646,7 +658,21 @@
         addSwipePhoto: "Add ID photo",
         replaceSwipePhoto: "Replace ID photo",
         passesTile: "Teacher Passes",
-        passesSub: "Hallway and Flex stay on iPhone",
+        passesSub: "Hallway and Flex",
+        issuePass: "Issue a Pass",
+        issuePassBody: "Same Hallway and Flex slip as iPhone. It goes to that student’s website and iPhone.",
+        issuePassType: "Pass type",
+        issuePassStudent: "Student name",
+        issuePassDestination: "Destination",
+        issuePassDates: "Date(s)",
+        issuePassSignature: "Teacher's signature",
+        issuePassClearSig: "Clear signature",
+        issuePassCode: "Student WHS Web Code",
+        issuePassNeedFields: "Add a student name, destination, date, signature, and WHS Web Code.",
+        issuePassNeedApple: "Sign in with Apple in More first. Issuing a pass needs the same iCloud sign-in teachers use on iPhone.",
+        issuePassFail: "Could not issue that pass.",
+        issuePassDone: "Pass sent. The student will see it in Teacher Passes.",
+        issuePassBadCode: "Could not find that WHS Web Code.",
         news: "News", lunch: "Lunch", contacts: "Contacts", classes: "Classes", more: "More", home: "Home",
         calendar: "Calendar", agenda: "Agenda",
         calendarEmpty: "Open school news for this week.",
@@ -821,7 +847,7 @@
         studentNameLabel: "NOMBRE DEL ESTUDIANTE",
         destinationLabel: "DESTINO",
         datesLabel: "FECHA(S)",
-        dashTeacher: "Panel de maestro. El registro de pases es el mismo que el de administrador. Los pases se envían en iPhone.",
+        dashTeacher: "Panel de maestro. El registro de pases es el mismo que el de administrador. Emite un pase aquí si no tienes iPhone.",
         dashParent: "Panel de padre. Las noticias están en la campana. El personal está en Contactos.",
         dashAdmin: "Panel de administrador. El registro de pases está aquí. Los estudiantes no lo ven.",
         openLunch: "Almuerzo WHS",
@@ -846,7 +872,21 @@
         addSwipePhoto: "Añadir foto de ID",
         replaceSwipePhoto: "Cambiar foto de ID",
         passesTile: "Pases de maestros",
-        passesSub: "Pasillo y Flex se quedan en iPhone",
+        passesSub: "Pasillo y Flex",
+        issuePass: "Emitir un pase",
+        issuePassBody: "El mismo pase de pasillo o Flex que en iPhone. Llega al sitio y al iPhone de ese estudiante.",
+        issuePassType: "Tipo de pase",
+        issuePassStudent: "Nombre del estudiante",
+        issuePassDestination: "Destino",
+        issuePassDates: "Fecha(s)",
+        issuePassSignature: "Firma del maestro",
+        issuePassClearSig: "Borrar firma",
+        issuePassCode: "Código web WHS del estudiante",
+        issuePassNeedFields: "Agrega nombre, destino, fecha, firma y código web WHS.",
+        issuePassNeedApple: "Entra con Apple en Más primero. Emitir un pase necesita la misma sesión de iCloud que usan los maestros en iPhone.",
+        issuePassFail: "No se pudo emitir ese pase.",
+        issuePassDone: "Pase enviado. El estudiante lo verá en Pases de maestros.",
+        issuePassBadCode: "No se encontró ese código web WHS.",
         news: "Noticias", lunch: "Almuerzo", contacts: "Contactos", classes: "Clases", more: "Más", home: "Inicio",
         calendar: "Calendario", agenda: "Agenda",
         calendarEmpty: "Abre las noticias de la escuela de esta semana.",
@@ -1085,6 +1125,9 @@
       return currentRole() === "administrator";
     }
     function canRevokePass() {
+      return canSeePassLog();
+    }
+    function canIssuePass() {
       return canSeePassLog();
     }
     function canPostNews() {
@@ -1386,6 +1429,7 @@
           if (id) handleRevokePass(id);
           else if (newsId) deleteNewsPost(newsId);
           else if (window._pendingNewsPost) publishNewsPost();
+          else if (window._pendingIssuePass) issuePassFromWeb();
           else if (view === "passes") loadPasses();
         }).catch(() => {});
       } catch (_) {}
@@ -1422,8 +1466,8 @@
       const key = id.toLowerCase();
       const kind = String(fieldValue(record, "kind") || "").toLowerCase();
       if (!id || key === MANIFEST.toLowerCase() || key === CLEARED.toLowerCase() || key === NEWS_MANIFEST.toLowerCase()) return true;
-      if (key.indexOf("cleared.") === 0 || key.indexOf("revoked.") === 0 || key.indexOf("news.") === 0 || key.indexOf("newsimg.") === 0) return true;
-      if (kind === "cleared" || kind === "revoked" || kind === "news" || kind === "newsimg") return true;
+      if (key.indexOf("cleared.") === 0 || key.indexOf("revoked.") === 0 || key.indexOf("news.") === 0 || key.indexOf("newsimg.") === 0 || key.indexOf("webpass.") === 0 || key.indexOf("passimg.") === 0) return true;
+      if (kind === "cleared" || kind === "revoked" || kind === "news" || kind === "newsimg" || kind === "webpass" || kind === "passimg") return true;
       return false;
     }
     function isRevokedFlag(record) {
@@ -1700,7 +1744,7 @@
       view = id;
       if (id !== "study") document.body.classList.remove("ql-open");
       closeSheet();
-      ["home", "news", "lunch", "contacts", "more", "posts", "passes", "mypasses", "swipe", "classes", "class", "study"].forEach((name) => {
+      ["home", "news", "lunch", "contacts", "more", "posts", "passes", "issuepass", "mypasses", "swipe", "classes", "class", "study"].forEach((name) => {
         const node = document.getElementById("view-" + name);
         if (node) node.classList.toggle("hidden", name !== id);
       });
@@ -1755,6 +1799,13 @@
           return;
         }
         loadPasses();
+      }
+      if (id === "issuepass") {
+        if (!canIssuePass()) {
+          show("home");
+          return;
+        }
+        renderIssuePass();
       }
     }
 
@@ -1853,6 +1904,7 @@
             </select>
             <button class="primary" type="button" id="saveToken">${c.saveToken}</button>
             <p class="ok hidden" id="tokenSaved"></p>
+            ${canIssuePass() ? `<button class="ghost" type="button" data-go="issuepass" style="width:100%;margin-top:8px;">${c.issuePass}</button>` : ""}
             <button class="ghost" type="button" id="openPasses" style="width:100%;margin-top:8px;">${c.openPasses}</button>
             ${canSeePassLog() ? `<div id="ck-auth-more"></div>` : ""}
           </div>` : "";
@@ -2680,10 +2732,305 @@
         <a class="ghost" style="display:block;text-align:center;margin-top:8px;text-decoration:none;" href="mailto:whsattendance@watertownps.org">${c.attendance}</a>`);
     }
 
+    function renderIssuePass() {
+      if (!canIssuePass()) return;
+      const c = t();
+      const today = new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+      const teacher = (profile && (profile.displayName || profile.firstName)) || "";
+      document.getElementById("view-issuepass").innerHTML = `<div class="dash">
+        <div class="toolbar"><button class="ghost" type="button" data-go="passes">${c.openPasses}</button></div>
+        <div class="card wide">
+          <div class="t">${c.issuePass}</div>
+          <p class="muted">${c.issuePassBody}</p>
+          <div class="sheet-field"><span>${c.issuePassType}</span>
+            <div class="pass-type">
+              <button type="button" data-action="passKind" data-kind="hallway">${c.hallway}</button>
+              <button type="button" class="on" data-action="passKind" data-kind="flex">${c.flex}</button>
+            </div>
+          </div>
+          <label class="sheet-field"><span>${c.issuePassStudent}</span>
+            <input id="issueStudent" type="text" maxlength="80" autocomplete="off">
+          </label>
+          <label class="sheet-field"><span>${c.issuePassDestination}</span>
+            <input id="issueDestination" type="text" maxlength="120" autocomplete="off">
+          </label>
+          <label class="sheet-field"><span>${c.issuePassDates}</span>
+            <input id="issueDates" type="text" maxlength="80" value="${escapeHtml(today)}" autocomplete="off">
+          </label>
+          <div class="sheet-field"><span>${c.issuePassSignature}</span>
+            <canvas class="sig-pad" id="passSigPad"></canvas>
+            <button class="ghost" type="button" data-action="clearPassSig" style="width:100%;margin-top:8px;">${c.issuePassClearSig}</button>
+          </div>
+          <label class="sheet-field"><span>${c.issuePassCode}</span>
+            <input id="issueWebCode" type="text" maxlength="12" autocomplete="off" spellcheck="false" placeholder="XXXXX-XXXXX">
+          </label>
+          <p class="muted">${escapeHtml(teacher)}</p>
+          <p class="error" id="issuePassError"></p>
+          <p class="ok hidden" id="issuePassOk"></p>
+          <button class="primary" type="button" data-action="issuePass" id="issuePassBtn">${c.issuePass}</button>
+        </div>
+      </div>`;
+      window._issuePassKind = "flex";
+      bindPassSignaturePad();
+    }
+    function bindPassSignaturePad() {
+      const canvas = document.getElementById("passSigPad");
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      const ratio = Math.max(1, window.devicePixelRatio || 1);
+      const width = Math.max(280, canvas.clientWidth || 520);
+      const height = 140;
+      canvas.width = Math.round(width * ratio);
+      canvas.height = Math.round(height * ratio);
+      canvas.style.width = width + "px";
+      canvas.style.height = height + "px";
+      ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      ctx.strokeStyle = "#111";
+      ctx.lineWidth = 2.2;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      let drawing = false;
+      const point = (event) => {
+        const rect = canvas.getBoundingClientRect();
+        const touch = event.touches && event.touches[0];
+        const src = touch || event;
+        return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+      };
+      const start = (event) => {
+        event.preventDefault();
+        drawing = true;
+        window._passSigEmpty = false;
+        const p = point(event);
+        ctx.beginPath();
+        ctx.moveTo(p.x, p.y);
+      };
+      const move = (event) => {
+        if (!drawing) return;
+        event.preventDefault();
+        const p = point(event);
+        ctx.lineTo(p.x, p.y);
+        ctx.stroke();
+      };
+      const end = () => { drawing = false; };
+      canvas.onmousedown = start;
+      canvas.onmousemove = move;
+      canvas.onmouseup = end;
+      canvas.onmouseleave = end;
+      canvas.ontouchstart = start;
+      canvas.ontouchmove = move;
+      canvas.ontouchend = end;
+      window._passSigEmpty = true;
+      window._passSigPad = canvas;
+    }
+    function passSignatureFile() {
+      const canvas = window._passSigPad || document.getElementById("passSigPad");
+      if (!canvas || window._passSigEmpty) return null;
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.72);
+      try { return dataUrlToFile(dataUrl, "signature.jpg"); } catch (_) { return null; }
+    }
+    function setIssuePassError(message) {
+      const node = document.getElementById("issuePassError");
+      if (node) node.textContent = message || "";
+      const ok = document.getElementById("issuePassOk");
+      if (ok && message) ok.classList.add("hidden");
+    }
+    async function addPassToManifest(id) {
+      const unique = String(id || "").trim();
+      if (!unique) return;
+      let existing = null;
+      try { existing = (await fetchByNames(cloudDb(), [MANIFEST]))[0] || null; } catch (_) {}
+      const ids = parsePassIDs(existing && fieldValue(existing, "passIDs"));
+      if (ids.indexOf(unique) === -1) ids.unshift(unique);
+      const record = {
+        recordType: PASS_TYPE,
+        recordName: MANIFEST,
+        fields: {
+          kind: { value: "manifest" },
+          passIDs: { value: ids.join(",") }
+        }
+      };
+      if (existing && existing.recordChangeTag) {
+        record.recordChangeTag = existing.recordChangeTag;
+        try { await ckCreateRecords([record]); return; } catch (_) {}
+        try { await restModify(record, "update"); return; } catch (_) {}
+      }
+      try { await ckCreateNews(record); } catch (_) {
+        await restModify(record, existing ? "forceUpdate" : "create");
+      }
+    }
+    async function attachPassToStudent(passId, webCode, studentName) {
+      const key = normalizeCode(webCode);
+      if (key.length !== 10) throw Object.assign(new Error("CODE"), { code: "CODE" });
+      let profileRec = null;
+      try { profileRec = (await fetchByNames(cloudDb(), [key]))[0] || null; } catch (_) {}
+      const role = normalizeRole(fieldValue(profileRec, "role"));
+      if (profileRec && role && role !== "student" && role !== "guest") {
+        throw Object.assign(new Error("CODE"), { code: "CODE" });
+      }
+      const name = studentName || fieldValue(profileRec, "displayName") || fieldValue(profileRec, "firstName") || "";
+      if (profileRec) {
+        const ids = parsePassIDs(fieldValue(profileRec, "passIDs"));
+        if (ids.indexOf(passId) === -1) ids.unshift(passId);
+        const rec = {
+          recordType: "WHSWebProfile",
+          recordName: profileRec.recordName || key,
+          fields: { passIDs: { value: ids.join(",") } }
+        };
+        if (profileRec.recordChangeTag) rec.recordChangeTag = profileRec.recordChangeTag;
+        try { await ckCreateRecords([rec]); } catch (_) {
+          try { await restModify(rec, "update"); } catch (_) {}
+        }
+      }
+      const linkName = "webpass." + key;
+      let link = null;
+      try { link = (await fetchByNames(cloudDb(), [linkName]))[0] || null; } catch (_) {}
+      const ids = parsePassIDs(fieldValue(link, "passIDs"));
+      if (ids.indexOf(passId) === -1) ids.unshift(passId);
+      const record = {
+        recordType: PASS_TYPE,
+        recordName: linkName,
+        fields: {
+          kind: { value: "webpass" },
+          passIDs: { value: ids.join(",") },
+          studentName: { value: name }
+        }
+      };
+      if (link && link.recordChangeTag) record.recordChangeTag = link.recordChangeTag;
+      try {
+        if (record.recordChangeTag) await ckCreateRecords([record]);
+        else await ckCreateNews(record);
+      } catch (_) {
+        await restModify(record, link ? "forceUpdate" : "create");
+      }
+    }
+    async function attachPassIcon(recordName, file) {
+      if (!recordName || !file) return;
+      let existing = null;
+      try { existing = (await fetchByNames(cloudDb(), [recordName]))[0] || null; } catch (_) {}
+      if (existing && existing.recordChangeTag) {
+        try {
+          const db = cloudDb();
+          if (db && typeof db.saveRecords === "function") {
+            const result = await db.saveRecords([{
+              recordName,
+              recordChangeTag: existing.recordChangeTag,
+              fields: { signature: { value: file } }
+            }]);
+            if (!(result && result.hasErrors)) return;
+          }
+        } catch (_) {}
+      }
+      try {
+        const dataUrl = await compressNewsIcon(file);
+        const parts = chunkNewsImage(dataUrl);
+        const records = parts.map((chunk, i) => ({
+          recordType: PASS_TYPE,
+          recordName: "passimg." + recordName + "." + i,
+          fields: {
+            kind: { value: "passimg" },
+            studentName: { value: recordName },
+            destination: { value: chunk },
+            dates: { value: String(parts.length) }
+          }
+        }));
+        const db = cloudDb();
+        if (db && typeof db.newRecordsBatch === "function") {
+          const batch = db.newRecordsBatch();
+          records.forEach((record) => { batch.create(record); });
+          const result = await batch.commit();
+          if (!(result && result.hasErrors)) return;
+        }
+        for (const record of records) {
+          try { await ckCreateNews(record); } catch (_) {
+            try { await restModify(record, "forceUpdate"); } catch (_) {}
+          }
+        }
+      } catch (_) {}
+    }
+    function newPassRecordName() {
+      if (crypto.randomUUID) return crypto.randomUUID().toUpperCase();
+      const bytes = new Uint8Array(16);
+      if (crypto.getRandomValues) crypto.getRandomValues(bytes);
+      bytes[6] = (bytes[6] & 0x0f) | 0x40;
+      bytes[8] = (bytes[8] & 0x3f) | 0x80;
+      const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+      return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join("-").toUpperCase();
+    }
+    async function issuePassFromWeb() {
+      if (!canIssuePass()) return;
+      const c = t();
+      const studentName = String((document.getElementById("issueStudent") || {}).value || "").trim();
+      const destination = String((document.getElementById("issueDestination") || {}).value || "").trim();
+      const dates = String((document.getElementById("issueDates") || {}).value || "").trim();
+      const webCode = String((document.getElementById("issueWebCode") || {}).value || "").trim();
+      const signature = passSignatureFile();
+      const kind = window._issuePassKind === "hallway" ? "hallway" : "flex";
+      if (!studentName || !destination || !dates || !signature || normalizeCode(webCode).length !== 10) {
+        setIssuePassError(c.issuePassNeedFields);
+        return;
+      }
+      const button = document.getElementById("issuePassBtn");
+      if (button) button.disabled = true;
+      setIssuePassError("");
+      window._pendingIssuePass = true;
+      try {
+        await ensureCloud();
+        watchAppleSignIn();
+        if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
+        const recordName = newPassRecordName();
+        const fields = {
+          kind: { value: kind },
+          studentName: { value: studentName },
+          destination: { value: destination },
+          dates: { value: dates },
+          teacherName: { value: (profile && (profile.displayName || profile.firstName)) || "WHS" }
+        };
+        let saved = null;
+        try {
+          saved = await ckCreateNews({ recordType: PASS_TYPE, recordName, fields });
+        } catch (error) {
+          if (error && error.apple) throw error;
+          saved = await restModify({ recordType: PASS_TYPE, recordName, fields }, "create");
+        }
+        if (!saved) {
+          try { saved = (await fetchByNames(cloudDb(), [recordName]))[0] || null; } catch (_) {}
+        }
+        if (!saved) throw Object.assign(new Error("FAIL"), { reason: "create" });
+        await addPassToManifest(recordName);
+        await attachPassToStudent(recordName, webCode, studentName);
+        try { await attachPassIcon(recordName, signature); } catch (_) {}
+        window._pendingIssuePass = false;
+        const ok = document.getElementById("issuePassOk");
+        if (ok) {
+          ok.textContent = c.issuePassDone;
+          ok.classList.remove("hidden");
+        }
+        const student = document.getElementById("issueStudent");
+        const dest = document.getElementById("issueDestination");
+        const code = document.getElementById("issueWebCode");
+        if (student) student.value = "";
+        if (dest) dest.value = "";
+        if (code) code.value = "";
+        const canvas = document.getElementById("passSigPad");
+        if (canvas) {
+          const ctx = canvas.getContext("2d");
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          window._passSigEmpty = true;
+        }
+      } catch (error) {
+        const apple = (error && error.apple) || error.message === "APPLE" || isAuthError(error);
+        const badCode = error && (error.code === "CODE" || error.message === "CODE");
+        setIssuePassError(apple ? c.issuePassNeedApple : (badCode ? c.issuePassBadCode : c.issuePassFail));
+      } finally {
+        const again = document.getElementById("issuePassBtn");
+        if (again) again.disabled = false;
+      }
+    }
+
     function passPaper(record, enlarged) {
       const c = t();
       const kind = fieldValue(record, "kind") === "flex" ? c.flex : c.hallway;
-      const signature = fieldValue(record, "signature");
+      const signature = fieldValue(record, "signature") || record._passIcon || "";
       return `<article class="paper${enlarged ? " big" : ""}">
         <div class="paper-head"><img class="paper-w-img" src="./WHSBlockW.png" alt=""><div class="paper-title">${kind}</div></div>
         <div class="paper-field"><div class="lab">${c.studentNameLabel}</div><div class="val">${escapeHtml(fieldValue(record, "studentName"))}</div></div>
@@ -2713,10 +3060,15 @@
       try { await ensureCloud(); } catch (_) {}
       try {
         const key = normalizeCode(profile.key);
-        const profiles = await fetchByNames(cloudDb(), [key]);
+        const profiles = await fetchByNames(cloudDb(), [key, "webpass." + key]);
         const mine = profiles.find((item) => normalizeCode(item.recordName) === key);
-        const ids = String(fieldValue(mine, "passIDs") || "").split(",").map((part) => part.trim()).filter(Boolean);
+        const linked = profiles.find((item) => String(item.recordName || "").toLowerCase() === ("webpass." + key).toLowerCase());
+        const ids = [...new Set(
+          String(fieldValue(mine, "passIDs") || "").split(",").concat(String(fieldValue(linked, "passIDs") || "").split(","))
+            .map((part) => part.trim()).filter(Boolean)
+        )];
         const records = await fetchByNames(cloudDb(), ids);
+        await applyPassIcons(records);
         const byName = new Map(records.map((record) => [String(record.recordName || "").toLowerCase(), record]));
         const markers = await fetchByNames(cloudDb(), ids.flatMap((id) => [revokedName(id), tombstoneName(id)]).concat([CLEARED]));
         window._revokedPassIDs = collectRevokedIDs(records.concat(markers));
@@ -2962,6 +3314,31 @@
       (posts || []).forEach((record) => {
         const parts = (grouped[record.recordName] || []).filter(Boolean);
         if (parts.length) record._newsIcon = "data:image/jpeg;base64," + parts.join("");
+      });
+    }
+    function passIconChunkNames(id) {
+      const names = [];
+      for (let i = 0; i < 40; i += 1) names.push("passimg." + id + "." + i);
+      return names;
+    }
+    async function applyPassIcons(records) {
+      const missing = (records || []).filter((record) => record && !fieldValue(record, "signature") && !record._passIcon);
+      const names = missing.flatMap((record) => passIconChunkNames(record.recordName));
+      if (!names.length) return;
+      let chunks = [];
+      try { chunks = await fetchByNames(cloudDb(), names); } catch (_) { return; }
+      const grouped = {};
+      chunks.forEach((record) => {
+        if (String(fieldValue(record, "kind") || "").toLowerCase() !== "passimg") return;
+        const parent = fieldValue(record, "studentName");
+        const idx = Number(String(record.recordName || "").split(".").pop());
+        if (!parent || !Number.isFinite(idx) || idx < 0) return;
+        if (!grouped[parent]) grouped[parent] = [];
+        grouped[parent][idx] = fieldValue(record, "destination");
+      });
+      missing.forEach((record) => {
+        const parts = (grouped[record.recordName] || []).filter(Boolean);
+        if (parts.length) record._passIcon = "data:image/jpeg;base64," + parts.join("");
       });
     }
     function chunkNewsImage(dataUrl) {
@@ -3489,7 +3866,7 @@
       const c = t();
       const query = String((document.getElementById("passQuery") || {}).value || window._passQuery || "");
       window._passQuery = query;
-      node.innerHTML = `<div class="toolbar"><button class="ghost" type="button" id="refreshPasses">${c.refresh}</button></div><input class="search" id="passQuery" placeholder="${c.passSearch}" value="${escapeHtml(query)}"><div id="passes"></div>`;
+      node.innerHTML = `<div class="toolbar" style="display:flex;gap:8px;flex-wrap:wrap;">${canIssuePass() ? `<button class="ghost" type="button" data-go="issuepass">${c.issuePass}</button>` : ""}<button class="ghost" type="button" id="refreshPasses">${c.refresh}</button></div><input class="search" id="passQuery" placeholder="${c.passSearch}" value="${escapeHtml(query)}"><div id="passes"></div>`;
       if (!(await ensureCloud())) {
         node.insertAdjacentHTML("beforeend", `<div class="card"><p class="muted">${c.adminHint}</p></div>`);
         return;
@@ -3509,6 +3886,7 @@
           if (isPassMarker(r)) return false;
           return !!(fieldValue(r, "studentName") || fieldValue(r, "teacherName"));
         });
+        await applyPassIcons(usable);
         window._passRecords = {};
         usable.forEach((record) => {
           const id = passRecordName(record);
@@ -3607,6 +3985,21 @@
           if (picker) picker.click();
         }
         if (name === "publishNews") publishNewsPost();
+        if (name === "passKind") {
+          window._issuePassKind = action.dataset.kind === "hallway" ? "hallway" : "flex";
+          document.querySelectorAll("[data-action='passKind']").forEach((node) => {
+            node.classList.toggle("on", node.dataset.kind === window._issuePassKind);
+          });
+        }
+        if (name === "clearPassSig") {
+          const canvas = document.getElementById("passSigPad");
+          if (canvas) {
+            const ctx = canvas.getContext("2d");
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+          }
+          window._passSigEmpty = true;
+        }
+        if (name === "issuePass") issuePassFromWeb();
         if (name === "useCode") returnToCodeGate();
         if (name === "copyWebCode") {
           const formatted = formatWebKey(profile && profile.key);
