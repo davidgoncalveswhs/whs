@@ -1422,8 +1422,8 @@
       const key = id.toLowerCase();
       const kind = String(fieldValue(record, "kind") || "").toLowerCase();
       if (!id || key === MANIFEST.toLowerCase() || key === CLEARED.toLowerCase() || key === NEWS_MANIFEST.toLowerCase()) return true;
-      if (key.indexOf("cleared.") === 0 || key.indexOf("revoked.") === 0 || key.indexOf("news.") === 0) return true;
-      if (kind === "cleared" || kind === "revoked" || kind === "news") return true;
+      if (key.indexOf("cleared.") === 0 || key.indexOf("revoked.") === 0 || key.indexOf("news.") === 0 || key.indexOf("newsimg.") === 0) return true;
+      if (kind === "cleared" || kind === "revoked" || kind === "news" || kind === "newsimg") return true;
       return false;
     }
     function isRevokedFlag(record) {
@@ -2900,11 +2900,12 @@
         watchAppleSignIn();
         if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
         let gone = false;
-        try { gone = await ckDeleteNames([id]); } catch (error) {
+        const names = [id].concat(newsIconChunkNames(id));
+        try { gone = await ckDeleteNames(names); } catch (error) {
           if (error && error.apple) throw error;
         }
         if (!gone) {
-          try { gone = await restDeleteNames([id]); } catch (error) {
+          try { gone = await restDeleteNames(names); } catch (error) {
             if (error && error.apple) throw error;
           }
         }
@@ -2937,17 +2938,38 @@
       return [];
     }
     function newsImageFromRecord(record) {
+      if (record && record._newsIcon) return record._newsIcon;
       const direct = fieldValue(record, "signature") || fieldValue(record, "newsImage") || fieldValue(record, "image");
       if (direct && (/^(https?:|data:|\.\/)/.test(direct) || direct.indexOf("${apiToken}") !== -1)) return direct;
       const parts = newsImageParts(record);
       return parts.length ? "data:image/jpeg;base64," + parts.join("") : "";
     }
+    function newsIconChunkNames(id) {
+      const names = [];
+      for (let i = 0; i < 40; i += 1) names.push("newsimg." + id + "." + i);
+      return names;
+    }
+    function applyNewsIcons(posts, chunks) {
+      const grouped = {};
+      (chunks || []).forEach((record) => {
+        if (String(fieldValue(record, "kind") || "").toLowerCase() !== "newsimg") return;
+        const parent = fieldValue(record, "studentName");
+        const idx = Number(String(record.recordName || "").split(".").pop());
+        if (!parent || !Number.isFinite(idx) || idx < 0) return;
+        if (!grouped[parent]) grouped[parent] = [];
+        grouped[parent][idx] = fieldValue(record, "destination");
+      });
+      (posts || []).forEach((record) => {
+        const parts = (grouped[record.recordName] || []).filter(Boolean);
+        if (parts.length) record._newsIcon = "data:image/jpeg;base64," + parts.join("");
+      });
+    }
     function chunkNewsImage(dataUrl) {
       const raw = String(dataUrl || "").split(",")[1] || "";
-      const size = 200;
+      const size = 240;
       const parts = [];
       for (let i = 0; i < raw.length; i += size) parts.push(raw.slice(i, i + size));
-      return parts.slice(0, 50);
+      return parts.slice(0, 40);
     }
     function compressNewsIcon(file) {
       return new Promise((resolve, reject) => {
@@ -2957,11 +2979,11 @@
         }
         const img = new Image();
         const blobURL = URL.createObjectURL(file);
-        const budget = 50 * 200;
+        const budget = 40 * 240;
         img.onload = () => {
           URL.revokeObjectURL(blobURL);
-          let max = 320;
-          let quality = 0.7;
+          let max = 240;
+          let quality = 0.62;
           let dataUrl = "";
           for (let step = 0; step < 10; step += 1) {
             const scale = Math.min(1, max / Math.max(img.width, img.height));
@@ -2975,7 +2997,7 @@
               return;
             }
             quality = Math.max(0.28, quality - 0.08);
-            max = Math.max(96, Math.round(max * 0.78));
+            max = Math.max(80, Math.round(max * 0.78));
           }
           resolve(dataUrl);
         };
@@ -2989,33 +3011,34 @@
     async function attachNewsIcon(recordName, imageParts) {
       const parts = (imageParts || []).filter(Boolean);
       if (!recordName || !parts.length) return;
-      let existing = null;
-      try { existing = (await fetchByNames(cloudDb(), [recordName]))[0] || null; } catch (_) {}
-      const jsRecord = {
+      const records = parts.map((chunk, i) => ({
         recordType: PASS_TYPE,
-        recordName,
-        fields: { imageParts: { value: parts } }
-      };
-      const restRecord = {
-        recordType: PASS_TYPE,
-        recordName,
-        fields: { imageParts: { value: parts, type: "STRING_LIST" } }
-      };
-      if (existing && existing.recordChangeTag) {
-        jsRecord.recordChangeTag = existing.recordChangeTag;
-        restRecord.recordChangeTag = existing.recordChangeTag;
-        try {
-          await ckCreateRecords([jsRecord]);
-          return;
-        } catch (_) {}
-        try {
-          await restModify(restRecord, "update");
-          return;
-        } catch (_) {}
-      }
+        recordName: "newsimg." + recordName + "." + i,
+        fields: {
+          kind: { value: "newsimg" },
+          studentName: { value: recordName },
+          destination: { value: chunk },
+          dates: { value: String(parts.length) }
+        }
+      }));
+      const db = cloudDb();
       try {
-        await restModify(restRecord, existing ? "forceUpdate" : "update");
+        if (db && typeof db.newRecordsBatch === "function") {
+          const batch = db.newRecordsBatch();
+          records.forEach((record) => { batch.create(record); });
+          const result = await batch.commit();
+          if (!(result && result.hasErrors)) return;
+        }
       } catch (_) {}
+      try {
+        if (db && typeof db.saveRecords === "function") {
+          const result = await db.saveRecords(records);
+          if (!(result && result.hasErrors)) return;
+        }
+      } catch (_) {}
+      for (const record of records) {
+        try { await restModify(record, "forceUpdate"); } catch (_) {}
+      }
     }
     function newsItemFromPass(record) {
       const created = record && record.created && typeof record.created.timestamp === "number" ? record.created.timestamp : newsStamp(record);
@@ -3042,6 +3065,8 @@
         const manifest = (await fetchByNames(cloudDb(), [NEWS_MANIFEST]))[0];
         const ids = parsePassIDs(fieldValue(manifest, "passIDs"));
         (await fetchByNames(cloudDb(), ids)).forEach(remember);
+        const iconNames = found.flatMap((record) => newsIconChunkNames(record.recordName));
+        applyNewsIcons(found, await fetchByNames(cloudDb(), iconNames));
       } catch (_) {}
       return found;
     }
