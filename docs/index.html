@@ -2944,12 +2944,12 @@
     }
     function chunkNewsImage(dataUrl) {
       const raw = String(dataUrl || "").split(",")[1] || "";
-      const size = 240;
+      const size = 200;
       const parts = [];
       for (let i = 0; i < raw.length; i += size) parts.push(raw.slice(i, i + size));
-      return parts.slice(0, 180);
+      return parts.slice(0, 50);
     }
-    function compressNewsPhoto(file) {
+    function compressNewsIcon(file) {
       return new Promise((resolve, reject) => {
         if (!file) {
           reject(new Error("image"));
@@ -2957,27 +2957,25 @@
         }
         const img = new Image();
         const blobURL = URL.createObjectURL(file);
-        const budget = 180 * 240;
-        const finish = (canvas, quality) => canvas.toDataURL("image/jpeg", quality);
+        const budget = 50 * 200;
         img.onload = () => {
           URL.revokeObjectURL(blobURL);
-          let max = 720;
-          let quality = 0.62;
+          let max = 320;
+          let quality = 0.7;
           let dataUrl = "";
-          for (let step = 0; step < 8; step += 1) {
+          for (let step = 0; step < 10; step += 1) {
             const scale = Math.min(1, max / Math.max(img.width, img.height));
             const canvas = document.createElement("canvas");
             canvas.width = Math.max(1, Math.round(img.width * scale));
             canvas.height = Math.max(1, Math.round(img.height * scale));
             canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
-            dataUrl = finish(canvas, quality);
-            const raw = (dataUrl.split(",")[1] || "").length;
-            if (raw <= budget) {
+            dataUrl = canvas.toDataURL("image/jpeg", quality);
+            if ((dataUrl.split(",")[1] || "").length <= budget) {
               resolve(dataUrl);
               return;
             }
-            quality = Math.max(0.32, quality - 0.08);
-            max = Math.max(240, Math.round(max * 0.82));
+            quality = Math.max(0.28, quality - 0.08);
+            max = Math.max(96, Math.round(max * 0.78));
           }
           resolve(dataUrl);
         };
@@ -2987,6 +2985,37 @@
         };
         img.src = blobURL;
       });
+    }
+    async function attachNewsIcon(recordName, imageParts) {
+      const parts = (imageParts || []).filter(Boolean);
+      if (!recordName || !parts.length) return;
+      let existing = null;
+      try { existing = (await fetchByNames(cloudDb(), [recordName]))[0] || null; } catch (_) {}
+      const jsRecord = {
+        recordType: PASS_TYPE,
+        recordName,
+        fields: { imageParts: { value: parts } }
+      };
+      const restRecord = {
+        recordType: PASS_TYPE,
+        recordName,
+        fields: { imageParts: { value: parts, type: "STRING_LIST" } }
+      };
+      if (existing && existing.recordChangeTag) {
+        jsRecord.recordChangeTag = existing.recordChangeTag;
+        restRecord.recordChangeTag = existing.recordChangeTag;
+        try {
+          await ckCreateRecords([jsRecord]);
+          return;
+        } catch (_) {}
+        try {
+          await restModify(restRecord, "update");
+          return;
+        } catch (_) {}
+      }
+      try {
+        await restModify(restRecord, existing ? "forceUpdate" : "update");
+      } catch (_) {}
     }
     function newsItemFromPass(record) {
       const created = record && record.created && typeof record.created.timestamp === "number" ? record.created.timestamp : newsStamp(record);
@@ -3272,6 +3301,9 @@
         }
         if (!saved) throw Object.assign(new Error("FAIL"), { reason: "create" });
         await addNewsToManifest(recordName);
+        try {
+          await attachNewsIcon(recordName, chunkNewsImage(await compressNewsIcon(rawFile)));
+        } catch (_) {}
         window._pendingNewsPost = false;
         window._newsDraftFile = null;
         if (view === "posts") {
