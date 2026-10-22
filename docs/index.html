@@ -1312,9 +1312,7 @@
       const payload = await response.json();
       const records = recordsFrom(payload).filter(usableRecord);
       if (records.length) return records[0];
-      const errors = payload.serverErrorCode || (payload.records && payload.records[0] && payload.records[0].serverErrorCode) || "";
-      if (errors) throw new Error(String(errors));
-      return null;
+      throw cloudRecordError(payload, payload.records && payload.records[0]);
     }
     async function restModifyOps(operations) {
       const token = schoolToken();
@@ -1369,10 +1367,21 @@
         error && error.ckErrorCode,
         error && error.serverErrorCode,
         error && error.message,
+        error && error.reason,
         payload && payload.serverErrorCode,
         payload && payload.reason
       ].filter(Boolean).join(" ");
       return /AUTH|421|authorization|sign in/i.test(text);
+    }
+    function cloudRecordError(payload, record) {
+      const row = record || {};
+      const code = String((payload && payload.serverErrorCode) || row.serverErrorCode || (payload && payload.reason) || row.reason || "FAIL");
+      const reason = String((payload && payload.reason) || row.reason || "");
+      return Object.assign(new Error(code), {
+        apple: isAuthError({ message: code + " " + reason }, payload),
+        code,
+        reason
+      });
     }
     function tombstoneName(id) {
       return "cleared." + String(id || "").trim();
@@ -2859,26 +2868,66 @@
       preview.src = URL.createObjectURL(file);
       preview.classList.remove("hidden");
     }
-    async function restUploadAsset(recordName, recordType, fieldName, file) {
+    function assetFieldValue(fileDict) {
+      if (!fileDict || typeof fileDict !== "object") return null;
+      const src = fileDict.singleFile || fileDict;
+      const value = {
+        fileChecksum: src.fileChecksum,
+        size: src.size,
+        receipt: src.receipt,
+        wrappingKey: src.wrappingKey,
+        referenceChecksum: src.referenceChecksum
+      };
+      if (!value.fileChecksum || !value.receipt || !value.size) return null;
+      return value;
+    }
+    async function ckCreateNews(record) {
+      const db = cloudDb();
+      if (!(db && typeof db.newRecordsBatch === "function")) return null;
+      const result = await db.newRecordsBatch().create(record).commit();
+      if (result && result.hasErrors) {
+        throw cloudRecordError(result, result.errors && result.errors[0] || result.records && result.records[0]);
+      }
+      return (result && result.records && result.records[0]) || result;
+    }
+    async function restUploadAsset(recordType, fieldName, file, recordName) {
+      const tokenBody = { recordType, fieldName };
+      if (recordName) tokenBody.recordName = recordName;
       const response = await fetch(restPublicUrl("assets/upload"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tokens: [{ recordName, recordType, fieldName }]
-        })
+        body: JSON.stringify({ tokens: [tokenBody] })
       });
       const payload = await response.json();
-      if (isAuthError(null, payload)) throw Object.assign(new Error("APPLE"), { apple: true });
+      if (payload.serverErrorCode || (payload.tokens && payload.tokens[0] && payload.tokens[0].serverErrorCode)) {
+        throw cloudRecordError(payload, payload.tokens && payload.tokens[0]);
+      }
       const token = (payload.tokens || [])[0];
-      if (!token || !token.url) throw new Error("FAIL");
+      if (!token || !token.url) throw cloudRecordError(payload, token);
       const uploaded = await fetch(token.url, {
         method: "POST",
-        headers: { "Content-Type": file.type || "application/octet-stream" },
         body: file
       });
-      const body = await uploaded.json();
-      if (isAuthError(null, body)) throw Object.assign(new Error("APPLE"), { apple: true });
-      return body.singleFile || (body.tokens && body.tokens[0] && body.tokens[0].singleFile) || body;
+      const text = await uploaded.text();
+      let body = {};
+      try { body = JSON.parse(text); } catch (_) {
+        throw Object.assign(new Error("FAIL"), { reason: "image" });
+      }
+      if (body.serverErrorCode) throw cloudRecordError(body, body);
+      const value = assetFieldValue(body);
+      if (!value) throw Object.assign(new Error("FAIL"), { reason: "image" });
+      return { recordName: token.recordName || recordName, value };
+    }
+    function newsTextFields(title, story, stamp, extras) {
+      const fields = {
+        titleEN: { value: title },
+        subtitleEN: { value: story },
+        titleES: { value: title },
+        subtitleES: { value: story }
+      };
+      if (!extras || extras.postedAt !== false) fields.postedAt = { value: stamp };
+      if (!extras || extras.published !== false) fields.published = { value: extras && extras.published != null ? extras.published : stamp };
+      return fields;
     }
     async function saveNewsRecord(recordName, fields) {
       const record = {
@@ -2887,17 +2936,12 @@
         fields
       };
       try {
-        if (await ckCreateRecords([record])) return true;
+        const saved = await ckCreateNews(record);
+        if (saved) return saved;
       } catch (error) {
-        if (isAuthError(error) && !ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
+        if (error && error.apple && !ckWebAuthToken()) throw error;
       }
-      try {
-        await restModify(record, "create");
-        return true;
-      } catch (error) {
-        if (isAuthError(error) && !ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
-        throw Object.assign(new Error(ckWebAuthToken() ? "FAIL" : "APPLE"), { apple: !ckWebAuthToken() });
-      }
+      return restModify(record, "create");
     }
     async function publishNewsPost() {
       if (!canPostNews()) return;
@@ -2916,32 +2960,40 @@
       try {
         await ensureCloud();
         watchAppleSignIn();
-        const jpeg = dataUrlToFile(await compressSwipePhoto(rawFile), "news.jpg");
-        const recordName = (crypto.randomUUID && crypto.randomUUID()) || ("news-" + Date.now());
+        if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
+        let jpeg = rawFile;
+        try { jpeg = dataUrlToFile(await compressSwipePhoto(rawFile), "news.jpg"); } catch (_) {}
         const stamp = Date.now();
-        const textFields = {
-          titleEN: { value: title },
-          subtitleEN: { value: story },
-          titleES: { value: title },
-          subtitleES: { value: story },
-          postedAt: { value: stamp },
-          published: { value: stamp }
-        };
-        let saved = false;
+        let saved = null;
         try {
-          saved = await ckCreateRecords([{
+          saved = await ckCreateNews({
             recordType: NEWS_TYPE,
-            recordName,
-            fields: Object.assign({ image: { value: jpeg } }, textFields)
-          }]);
+            fields: Object.assign({ image: { value: jpeg } }, newsTextFields(title, story, stamp))
+          });
         } catch (error) {
-          if (isAuthError(error) && !ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
+          if (error && error.apple) throw error;
         }
         if (!saved) {
-          const asset = await restUploadAsset(recordName, NEWS_TYPE, "image", jpeg);
-          await saveNewsRecord(recordName, Object.assign({
-            image: { value: asset }
-          }, textFields));
+          const uploaded = await restUploadAsset(NEWS_TYPE, "image", jpeg);
+          const attempts = [
+            newsTextFields(title, story, stamp),
+            newsTextFields(title, story, stamp, { published: 1000000 }),
+            newsTextFields(title, story, stamp, { postedAt: false, published: 1000000 }),
+            newsTextFields(title, story, stamp, { postedAt: false, published: false })
+          ];
+          let lastError = null;
+          for (let i = 0; i < attempts.length; i += 1) {
+            try {
+              saved = await saveNewsRecord(uploaded.recordName, Object.assign({
+                image: { value: uploaded.value }
+              }, attempts[i]));
+              if (saved) break;
+            } catch (error) {
+              lastError = error;
+              if (error && error.apple) throw error;
+            }
+          }
+          if (!saved) throw lastError || Object.assign(new Error("FAIL"), { reason: "FAIL" });
         }
         window._pendingNewsPost = false;
         window._newsDraftFile = null;
