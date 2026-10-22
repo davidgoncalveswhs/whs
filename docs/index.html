@@ -4108,9 +4108,12 @@
       try {
         const db = CloudKit.getDefaultContainer().publicCloudDatabase;
         (await fetchByNames(db, [MANIFEST])).forEach(remember);
-        const raw = seen.get(MANIFEST) ? fieldValue(seen.get(MANIFEST), "passIDs") : "";
-        (await fetchByNames(db, raw.split(",").map((part) => part.trim()))).forEach(remember);
-        try { recordsFrom(await db.performQuery({ recordType: PASS_TYPE })).forEach(remember); } catch (_) {}
+        const hasManifest = !!seen.get(MANIFEST);
+        const raw = hasManifest ? fieldValue(seen.get(MANIFEST), "passIDs") : "";
+        (await fetchByNames(db, String(raw || "").split(",").map((part) => part.trim()).filter(Boolean))).forEach(remember);
+        if (!hasManifest) {
+          try { recordsFrom(await db.performQuery({ recordType: PASS_TYPE })).forEach(remember); } catch (_) {}
+        }
         const allIDs = [...seen.keys()];
         const marked = await loadClearedIDs(allIDs);
         window._revokedPassIDs = new Set([...marked, ...collectRevokedIDs([...seen.values()])]);
