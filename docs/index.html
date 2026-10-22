@@ -593,6 +593,7 @@
     const NEWS_MANIFEST = "whs-news-manifest";
     const LUNCH = "https://drive.google.com/file/d/1FcyUw6LwftfJC6cDnOQrlXgBXC4UjB57/preview";
     const STAFF_GATE = "105310";
+    const PASS_WIPE_CODE = "5203";
     const copy = {
       en: {
         welcome: "Welcome",
@@ -769,6 +770,16 @@
         revokePassFail: "Could not revoke that pass.",
         revokePassNeedApple: "Sign in with Apple in More first. The school token can read the log. Revoking a pass needs the same iCloud sign-in teachers use on iPhone.",
         revokePassDone: "This pass is revoked. The student cannot use it.",
+        adminPassWipeTitle: "Clear pass log",
+        adminPassWipe: "Revoke all passes and clear the log",
+        adminPassWipeBody: "This override revokes every hallway and Flex pass for students, then empties the campus log. It needs the administrator access code.",
+        adminPassWipeCode: "Access code",
+        adminPassWipeConfirmTitle: "Clear the pass log?",
+        adminPassWipeConfirmBody: "Every student pass will be revoked. The campus log will be empty. This cannot be undone.",
+        adminPassWipeBadCode: "That access code is not correct.",
+        adminPassWipeNeedApple: "Sign in with Apple in More first. Clearing the log needs the same iCloud sign-in teachers use on iPhone.",
+        adminPassWipeDone: "All passes are revoked. The campus log is empty.",
+        adminPassWipeFail: "Could not clear the pass log.",
         hallway: "HALLWAY PASS", flex: "FLEX PASS",
         search: "Name, role, or email",
         newsEmpty: "No news yet.",
@@ -983,6 +994,16 @@
         revokePassFail: "No se pudo revocar ese pase.",
         revokePassNeedApple: "Entra con Apple en Más primero. El token de la escuela puede leer el registro. Revocar un pase necesita la misma sesión de iCloud que usan los maestros en iPhone.",
         revokePassDone: "Este pase está revocado. El estudiante no puede usarlo.",
+        adminPassWipeTitle: "Vaciar registro de pases",
+        adminPassWipe: "Revocar todos los pases y vaciar el registro",
+        adminPassWipeBody: "Esta anulacion revoca cada pase de pasillo y Flex para los estudiantes y luego vacia el registro del campus. Necesita el codigo de acceso de administrador.",
+        adminPassWipeCode: "Codigo de acceso",
+        adminPassWipeConfirmTitle: "Vaciar el registro de pases?",
+        adminPassWipeConfirmBody: "Se revocara cada pase de estudiante. El registro del campus quedara vacio. No se puede deshacer.",
+        adminPassWipeBadCode: "Ese codigo de acceso no es correcto.",
+        adminPassWipeNeedApple: "Entra con Apple en Mas primero. Vaciar el registro necesita la misma sesion de iCloud que usan los maestros en iPhone.",
+        adminPassWipeDone: "Todos los pases estan revocados. El registro del campus esta vacio.",
+        adminPassWipeFail: "No se pudo vaciar el registro.",
         hallway: "PASE DE PASILLO", flex: "PASE FLEX",
         search: "Nombre, rol o correo",
         newsEmpty: "Aún no hay noticias.",
@@ -1477,6 +1498,19 @@
       const raw = String(fieldValue(record, "revoked") || "").trim().toLowerCase();
       return raw === "1" || raw === "true" || raw === "yes" || raw === "revoked";
     }
+    function collectClearedIDs(records) {
+      const out = new Set();
+      (records || []).forEach((record) => {
+        const id = String(record.recordName || "");
+        const key = id.toLowerCase();
+        const kind = String(fieldValue(record, "kind") || "").toLowerCase();
+        if (key === CLEARED.toLowerCase() || kind === "cleared") {
+          parsePassIDs(fieldValue(record, "passIDs")).forEach((item) => out.add(item.toLowerCase()));
+        }
+        if (key.indexOf("cleared.") === 0) out.add(key.slice("cleared.".length));
+      });
+      return out;
+    }
     function collectRevokedIDs(records) {
       const out = new Set();
       (records || []).forEach((record) => {
@@ -1601,6 +1635,128 @@
         window._pendingRevokeId = id;
         const apple = (error && error.apple) || error.message === "APPLE" || isAuthError(error);
         showRevokePassError(apple ? "APPLE" : "FAIL");
+      }
+    }
+    function setPassWipeError(message) {
+      const err = document.getElementById("passWipeError");
+      const ok = document.getElementById("passWipeOk");
+      if (err) err.textContent = message || "";
+      if (ok) ok.classList.toggle("hidden", !!message);
+    }
+    function confirmClearPassLog() {
+      if (!canClearPassLog()) return;
+      const c = t();
+      const typed = String((document.getElementById("passWipeCode") || {}).value || "").trim();
+      if (typed !== PASS_WIPE_CODE) {
+        setPassWipeError(c.adminPassWipeBadCode);
+        return;
+      }
+      setPassWipeError("");
+      openSheet(`
+        <div class="card-title"><b>${c.adminPassWipeConfirmTitle}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
+        <p class="muted">${c.adminPassWipeConfirmBody}</p>
+        <button class="primary" type="button" data-action="closeSheet">${c.close}</button>
+        <button class="ghost" type="button" data-action="clearPassLog" style="width:100%;margin-top:8px;color:#B42318;">${c.adminPassWipe}</button>`);
+    }
+    async function emptyPassManifest() {
+      let existing = null;
+      try { existing = (await fetchByNames(cloudDb(), [MANIFEST]))[0] || null; } catch (_) {}
+      const record = {
+        recordType: PASS_TYPE,
+        recordName: MANIFEST,
+        fields: {
+          kind: { value: "manifest" },
+          passIDs: { value: "" }
+        }
+      };
+      if (existing && existing.recordChangeTag) {
+        record.recordChangeTag = existing.recordChangeTag;
+        try { await ckCreateRecords([record]); return; } catch (_) {}
+        try { await restModify(record, "update"); return; } catch (_) {}
+      }
+      try { await ckCreateNews(record); } catch (_) {
+        await restModify(record, existing ? "forceUpdate" : "create");
+      }
+    }
+    async function saveClearedPassIDs(ids) {
+      const unique = [...new Set((ids || []).map((id) => String(id || "").trim()).filter(Boolean))];
+      let existing = null;
+      try { existing = (await fetchByNames(cloudDb(), [CLEARED]))[0] || null; } catch (_) {}
+      const merged = [...new Set(parsePassIDs(existing && fieldValue(existing, "passIDs")).concat(unique))];
+      const record = {
+        recordType: PASS_TYPE,
+        recordName: CLEARED,
+        fields: {
+          kind: { value: "cleared" },
+          passIDs: { value: merged.join(",") }
+        }
+      };
+      if (existing && existing.recordChangeTag) {
+        record.recordChangeTag = existing.recordChangeTag;
+        try { await ckCreateRecords([record]); return; } catch (_) {}
+        try { await restModify(record, "update"); return; } catch (_) {}
+      }
+      try { await ckCreateNews(record); } catch (_) {
+        await restModify(record, existing ? "forceUpdate" : "create");
+      }
+    }
+    async function collectCampusPassIDs() {
+      const names = new Set();
+      try {
+        const manifest = (await fetchByNames(cloudDb(), [MANIFEST]))[0];
+        parsePassIDs(manifest && fieldValue(manifest, "passIDs")).forEach((id) => names.add(id));
+      } catch (_) {}
+      try {
+        (await restQuery(PASS_TYPE, 200)).forEach((record) => {
+          const id = passRecordName(record);
+          if (id && !isPassMarker(record)) names.add(id);
+        });
+      } catch (_) {}
+      (window._passLogList || []).forEach((record) => {
+        const id = passRecordName(record);
+        if (id) names.add(id);
+      });
+      return [...names].filter((id) => id && id !== MANIFEST && id !== CLEARED);
+    }
+    async function handleClearPassLog() {
+      if (!canClearPassLog()) return;
+      const c = t();
+      const typed = String((document.getElementById("passWipeCode") || {}).value || "").trim();
+      if (typed !== PASS_WIPE_CODE) {
+        closeSheet();
+        setPassWipeError(c.adminPassWipeBadCode);
+        return;
+      }
+      try {
+        await ensureCloud();
+        watchAppleSignIn();
+        if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
+        const ids = await collectCampusPassIDs();
+        if (ids.length) {
+          await markPassesRevoked(ids);
+          for (const id of ids) {
+            try { await revokePassRecord(id); } catch (_) {}
+          }
+          await saveClearedPassIDs(ids);
+        }
+        await emptyPassManifest();
+        closeSheet();
+        window._passLogList = [];
+        window._revokedPassIDs = new Set(ids.map((id) => id.toLowerCase()));
+        window._clearedPassIDs = new Set(ids.map((id) => id.toLowerCase()));
+        const ok = document.getElementById("passWipeOk");
+        if (ok) {
+          ok.textContent = c.adminPassWipeDone;
+          ok.classList.remove("hidden");
+        }
+        setPassWipeError("");
+        const code = document.getElementById("passWipeCode");
+        if (code) code.value = "";
+        if (view === "passes") await loadPasses();
+      } catch (error) {
+        closeSheet();
+        const apple = (error && error.apple) || error.message === "APPLE" || isAuthError(error);
+        setPassWipeError(apple ? c.adminPassWipeNeedApple : c.adminPassWipeFail);
       }
     }
     async function allocateGuestStudentKey(person) {
@@ -1909,6 +2065,15 @@
             <p class="ok hidden" id="tokenSaved"></p>
             ${canIssuePass() ? `<button class="ghost" type="button" data-go="issuepass" style="width:100%;margin-top:8px;">${c.issuePass}</button>` : ""}
             <button class="ghost" type="button" id="openPasses" style="width:100%;margin-top:8px;">${c.openPasses}</button>
+            ${canClearPassLog() ? `<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--line,#ddd);">
+              <b>${c.adminPassWipeTitle}</b>
+              <p class="muted">${c.adminPassWipeBody}</p>
+              <label class="muted">${c.adminPassWipeCode}</label>
+              <input id="passWipeCode" type="password" inputmode="numeric" autocomplete="off" style="margin:8px 0;">
+              <button class="ghost" type="button" data-action="askClearPassLog" style="width:100%;color:#B42318;">${c.adminPassWipe}</button>
+              <p class="error" id="passWipeError"></p>
+              <p class="ok hidden" id="passWipeOk"></p>
+            </div>` : ""}
             ${canSeePassLog() ? `<div id="ck-auth-more"></div>` : ""}
           </div>` : "";
       const face = window._profilePhoto
@@ -2836,8 +3001,10 @@
       const ctx = out.getContext("2d");
       ctx.fillStyle = "#fff";
       ctx.fillRect(0, 0, out.width, out.height);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
       ctx.drawImage(canvas, 0, 0);
-      try { return dataUrlToFile(out.toDataURL("image/jpeg", 0.86), "signature.jpg"); } catch (_) { return null; }
+      try { return dataUrlToFile(out.toDataURL("image/png"), "signature.png"); } catch (_) { return null; }
     }
     function compressPassSignature(file) {
       return new Promise((resolve, reject) => {
@@ -2847,14 +3014,15 @@
         }
         const img = new Image();
         const blobURL = URL.createObjectURL(file);
-        const budget = 80 * 240;
+        const budget = 200 * 240;
         img.onload = () => {
           URL.revokeObjectURL(blobURL);
-          let maxW = 900;
-          let quality = 0.86;
+          let maxW = 1280;
+          let maxH = 320;
+          let quality = 0.92;
           let dataUrl = "";
-          for (let step = 0; step < 10; step += 1) {
-            const scale = Math.min(1, maxW / Math.max(1, img.width), 220 / Math.max(1, img.height));
+          for (let step = 0; step < 12; step += 1) {
+            const scale = Math.min(1, maxW / Math.max(1, img.width), maxH / Math.max(1, img.height));
             const width = Math.max(1, Math.round(img.width * scale));
             const height = Math.max(1, Math.round(img.height * scale));
             const canvas = document.createElement("canvas");
@@ -2863,14 +3031,19 @@
             const ctx = canvas.getContext("2d");
             ctx.fillStyle = "#fff";
             ctx.fillRect(0, 0, width, height);
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = "high";
             ctx.drawImage(img, 0, 0, width, height);
             dataUrl = canvas.toDataURL("image/jpeg", quality);
             if ((dataUrl.split(",")[1] || "").length <= budget) {
               resolve(dataUrl);
               return;
             }
-            quality = Math.max(0.45, quality - 0.08);
-            maxW = Math.max(400, Math.round(maxW * 0.86));
+            if (quality > 0.72) quality = Math.max(0.72, quality - 0.04);
+            else {
+              maxW = Math.max(720, Math.round(maxW * 0.9));
+              maxH = Math.max(180, Math.round(maxH * 0.9));
+            }
           }
           resolve(dataUrl);
         };
@@ -2974,7 +3147,7 @@
       }
       try {
         const dataUrl = await compressPassSignature(file);
-        const parts = chunkNewsImage(dataUrl, 80);
+        const parts = chunkNewsImage(dataUrl, 200);
         const records = parts.map((chunk, i) => ({
           recordType: PASS_TYPE,
           recordName: "passimg." + recordName + "." + i,
@@ -3377,7 +3550,7 @@
     }
     function passIconChunkNames(id) {
       const names = [];
-      for (let i = 0; i < 80; i += 1) names.push("passimg." + id + "." + i);
+      for (let i = 0; i < 200; i += 1) names.push("passimg." + id + "." + i);
       return names;
     }
     async function applyPassIcons(records) {
@@ -3941,8 +4114,11 @@
         const allIDs = [...seen.keys()];
         const marked = await loadClearedIDs(allIDs);
         window._revokedPassIDs = new Set([...marked, ...collectRevokedIDs([...seen.values()])]);
+        window._clearedPassIDs = collectClearedIDs([...seen.values()].concat(await fetchByNames(cloudDb(), [CLEARED]).catch(() => [])));
         const usable = [...seen.values()].filter((r) => {
           if (isPassMarker(r)) return false;
+          const id = passRecordName(r).toLowerCase();
+          if (window._clearedPassIDs && window._clearedPassIDs.has(id)) return false;
           return !!(fieldValue(r, "studentName") || fieldValue(r, "teacherName"));
         });
         await applyPassIcons(usable);
@@ -4077,6 +4253,8 @@
         if (name === "openPass" || name === "openStudentPass") openPass(action.dataset.passId || "");
         if (name === "askRevokePass") confirmRevokePass(action.dataset.passId || "");
         if (name === "revokePass") handleRevokePass(action.dataset.passId || "");
+        if (name === "askClearPassLog") confirmClearPassLog();
+        if (name === "clearPassLog") handleClearPassLog();
         if (name === "openClass") {
           window._classID = action.dataset.classId || "";
           show("class");
