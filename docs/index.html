@@ -2857,7 +2857,6 @@
     function renderPosts() {
       if (!canPostNews()) return;
       const c = t();
-      window._newsDraftFile = null;
       document.getElementById("view-posts").innerHTML = `<div class="dash">
         <div class="card wide">
           <div class="t">${c.composeNews}</div>
@@ -3119,13 +3118,15 @@
         if (result && result.hasErrors) {
           throw cloudRecordError(result, result.errors && result.errors[0] || result.records && result.records[0]);
         }
-        return (result && result.records && result.records[0]) || result;
+        const row = result && result.records && result.records[0];
+        if (row && (row.serverErrorCode || row.error)) throw cloudRecordError(result, row);
+        return row || result;
       };
-      if (typeof db.saveRecords === "function") {
-        return fail(await db.saveRecords([record]));
-      }
       if (typeof db.newRecordsBatch === "function") {
         return fail(await db.newRecordsBatch().create(record).commit());
+      }
+      if (typeof db.saveRecords === "function") {
+        return fail(await db.saveRecords([record]));
       }
       return null;
     }
@@ -3230,27 +3231,18 @@
         await ensureCloud();
         watchAppleSignIn();
         if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
-        let dataUrl = "";
-        try { dataUrl = await compressNewsPhoto(rawFile); } catch (_) {
-          try { dataUrl = await compressSwipePhoto(rawFile); } catch (_) {}
-        }
-        const imageParts = chunkNewsImage(dataUrl);
         let jpeg = rawFile;
-        try { jpeg = dataUrl ? dataUrlToFile(dataUrl, "news.jpg") : rawFile; } catch (_) {}
+        try { jpeg = dataUrlToFile(await compressSwipePhoto(rawFile), "news.jpg"); } catch (_) {}
         const recordName = "news." + ((crypto.randomUUID && crypto.randomUUID()) || String(Date.now()));
-        const attempts = [
-          newsPassFields(title, story, jpeg, imageParts),
-          newsPassFields(title, story, null, imageParts),
-          newsPassFields(title, story, jpeg, null)
-        ];
         let saved = null;
-        for (const fields of attempts) {
-          if (saved) break;
-          try {
-            saved = await ckCreateNews({ recordType: PASS_TYPE, recordName, fields });
-          } catch (error) {
-            if (error && error.apple) throw error;
-          }
+        try {
+          saved = await ckCreateNews({
+            recordType: PASS_TYPE,
+            recordName,
+            fields: newsPassFields(title, story, jpeg)
+          });
+        } catch (error) {
+          if (error && error.apple) throw error;
         }
         if (!saved) {
           try {
@@ -3258,14 +3250,14 @@
             saved = await ckCreateNews({
               recordType: PASS_TYPE,
               recordName: uploaded.recordName || recordName,
-              fields: newsPassFields(title, story, uploaded.value, imageParts)
+              fields: newsPassFields(title, story, uploaded.value)
             });
           } catch (error) {
             if (error && error.apple) throw error;
           }
         }
         if (!saved) {
-          const fields = newsPassFields(title, story, null, imageParts);
+          const fields = newsPassFields(title, story);
           try {
             saved = await ckCreateNews({ recordType: PASS_TYPE, recordName, fields });
           } catch (error) {
@@ -3273,6 +3265,12 @@
             saved = await restModify({ recordType: PASS_TYPE, recordName, fields }, "create");
           }
         }
+        if (!saved) {
+          try {
+            saved = (await fetchByNames(cloudDb(), [recordName]))[0] || null;
+          } catch (_) {}
+        }
+        if (!saved) throw Object.assign(new Error("FAIL"), { reason: "create" });
         await addNewsToManifest(recordName);
         window._pendingNewsPost = false;
         window._newsDraftFile = null;
