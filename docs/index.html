@@ -177,6 +177,10 @@
     .news-art.empty { display: grid; place-items: center; color: var(--orange); }
     .news-art.empty .icon { width: 22px; height: 22px; fill: currentColor; }
     .news-full { width: 100%; max-height: 70vh; object-fit: contain; border-radius: 12px; background: #111; }
+    .news-compose-preview {
+      width: 100%; max-height: 220px; object-fit: contain; display: block;
+      border-radius: 12px; background: #F2F2F7; margin: 8px 0 0;
+    }
     button, .btn { appearance: none; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
     input, select, textarea {
       width: 100%; padding: 14px; border-radius: 16px; border: 1px solid #E5E5EA;
@@ -736,6 +740,17 @@
         search: "Name, role, or email",
         newsEmpty: "No news yet.",
         newsNeedToken: "News needs the school CloudKit token. An administrator can paste it in More.",
+        composeNews: "Create a New Notification Post",
+        composeNewsBody: "Students see this in Notifications on the website and iPhone.",
+        newsTitleLabel: "Title",
+        newsStoryLabel: "Description",
+        newsImageLabel: "Image",
+        newsPickImage: "Choose image",
+        newsPublish: "Publish",
+        newsNeedFields: "Add an image, a title, and a description.",
+        newsPublishFail: "Could not publish that post.",
+        newsPublishNeedApple: "Sign in with Apple in More first. Publishing a notification needs the same iCloud sign-in teachers use on iPhone.",
+        newsPublished: "Posted. Students will see it in Notifications.",
         language: "Language",
         email: "Email",
         idTitle: "Swipe Card",
@@ -917,6 +932,17 @@
         search: "Nombre, rol o correo",
         newsEmpty: "Aún no hay noticias.",
         newsNeedToken: "Las noticias necesitan el token de CloudKit. Un administrador puede pegarlo en Más.",
+        composeNews: "Crear un aviso nuevo",
+        composeNewsBody: "Los estudiantes lo ven en Notificaciones en el sitio y en iPhone.",
+        newsTitleLabel: "Título",
+        newsStoryLabel: "Descripción",
+        newsImageLabel: "Imagen",
+        newsPickImage: "Elegir imagen",
+        newsPublish: "Publicar",
+        newsNeedFields: "Agrega una imagen, un título y una descripción.",
+        newsPublishFail: "No se pudo publicar ese aviso.",
+        newsPublishNeedApple: "Entra con Apple en Más primero. Publicar un aviso necesita la misma sesión de iCloud que usan los maestros en iPhone.",
+        newsPublished: "Publicado. Los estudiantes lo verán en Notificaciones.",
         language: "Idioma",
         email: "Correo",
         idTitle: "Tarjeta Swipe",
@@ -1040,6 +1066,9 @@
     }
     function canRevokePass() {
       return canSeePassLog();
+    }
+    function canPostNews() {
+      return currentRole() === "administrator";
     }
     function signedIn() {
       if (isGuest()) return true;
@@ -1216,8 +1245,11 @@
       return "";
     }
     function restUrl(action) {
+      return restPublicUrl("records/" + action);
+    }
+    function restPublicUrl(path) {
       const token = schoolToken();
-      let url = `https://api.apple-cloudkit.com/database/1/${CONTAINER}/${schoolEnv()}/public/records/${action}?ckAPIToken=${encodeURIComponent(token)}`;
+      let url = `https://api.apple-cloudkit.com/database/1/${CONTAINER}/${schoolEnv()}/public/${path}?ckAPIToken=${encodeURIComponent(token)}`;
       const web = ckWebAuthToken();
       if (web) url += `&ckWebAuthToken=${encodeURIComponent(web)}`;
       return url;
@@ -1238,14 +1270,14 @@
       if (!record || record.deleted || record.serverErrorCode) return false;
       return !!(record.recordName || record.recordType || (record.fields && Object.keys(record.fields).length));
     }
-    async function restQuery(recordType) {
+    async function restQuery(recordType, limit) {
       const token = schoolToken();
       if (!token || !recordType) return [];
       const url = restUrl("query");
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: { recordType }, resultsLimit: 80 })
+        body: JSON.stringify({ query: { recordType }, resultsLimit: limit || 80 })
       });
       const payload = await response.json();
       return recordsFrom(payload).filter(usableRecord);
@@ -1327,6 +1359,7 @@
           const id = window._pendingRevokeId;
           window._pendingRevokeId = "";
           if (id) handleRevokePass(id);
+          else if (window._pendingNewsPost) publishNewsPost();
           else if (view === "passes") loadPasses();
         }).catch(() => {});
       } catch (_) {}
@@ -1773,6 +1806,7 @@
             </select>
             <button class="primary" type="button" id="saveToken">${c.saveToken}</button>
             <p class="ok hidden" id="tokenSaved"></p>
+            ${canPostNews() ? `<button class="ghost" type="button" data-action="composeNews" style="width:100%;margin-top:8px;">${c.composeNews}</button>` : ""}
             <button class="ghost" type="button" id="openPasses" style="width:100%;margin-top:8px;">${c.openPasses}</button>
             ${canSeePassLog() ? `<div id="ck-auth-more"></div>` : ""}
           </div>` : "";
@@ -2753,7 +2787,7 @@
       paintNews(bundled);
       let remote = [];
       try {
-        remote = (await restQuery(NEWS_TYPE)).filter((record) => Number(fieldValue(record, "published") || 1) !== 0);
+        remote = (await restQuery(NEWS_TYPE, 100)).filter((record) => Number(fieldValue(record, "published") || 1) !== 0);
       } catch (_) {}
       if (!remote.length) {
         try { await ensureCloud(); } catch (_) {}
@@ -2782,6 +2816,152 @@
       const c = t();
       document.getElementById("view-news").innerHTML = newsPage(`<div class="t">${c.newsFeed}</div>`);
       await loadNewsFeed();
+    }
+    function dataUrlToFile(dataUrl, name) {
+      const parts = String(dataUrl || "").split(",");
+      const raw = parts.length > 1 ? parts[1] : "";
+      const binary = atob(raw);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+      return new File([bytes], name || "news.jpg", { type: "image/jpeg" });
+    }
+    function setNewsComposeError(message) {
+      const node = document.getElementById("newsComposeError");
+      if (node) node.textContent = message || "";
+    }
+    function showComposeNews() {
+      if (!canPostNews()) return;
+      const c = t();
+      window._newsDraftFile = null;
+      window._pendingNewsPost = false;
+      openSheet(`
+        <div class="card-title"><b>${c.composeNews}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
+        <p class="muted">${c.composeNewsBody}</p>
+        <div class="sheet-field"><span>${c.newsImageLabel}</span>
+          <input id="newsImage" class="hidden" type="file" accept="image/*">
+          <button class="ghost" type="button" data-action="pickNewsImage" style="width:100%;">${c.newsPickImage}</button>
+          <img id="newsImagePreview" class="news-compose-preview hidden" alt="">
+        </div>
+        <label class="sheet-field"><span>${c.newsTitleLabel}</span>
+          <input id="newsTitle" type="text" maxlength="120" autocomplete="off">
+        </label>
+        <label class="sheet-field"><span>${c.newsStoryLabel}</span>
+          <textarea id="newsStory" rows="4" maxlength="800"></textarea>
+        </label>
+        <p class="error" id="newsComposeError"></p>
+        <button class="primary" type="button" data-action="publishNews" id="newsPublishBtn">${c.newsPublish}</button>`);
+    }
+    function handleNewsImage(file) {
+      if (!file) return;
+      window._newsDraftFile = file;
+      const preview = document.getElementById("newsImagePreview");
+      if (!preview) return;
+      preview.src = URL.createObjectURL(file);
+      preview.classList.remove("hidden");
+    }
+    async function restUploadAsset(recordName, recordType, fieldName, file) {
+      const response = await fetch(restPublicUrl("assets/upload"), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tokens: [{ recordName, recordType, fieldName }]
+        })
+      });
+      const payload = await response.json();
+      if (isAuthError(null, payload)) throw Object.assign(new Error("APPLE"), { apple: true });
+      const token = (payload.tokens || [])[0];
+      if (!token || !token.url) throw new Error("FAIL");
+      const uploaded = await fetch(token.url, {
+        method: "POST",
+        headers: { "Content-Type": file.type || "application/octet-stream" },
+        body: file
+      });
+      const body = await uploaded.json();
+      if (isAuthError(null, body)) throw Object.assign(new Error("APPLE"), { apple: true });
+      return body.singleFile || (body.tokens && body.tokens[0] && body.tokens[0].singleFile) || body;
+    }
+    async function saveNewsRecord(recordName, fields) {
+      const record = {
+        recordType: NEWS_TYPE,
+        recordName,
+        fields
+      };
+      try {
+        if (await ckCreateRecords([record])) return true;
+      } catch (error) {
+        if (isAuthError(error) && !ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
+      }
+      try {
+        await restModify(record, "create");
+        return true;
+      } catch (error) {
+        if (isAuthError(error) && !ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
+        throw Object.assign(new Error(ckWebAuthToken() ? "FAIL" : "APPLE"), { apple: !ckWebAuthToken() });
+      }
+    }
+    async function publishNewsPost() {
+      if (!canPostNews()) return;
+      const c = t();
+      const title = String((document.getElementById("newsTitle") || {}).value || "").trim();
+      const story = String((document.getElementById("newsStory") || {}).value || "").trim();
+      const rawFile = window._newsDraftFile;
+      if (!title || !story || !rawFile) {
+        setNewsComposeError(c.newsNeedFields);
+        return;
+      }
+      const button = document.getElementById("newsPublishBtn");
+      if (button) button.disabled = true;
+      setNewsComposeError("");
+      window._pendingNewsPost = true;
+      try {
+        await ensureCloud();
+        watchAppleSignIn();
+        const jpeg = dataUrlToFile(await compressSwipePhoto(rawFile), "news.jpg");
+        const recordName = (crypto.randomUUID && crypto.randomUUID()) || ("news-" + Date.now());
+        const stamp = Date.now();
+        const textFields = {
+          titleEN: { value: title },
+          subtitleEN: { value: story },
+          titleES: { value: title },
+          subtitleES: { value: story },
+          postedAt: { value: stamp },
+          published: { value: stamp }
+        };
+        let saved = false;
+        try {
+          saved = await ckCreateRecords([{
+            recordType: NEWS_TYPE,
+            recordName,
+            fields: Object.assign({ image: { value: jpeg } }, textFields)
+          }]);
+        } catch (error) {
+          if (isAuthError(error) && !ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
+        }
+        if (!saved) {
+          const asset = await restUploadAsset(recordName, NEWS_TYPE, "image", jpeg);
+          await saveNewsRecord(recordName, Object.assign({
+            image: { value: asset }
+          }, textFields));
+        }
+        window._pendingNewsPost = false;
+        window._newsDraftFile = null;
+        closeSheet();
+        await loadNewsFeed();
+        if (view === "more") {
+          openSheet(`
+            <div class="card-title"><b>${c.newsPublished}</b><button type="button" data-action="closeSheet">${c.close}</button></div>`);
+        }
+      } catch (error) {
+        const apple = (error && error.apple) || error.message === "APPLE" || isAuthError(error);
+        setNewsComposeError(apple ? c.newsPublishNeedApple : c.newsPublishFail);
+        if (!document.getElementById("newsComposeError")) {
+          openSheet(`
+            <div class="card-title"><b>${apple ? c.newsPublishNeedApple : c.newsPublishFail}</b><button type="button" data-action="closeSheet">${c.close}</button></div>`);
+        }
+      } finally {
+        const again = document.getElementById("newsPublishBtn");
+        if (again) again.disabled = false;
+      }
     }
 
     function parsePassDate(text) {
@@ -3018,6 +3198,12 @@
               <p class="muted">${escapeHtml(item.subtitle)}</p>`);
           }
         }
+        if (name === "composeNews") showComposeNews();
+        if (name === "pickNewsImage") {
+          const picker = document.getElementById("newsImage");
+          if (picker) picker.click();
+        }
+        if (name === "publishNews") publishNewsPost();
         if (name === "useCode") returnToCodeGate();
         if (name === "copyWebCode") {
           const formatted = formatWebKey(profile && profile.key);
@@ -3162,6 +3348,10 @@
       }
       if (event.target.id === "swipeFile" && event.target.files && event.target.files[0]) {
         handleSwipeFile(event.target.files[0]);
+        event.target.value = "";
+      }
+      if (event.target.id === "newsImage" && event.target.files && event.target.files[0]) {
+        handleNewsImage(event.target.files[0]);
         event.target.value = "";
       }
     });
