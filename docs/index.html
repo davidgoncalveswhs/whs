@@ -302,8 +302,11 @@
     .paper-field .val { font-family: var(--font-text); font-size: 17px; letter-spacing: -0.022em; padding-bottom: 6px; border-bottom: 1px solid #111; min-height: 28px; }
     .paper.big .paper-field .val { font-size: 20px; }
     .paper-sign { margin-top: 8px; }
-    .paper-sign img { max-height: 54px; max-width: 100%; display: block; }
-    .paper.big .paper-sign img { max-height: 88px; }
+    .paper-sign img {
+      display: block; height: 54px; width: auto; max-width: 100%;
+      object-fit: contain; object-position: left center; background: #fff;
+    }
+    .paper.big .paper-sign img { height: 88px; }
     .sig, .news-img { max-width: 100%; max-height: 220px; margin-top: 8px; border-radius: 12px; }
     .lunch { width: 100%; min-height: 72vh; border: 0; border-radius: 24px; background: white; }
     .search { margin-bottom: 12px; }
@@ -2785,6 +2788,8 @@
       canvas.style.width = width + "px";
       canvas.style.height = height + "px";
       ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, width, height);
       ctx.strokeStyle = "#111";
       ctx.lineWidth = 2.2;
       ctx.lineCap = "round";
@@ -2825,8 +2830,56 @@
     function passSignatureFile() {
       const canvas = window._passSigPad || document.getElementById("passSigPad");
       if (!canvas || window._passSigEmpty) return null;
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.72);
-      try { return dataUrlToFile(dataUrl, "signature.jpg"); } catch (_) { return null; }
+      const out = document.createElement("canvas");
+      out.width = canvas.width;
+      out.height = canvas.height;
+      const ctx = out.getContext("2d");
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, out.width, out.height);
+      ctx.drawImage(canvas, 0, 0);
+      try { return dataUrlToFile(out.toDataURL("image/jpeg", 0.86), "signature.jpg"); } catch (_) { return null; }
+    }
+    function compressPassSignature(file) {
+      return new Promise((resolve, reject) => {
+        if (!file) {
+          reject(new Error("image"));
+          return;
+        }
+        const img = new Image();
+        const blobURL = URL.createObjectURL(file);
+        const budget = 80 * 240;
+        img.onload = () => {
+          URL.revokeObjectURL(blobURL);
+          let maxW = 900;
+          let quality = 0.86;
+          let dataUrl = "";
+          for (let step = 0; step < 10; step += 1) {
+            const scale = Math.min(1, maxW / Math.max(1, img.width), 220 / Math.max(1, img.height));
+            const width = Math.max(1, Math.round(img.width * scale));
+            const height = Math.max(1, Math.round(img.height * scale));
+            const canvas = document.createElement("canvas");
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext("2d");
+            ctx.fillStyle = "#fff";
+            ctx.fillRect(0, 0, width, height);
+            ctx.drawImage(img, 0, 0, width, height);
+            dataUrl = canvas.toDataURL("image/jpeg", quality);
+            if ((dataUrl.split(",")[1] || "").length <= budget) {
+              resolve(dataUrl);
+              return;
+            }
+            quality = Math.max(0.45, quality - 0.08);
+            maxW = Math.max(400, Math.round(maxW * 0.86));
+          }
+          resolve(dataUrl);
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(blobURL);
+          reject(new Error("image"));
+        };
+        img.src = blobURL;
+      });
     }
     function setIssuePassError(message) {
       const node = document.getElementById("issuePassError");
@@ -2911,18 +2964,17 @@
         try {
           const db = cloudDb();
           if (db && typeof db.saveRecords === "function") {
-            const result = await db.saveRecords([{
+            await db.saveRecords([{
               recordName,
               recordChangeTag: existing.recordChangeTag,
               fields: { signature: { value: file } }
             }]);
-            if (!(result && result.hasErrors)) return;
           }
         } catch (_) {}
       }
       try {
-        const dataUrl = await compressNewsIcon(file);
-        const parts = chunkNewsImage(dataUrl);
+        const dataUrl = await compressPassSignature(file);
+        const parts = chunkNewsImage(dataUrl, 80);
         const records = parts.map((chunk, i) => ({
           recordType: PASS_TYPE,
           recordName: "passimg." + recordName + "." + i,
@@ -3027,10 +3079,17 @@
       }
     }
 
+    function passSignatureSrc(record) {
+      const icon = String((record && record._passIcon) || "");
+      if (icon.indexOf("data:") === 0) return icon;
+      const direct = String(fieldValue(record, "signature") || "");
+      if (direct.indexOf("data:") === 0) return direct;
+      return icon;
+    }
     function passPaper(record, enlarged) {
       const c = t();
       const kind = fieldValue(record, "kind") === "flex" ? c.flex : c.hallway;
-      const signature = fieldValue(record, "signature") || record._passIcon || "";
+      const signature = passSignatureSrc(record);
       return `<article class="paper${enlarged ? " big" : ""}">
         <div class="paper-head"><img class="paper-w-img" src="./WHSBlockW.png" alt=""><div class="paper-title">${kind}</div></div>
         <div class="paper-field"><div class="lab">${c.studentNameLabel}</div><div class="val">${escapeHtml(fieldValue(record, "studentName"))}</div></div>
@@ -3318,11 +3377,11 @@
     }
     function passIconChunkNames(id) {
       const names = [];
-      for (let i = 0; i < 40; i += 1) names.push("passimg." + id + "." + i);
+      for (let i = 0; i < 80; i += 1) names.push("passimg." + id + "." + i);
       return names;
     }
     async function applyPassIcons(records) {
-      const missing = (records || []).filter((record) => record && !fieldValue(record, "signature") && !record._passIcon);
+      const missing = (records || []).filter((record) => record && !record._passIcon && String(passSignatureSrc(record) || "").indexOf("data:") !== 0);
       const names = missing.flatMap((record) => passIconChunkNames(record.recordName));
       if (!names.length) return;
       let chunks = [];
@@ -3341,12 +3400,12 @@
         if (parts.length) record._passIcon = "data:image/jpeg;base64," + parts.join("");
       });
     }
-    function chunkNewsImage(dataUrl) {
+    function chunkNewsImage(dataUrl, maxParts) {
       const raw = String(dataUrl || "").split(",")[1] || "";
       const size = 240;
       const parts = [];
       for (let i = 0; i < raw.length; i += size) parts.push(raw.slice(i, i + size));
-      return parts.slice(0, 40);
+      return parts.slice(0, maxParts || 40);
     }
     function compressNewsIcon(file) {
       return new Promise((resolve, reject) => {
@@ -3992,12 +4051,7 @@
           });
         }
         if (name === "clearPassSig") {
-          const canvas = document.getElementById("passSigPad");
-          if (canvas) {
-            const ctx = canvas.getContext("2d");
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-          }
-          window._passSigEmpty = true;
+          bindPassSignaturePad();
         }
         if (name === "issuePass") issuePassFromWeb();
         if (name === "useCode") returnToCodeGate();
