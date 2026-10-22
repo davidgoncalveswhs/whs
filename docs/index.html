@@ -404,6 +404,8 @@
     }
     .pass-grid .action { text-align: left; width: 100%; }
     .pass-slot { display: grid; gap: 8px; }
+    .pass-day { display: grid; gap: 14px; margin: 0 0 22px; }
+    .pass-day .section { margin: 2px 0 0; font-size: 20px; }
     .page-head { margin-bottom: 16px; }
     @media (min-width: 820px) {
       body {
@@ -704,6 +706,9 @@
         back: "Back",
         close: "Close",
         emptyPasses: "No passes yet.",
+        passSearch: "Student name, destination, or date",
+        passSearchEmpty: "No matching passes.",
+        passNoDate: "No date",
         clearPass: "Clear pass",
         clearPassLog: "Clear pass log",
         clearPassTitle: "Clear this pass?",
@@ -711,7 +716,7 @@
         clearPassLogTitle: "Clear the pass log?",
         clearPassLogBody: "Every pass in this log will leave the campus log. Teachers cannot do this.",
         clearPassFail: "Could not clear that pass.",
-        clearPassNeedApple: "Sign in with Apple here first. The school token can read the log. Clearing a pass needs the same iCloud sign-in teachers use on iPhone.",
+        clearPassNeedApple: "Sign in with Apple in More first. The school token can read the log. Clearing a pass needs the same iCloud sign-in teachers use on iPhone.",
         hallway: "HALLWAY PASS", flex: "FLEX PASS",
         search: "Name, role, or email",
         newsEmpty: "No news yet.",
@@ -883,6 +888,9 @@
         back: "Atrás",
         close: "Cerrar",
         emptyPasses: "Aún no hay pases.",
+        passSearch: "Nombre del estudiante, destino o fecha",
+        passSearchEmpty: "No hay pases que coincidan.",
+        passNoDate: "Sin fecha",
         clearPass: "Quitar pase",
         clearPassLog: "Vaciar registro de pases",
         clearPassTitle: "¿Quitar este pase?",
@@ -890,7 +898,7 @@
         clearPassLogTitle: "¿Vaciar el registro de pases?",
         clearPassLogBody: "Todos los pases de este registro saldrán del registro del campus. Los maestros no pueden hacer esto.",
         clearPassFail: "No se pudo quitar ese pase.",
-        clearPassNeedApple: "Entra con Apple aquí primero. El token de la escuela puede leer el registro. Quitar un pase necesita la misma sesión de iCloud que usan los maestros en iPhone.",
+        clearPassNeedApple: "Entra con Apple en Más primero. El token de la escuela puede leer el registro. Quitar un pase necesita la misma sesión de iCloud que usan los maestros en iPhone.",
         hallway: "PASE DE PASILLO", flex: "PASE FLEX",
         search: "Nombre, rol o correo",
         newsEmpty: "Aún no hay noticias.",
@@ -1283,9 +1291,7 @@
       const c = t();
       const needApple = kind === "APPLE";
       openSheet(`
-        <div class="card-title"><b>${needApple ? c.clearPassNeedApple : c.clearPassFail}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
-        <div id="ck-auth-sheet"></div>`);
-      mountCkAuth(document.getElementById("ck-auth-sheet"));
+        <div class="card-title"><b>${needApple ? c.clearPassNeedApple : c.clearPassFail}</b><button type="button" data-action="closeSheet">${c.close}</button></div>`);
     }
     function confirmClearPass(id) {
       if (!canClearPassLog()) return;
@@ -1726,7 +1732,7 @@
             <button class="primary" type="button" id="saveToken">${c.saveToken}</button>
             <p class="ok hidden" id="tokenSaved"></p>
             <button class="ghost" type="button" id="openPasses" style="width:100%;margin-top:8px;">${c.openPasses}</button>
-            <div id="ck-auth-more"></div>
+            ${canClearPassLog() ? `<div id="ck-auth-more"></div>` : ""}
           </div>` : "";
       const face = window._profilePhoto
         ? `<span class="avatar"><img alt="" src="${escapeHtml(window._profilePhoto)}"></span>`
@@ -2726,15 +2732,114 @@
       await loadNewsFeed();
     }
 
+    function parsePassDate(text) {
+      const raw = String(text || "").trim().replace(/[–—]/g, "-");
+      if (!raw) return null;
+      const start = raw.split(/\s+(?:to|through|thru|al|hasta)\s+/i)[0].split(/\s+-\s+/)[0].trim();
+      const tryOne = (value) => {
+        const parsed = Date.parse(value);
+        if (Number.isNaN(parsed)) return null;
+        const date = new Date(parsed);
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      };
+      return tryOne(start) || tryOne(raw) || (() => {
+        const match = raw.match(/([A-Za-z]{3,9}\.?\s+\d{1,2}(?:,?\s+\d{2,4})?|\d{1,2}\/\d{1,2}(?:\/\d{2,4})?|\d{4}-\d{2}-\d{2})/);
+        return match ? tryOne(match[1]) : null;
+      })();
+    }
+    function passCreatedStamp(record) {
+      const created = record && record.created;
+      if (!created) return 0;
+      if (typeof created.timestamp === "number") return created.timestamp;
+      if (typeof created === "number") return created;
+      const parsed = Date.parse(created.timestamp || created);
+      return Number.isNaN(parsed) ? 0 : parsed;
+    }
+    function passDayStamp(record) {
+      const fromDates = parsePassDate(fieldValue(record, "dates"));
+      if (fromDates) return fromDates.getTime();
+      const created = passCreatedStamp(record);
+      if (created) {
+        const date = new Date(created);
+        return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+      }
+      return 0;
+    }
+    function formatPassDay(stamp) {
+      if (!stamp) return t().passNoDate;
+      const date = new Date(stamp);
+      const loc = lang === "es" ? "es-US" : "en-US";
+      let weekday = date.toLocaleDateString(loc, { weekday: "long" });
+      weekday = weekday.charAt(0).toUpperCase() + weekday.slice(1);
+      const month = date.toLocaleDateString(loc, { month: "short" }).replace(/\.$/, "") + ".";
+      const day = date.getDate();
+      return lang === "es" ? `${weekday} ${day} ${month}` : `${weekday} ${month} ${day}`;
+    }
+    function passSearchBlob(record) {
+      const stamp = passDayStamp(record);
+      const date = stamp ? new Date(stamp) : null;
+      const loc = lang === "es" ? "es-US" : "en-US";
+      const extras = date ? [
+        formatPassDay(stamp),
+        date.toLocaleDateString(loc, { weekday: "long" }),
+        date.toLocaleDateString(loc, { month: "long" }),
+        date.toLocaleDateString(loc, { month: "short" }),
+        `${date.getMonth() + 1}/${date.getDate()}/${date.getFullYear()}`,
+        `${date.getMonth() + 1}/${date.getDate()}`,
+        `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`
+      ] : [];
+      return [fieldValue(record, "studentName"), fieldValue(record, "destination"), fieldValue(record, "dates")]
+        .concat(extras)
+        .join(" ")
+        .toLowerCase();
+    }
+    function passSlotHTML(record) {
+      const c = t();
+      const id = passRecordName(record) || String(Math.random());
+      const clear = canClearPassLog()
+        ? `<button class="ghost" type="button" data-action="askClearPass" data-pass-id="${escapeHtml(id)}" style="color:#B42318;">${c.clearPass}</button>`
+        : "";
+      return `<div class="pass-slot"><button type="button" class="action" data-action="openPass" data-pass-id="${escapeHtml(id)}">${passPaper(record, false)}</button>${clear}</div>`;
+    }
+    function paintPassLog() {
+      const node = document.getElementById("passes");
+      if (!node) return;
+      const c = t();
+      const query = String((document.getElementById("passQuery") || {}).value || window._passQuery || "").trim().toLowerCase();
+      window._passQuery = query;
+      const list = (window._passLogList || []).filter((record) => !query || passSearchBlob(record).indexOf(query) !== -1);
+      if (!list.length) {
+        node.innerHTML = `<div class="card"><p class="muted">${(window._passLogList || []).length ? c.passSearchEmpty : c.emptyPasses}</p></div>`;
+        return;
+      }
+      const groups = new Map();
+      list.forEach((record) => {
+        const stamp = passDayStamp(record);
+        const key = String(stamp);
+        if (!groups.has(key)) groups.set(key, { stamp, records: [] });
+        groups.get(key).records.push(record);
+      });
+      const days = [...groups.values()].sort((a, b) => b.stamp - a.stamp);
+      days.forEach((day) => {
+        day.records.sort((a, b) => {
+          const name = fieldValue(a, "studentName").localeCompare(fieldValue(b, "studentName"));
+          if (name) return name;
+          return fieldValue(a, "destination").localeCompare(fieldValue(b, "destination"));
+        });
+      });
+      node.innerHTML = days.map((day) => (
+        `<section class="pass-day"><h2 class="section">${escapeHtml(formatPassDay(day.stamp))}</h2><div class="pass-grid">${day.records.map(passSlotHTML).join("")}</div></section>`
+      )).join("");
+    }
     async function loadPasses() {
       const node = document.getElementById("view-passes");
       const c = t();
-      parkCkAuth();
+      const query = String((document.getElementById("passQuery") || {}).value || window._passQuery || "");
+      window._passQuery = query;
       const clearAll = canClearPassLog()
         ? `<button class="ghost" type="button" data-action="askClearPassLog">${c.clearPassLog}</button>`
         : "";
-      node.innerHTML = `<div class="toolbar"><button class="ghost" type="button" data-view="home">${c.back}</button><button class="ghost" type="button" id="refreshPasses">${c.refresh}</button>${clearAll}</div><div id="ck-auth-passes"></div><div id="passes"></div>`;
-      if (canClearPassLog()) mountCkAuth(document.getElementById("ck-auth-passes"));
+      node.innerHTML = `<div class="toolbar"><button class="ghost" type="button" id="refreshPasses">${c.refresh}</button>${clearAll}</div><input class="search" id="passQuery" placeholder="${c.passSearch}" value="${escapeHtml(query)}"><div id="passes"></div>`;
       if (!(await ensureCloud())) {
         node.insertAdjacentHTML("beforeend", `<div class="card"><p class="muted">${c.adminHint}</p></div>`);
         return;
@@ -2759,14 +2864,12 @@
           return !!(fieldValue(r, "studentName") || fieldValue(r, "teacherName"));
         });
         window._passRecords = {};
-        document.getElementById("passes").innerHTML = usable.length ? `<div class="pass-grid">` + usable.map((record) => {
-          const id = passRecordName(record) || String(Math.random());
-          window._passRecords[id] = record;
-          const clear = canClearPassLog()
-            ? `<button class="ghost" type="button" data-action="askClearPass" data-pass-id="${escapeHtml(id)}" style="color:#B42318;">${c.clearPass}</button>`
-            : "";
-          return `<div class="pass-slot"><button type="button" class="action" data-action="openPass" data-pass-id="${escapeHtml(id)}">${passPaper(record, false)}</button>${clear}</div>`;
-        }).join("") + `</div>` : `<div class="card"><p class="muted">${c.emptyPasses}</p></div>`;
+        usable.forEach((record) => {
+          const id = passRecordName(record);
+          if (id) window._passRecords[id] = record;
+        });
+        window._passLogList = usable;
+        paintPassLog();
       } catch (error) {
         node.insertAdjacentHTML("beforeend", `<p class="error">${escapeHtml(error.message)}</p>`);
       }
@@ -2986,6 +3089,7 @@
     });
     document.body.addEventListener("input", (event) => {
       if (event.target.id === "staffQuery") renderStaff(event.target.value);
+      if (event.target.id === "passQuery") paintPassLog();
     });
     document.body.addEventListener("change", (event) => {
       if (event.target.id === "guestRole") {
