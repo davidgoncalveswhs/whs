@@ -680,6 +680,10 @@
         issuePassFail: "Could not issue that pass.",
         issuePassDone: "Pass sent. The student will see it in Teacher Passes.",
         issuePassBadCode: "Could not find that WHS Web Code.",
+        issuePassWorking: "Sending pass",
+        issuePassStepSave: "Saving the pass",
+        issuePassStepStudent: "Sending it to the student",
+        issuePassStepSignature: "Saving the signature",
         news: "News", lunch: "Lunch", contacts: "Contacts", classes: "Classes", more: "More", home: "Home",
         calendar: "Calendar", agenda: "Agenda",
         calendarEmpty: "Open school news for this week.",
@@ -912,6 +916,10 @@
         issuePassFail: "No se pudo emitir ese pase.",
         issuePassDone: "Pase enviado. El estudiante lo verá en Pases de maestros.",
         issuePassBadCode: "No se encontró ese código web WHS.",
+        issuePassWorking: "Enviando pase",
+        issuePassStepSave: "Guardando el pase",
+        issuePassStepStudent: "Enviandolo al estudiante",
+        issuePassStepSignature: "Guardando la firma",
         news: "Noticias", lunch: "Almuerzo", contacts: "Contactos", classes: "Clases", more: "Más", home: "Inicio",
         calendar: "Calendario", agenda: "Agenda",
         calendarEmpty: "Abre las noticias de la escuela de esta semana.",
@@ -1298,7 +1306,7 @@
       box.classList.add("hidden");
     }
     function closeSheet() {
-      if (window._passWipeBusy) return;
+      if (window._passWipeBusy || window._issuePassBusy) return;
       parkCkAuth();
       sheet.classList.add("hidden");
       sheetCard.innerHTML = "";
@@ -1680,12 +1688,12 @@
         <button class="ghost" type="button" data-action="closeSheet" style="width:100%;">${c.adminPassWipeCancel}</button>
         <button class="primary" type="button" data-action="clearPassLog" style="width:100%;margin-top:8px;background:#B42318;">${c.adminPassWipeConfirm}</button>`);
     }
-    function showPassWipeProgress(percent, step, detail, finished, failed) {
+    function showWorkProgress(percent, title, step, detail, finished, closeAction) {
       const c = t();
       const pct = Math.max(0, Math.min(100, Math.round(percent || 0)));
-      const title = finished ? (failed ? c.adminPassWipeFail : c.adminPassWipeDone) : c.adminPassWipeWorking;
+      const action = closeAction || "closeSheet";
       const close = finished
-        ? `<button type="button" data-action="finishPassWipe">${c.close}</button>`
+        ? `<button type="button" data-action="${action}">${c.close}</button>`
         : `<span class="wipe-pct">${pct}%</span>`;
       openSheet(`
         <div class="card-title"><b>${title}</b>${close}</div>
@@ -1693,7 +1701,11 @@
         <div class="wipe-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${pct}"><div class="wipe-fill" style="width:${pct}%"></div></div>
         <p class="wipe-pct">${pct}%</p>
         ${detail ? `<p class="muted">${escapeHtml(detail)}</p>` : ""}
-        ${finished ? `<button class="primary" type="button" data-action="finishPassWipe" style="width:100%;margin-top:8px;">${c.close}</button>` : ""}`);
+        ${finished ? `<button class="primary" type="button" data-action="${action}" style="width:100%;margin-top:8px;">${c.close}</button>` : ""}`);
+    }
+    function showPassWipeProgress(percent, step, detail, finished, failed) {
+      const c = t();
+      showWorkProgress(percent, finished ? (failed ? c.adminPassWipeFail : c.adminPassWipeDone) : c.adminPassWipeWorking, step, detail, finished, "finishPassWipe");
     }
     async function emptyPassManifest() {
       let existing = null;
@@ -1814,6 +1826,10 @@
       window._passWipeBusy = false;
       closeSheet();
       if (view === "more") renderMore();
+    }
+    function finishIssuePass() {
+      window._issuePassBusy = false;
+      closeSheet();
     }
     async function allocateGuestStudentKey(person) {
       if (!schoolToken()) return "";
@@ -3185,24 +3201,12 @@
         await restModify(record, link ? "forceUpdate" : "create");
       }
     }
-    async function attachPassIcon(recordName, file) {
+    async function attachPassIcon(recordName, file, onProgress) {
       if (!recordName || !file) return;
-      let existing = null;
-      try { existing = (await fetchByNames(cloudDb(), [recordName]))[0] || null; } catch (_) {}
-      if (existing && existing.recordChangeTag) {
-        try {
-          const db = cloudDb();
-          if (db && typeof db.saveRecords === "function") {
-            await db.saveRecords([{
-              recordName,
-              recordChangeTag: existing.recordChangeTag,
-              fields: { signature: { value: file } }
-            }]);
-          }
-        } catch (_) {}
-      }
+      const note = (value) => { if (typeof onProgress === "function") onProgress(value); };
       try {
         const dataUrl = await compressPassSignature(file);
+        note(0.12);
         const parts = chunkNewsImage(dataUrl, 200);
         const records = parts.map((chunk, i) => ({
           recordType: PASS_TYPE,
@@ -3218,14 +3222,20 @@
         if (db && typeof db.newRecordsBatch === "function") {
           const batch = db.newRecordsBatch();
           records.forEach((record) => { batch.create(record); });
+          note(0.35);
           const result = await batch.commit();
-          if (!(result && result.hasErrors)) return;
-        }
-        for (const record of records) {
-          try { await ckCreateNews(record); } catch (_) {
-            try { await restModify(record, "forceUpdate"); } catch (_) {}
+          if (!(result && result.hasErrors)) {
+            note(1);
+            return;
           }
         }
+        for (let i = 0; i < records.length; i += 1) {
+          try { await ckCreateNews(records[i]); } catch (_) {
+            try { await restModify(records[i], "forceUpdate"); } catch (_) {}
+          }
+          note(0.35 + ((i + 1) / Math.max(records.length, 1)) * 0.65);
+        }
+        note(1);
       } catch (_) {}
     }
     function newPassRecordName() {
@@ -3254,7 +3264,9 @@
       if (button) button.disabled = true;
       setIssuePassError("");
       window._pendingIssuePass = true;
+      window._issuePassBusy = true;
       try {
+        showWorkProgress(8, c.issuePassWorking, c.issuePassStepSave, "", false, "finishIssuePass");
         await ensureCloud();
         watchAppleSignIn();
         if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
@@ -3266,6 +3278,7 @@
           dates: { value: dates },
           teacherName: { value: (profile && (profile.displayName || profile.firstName)) || "WHS" }
         };
+        showWorkProgress(22, c.issuePassWorking, c.issuePassStepSave, "", false, "finishIssuePass");
         let saved = null;
         try {
           saved = await ckCreateNews({ recordType: PASS_TYPE, recordName, fields });
@@ -3277,9 +3290,16 @@
           try { saved = (await fetchByNames(cloudDb(), [recordName]))[0] || null; } catch (_) {}
         }
         if (!saved) throw Object.assign(new Error("FAIL"), { reason: "create" });
+        showWorkProgress(40, c.issuePassWorking, c.issuePassStepSave, "", false, "finishIssuePass");
         await addPassToManifest(recordName);
+        showWorkProgress(55, c.issuePassWorking, c.issuePassStepStudent, "", false, "finishIssuePass");
         await attachPassToStudent(recordName, webCode, studentName);
-        try { await attachPassIcon(recordName, signature); } catch (_) {}
+        showWorkProgress(68, c.issuePassWorking, c.issuePassStepSignature, "", false, "finishIssuePass");
+        try {
+          await attachPassIcon(recordName, signature, (part) => {
+            showWorkProgress(68 + Math.round(part * 28), c.issuePassWorking, c.issuePassStepSignature, "", false, "finishIssuePass");
+          });
+        } catch (_) {}
         window._pendingIssuePass = false;
         const ok = document.getElementById("issuePassOk");
         if (ok) {
@@ -3292,16 +3312,17 @@
         if (student) student.value = "";
         if (dest) dest.value = "";
         if (code) code.value = "";
-        const canvas = document.getElementById("passSigPad");
-        if (canvas) {
-          const ctx = canvas.getContext("2d");
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          window._passSigEmpty = true;
-        }
+        bindPassSignaturePad();
+        window._issuePassBusy = false;
+        showWorkProgress(100, c.issuePassDone, "", "", true, "finishIssuePass");
       } catch (error) {
+        window._pendingIssuePass = false;
+        window._issuePassBusy = false;
         const apple = (error && error.apple) || error.message === "APPLE" || isAuthError(error);
         const badCode = error && (error.code === "CODE" || error.message === "CODE");
-        setIssuePassError(apple ? c.issuePassNeedApple : (badCode ? c.issuePassBadCode : c.issuePassFail));
+        const message = apple ? c.issuePassNeedApple : (badCode ? c.issuePassBadCode : c.issuePassFail);
+        setIssuePassError(message);
+        showWorkProgress(100, message, "", "", true, "finishIssuePass");
       } finally {
         const again = document.getElementById("issuePassBtn");
         if (again) again.disabled = false;
@@ -4315,6 +4336,7 @@
         if (name === "askClearPassLog") confirmClearPassLog();
         if (name === "clearPassLog") handleClearPassLog();
         if (name === "finishPassWipe") finishPassWipe();
+        if (name === "finishIssuePass") finishIssuePass();
         if (name === "openClass") {
           window._classID = action.dataset.classId || "";
           show("class");
