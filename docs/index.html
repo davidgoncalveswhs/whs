@@ -572,6 +572,7 @@
     const NEWS_TYPE = "WHSAnnouncement";
     const MANIFEST = "whs-teacher-pass-manifest";
     const CLEARED = "whs-cleared-passes";
+    const NEWS_MANIFEST = "whs-news-manifest";
     const LUNCH = "https://drive.google.com/file/d/1FcyUw6LwftfJC6cDnOQrlXgBXC4UjB57/preview";
     const STAFF_GATE = "105310";
     const copy = {
@@ -1393,9 +1394,9 @@
       const id = String((record && record.recordName) || "");
       const key = id.toLowerCase();
       const kind = String(fieldValue(record, "kind") || "").toLowerCase();
-      if (!id || key === MANIFEST.toLowerCase() || key === CLEARED.toLowerCase()) return true;
-      if (key.indexOf("cleared.") === 0 || key.indexOf("revoked.") === 0) return true;
-      if (kind === "cleared" || kind === "revoked") return true;
+      if (!id || key === MANIFEST.toLowerCase() || key === CLEARED.toLowerCase() || key === NEWS_MANIFEST.toLowerCase()) return true;
+      if (key.indexOf("cleared.") === 0 || key.indexOf("revoked.") === 0 || key.indexOf("news.") === 0) return true;
+      if (kind === "cleared" || kind === "revoked" || kind === "news") return true;
       return false;
     }
     function isRevokedFlag(record) {
@@ -2791,35 +2792,68 @@
         document.getElementById("view-news").innerHTML = newsPage(`<div class="t" style="margin-bottom:8px;">${c.newsFeed}</div>${rows}`);
       }
     }
+    function newsItemFromPass(record) {
+      const created = record && record.created && typeof record.created.timestamp === "number" ? record.created.timestamp : newsStamp(record);
+      return {
+        id: record.recordName || "",
+        image: fieldValue(record, "signature") || fieldValue(record, "image"),
+        title: fieldValue(record, "studentName") || newsHeading(record),
+        subtitle: fieldValue(record, "destination") || newsBody(record),
+        published: Number(fieldValue(record, "published") || created || 1),
+        stamp: created || newsStamp(record)
+      };
+    }
+    async function loadPostedNewsRecords() {
+      const found = [];
+      const remember = (record) => {
+        if (!record) return;
+        const kind = String(fieldValue(record, "kind") || "").toLowerCase();
+        const name = String(record.recordName || "").toLowerCase();
+        if (kind !== "news" && name.indexOf("news.") !== 0) return;
+        if (!(fieldValue(record, "studentName") || fieldValue(record, "titleEN"))) return;
+        found.push(record);
+      };
+      try {
+        const manifest = (await fetchByNames(cloudDb(), [NEWS_MANIFEST]))[0];
+        const ids = parsePassIDs(fieldValue(manifest, "passIDs"));
+        (await fetchByNames(cloudDb(), ids)).forEach(remember);
+      } catch (_) {}
+      return found;
+    }
     async function loadNewsFeed() {
       const bundled = bundledNewsItems();
       paintNews(bundled);
       let remote = [];
+      try { await ensureCloud(); } catch (_) {}
       try {
-        remote = (await restQuery(NEWS_TYPE, 100)).filter((record) => Number(fieldValue(record, "published") || 1) !== 0);
+        remote = await loadPostedNewsRecords();
       } catch (_) {}
-      if (!remote.length) {
-        try { await ensureCloud(); } catch (_) {}
-        try {
-          const db = cloudDb();
-          if (db && typeof db.performQuery === "function") {
-            remote = recordsFrom(await db.performQuery({ recordType: NEWS_TYPE }))
-              .filter((record) => Number(fieldValue(record, "published") || 1) !== 0);
-          }
-        } catch (_) {}
-      }
-      const remoteItems = remote.map((record) => ({
-        id: record.recordName || "",
-        image: fieldValue(record, "image"),
-        title: newsHeading(record),
-        subtitle: newsBody(record),
-        published: Number(fieldValue(record, "published") || 1),
-        stamp: newsStamp(record)
-      })).filter((item) => item.id && (item.title || item.subtitle));
-      const seen = new Set(remoteItems.map((item) => item.id));
-      const items = remoteItems.concat(bundled.filter((item) => !seen.has(item.id)));
-      items.sort((a, b) => (b.published - a.published) || (b.stamp - a.stamp));
-      paintNews(items);
+      try {
+        const queried = (await restQuery(NEWS_TYPE, 100)).filter((record) => Number(fieldValue(record, "published") || 1) !== 0);
+        remote = remote.concat(queried);
+      } catch (_) {}
+      const remoteItems = remote.map((record) => {
+        if (String(fieldValue(record, "kind") || "").toLowerCase() === "news" || String(record.recordName || "").toLowerCase().indexOf("news.") === 0) {
+          return newsItemFromPass(record);
+        }
+        return {
+          id: record.recordName || "",
+          image: fieldValue(record, "image"),
+          title: newsHeading(record),
+          subtitle: newsBody(record),
+          published: Number(fieldValue(record, "published") || 1),
+          stamp: newsStamp(record)
+        };
+      }).filter((item) => item.id && (item.title || item.subtitle));
+      const seen = new Set();
+      const unique = [];
+      remoteItems.concat(bundled).forEach((item) => {
+        if (seen.has(item.id)) return;
+        seen.add(item.id);
+        unique.push(item);
+      });
+      unique.sort((a, b) => (b.published - a.published) || (b.stamp - a.stamp));
+      paintNews(unique);
     }
     async function loadNews() {
       const c = t();
@@ -2918,30 +2952,48 @@
       if (!value) throw Object.assign(new Error("FAIL"), { reason: "image" });
       return { recordName: token.recordName || recordName, value };
     }
-    function newsTextFields(title, story, stamp, extras) {
+    function newsPassFields(title, story, imageValue) {
       const fields = {
-        titleEN: { value: title },
-        subtitleEN: { value: story },
-        titleES: { value: title },
-        subtitleES: { value: story }
+        kind: { value: "news" },
+        studentName: { value: title },
+        destination: { value: story },
+        teacherName: { value: (profile && (profile.displayName || profile.firstName)) || "WHS" },
+        dates: { value: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) }
       };
-      if (!extras || extras.postedAt !== false) fields.postedAt = { value: stamp };
-      if (!extras || extras.published !== false) fields.published = { value: extras && extras.published != null ? extras.published : stamp };
+      if (imageValue) fields.signature = { value: imageValue };
       return fields;
     }
-    async function saveNewsRecord(recordName, fields) {
+    async function addNewsToManifest(id) {
+      const unique = String(id || "").trim();
+      if (!unique) return;
+      let existing = null;
+      try { existing = (await fetchByNames(cloudDb(), [NEWS_MANIFEST]))[0] || null; } catch (_) {}
+      const ids = parsePassIDs(existing && fieldValue(existing, "passIDs"));
+      if (ids.indexOf(unique) === -1) ids.unshift(unique);
       const record = {
-        recordType: NEWS_TYPE,
-        recordName,
-        fields
+        recordType: PASS_TYPE,
+        recordName: NEWS_MANIFEST,
+        fields: {
+          kind: { value: "news" },
+          passIDs: { value: ids.join(",") }
+        }
       };
-      try {
-        const saved = await ckCreateNews(record);
-        if (saved) return saved;
-      } catch (error) {
-        if (error && error.apple && !ckWebAuthToken()) throw error;
+      if (existing && existing.recordChangeTag) {
+        record.recordChangeTag = existing.recordChangeTag;
+        try {
+          await ckCreateRecords([record]);
+          return;
+        } catch (_) {}
+        try {
+          await restModify(record, "update");
+          return;
+        } catch (_) {}
       }
-      return restModify(record, "create");
+      try {
+        await ckCreateNews(record);
+      } catch (_) {
+        await restModify(record, existing ? "forceUpdate" : "create");
+      }
     }
     async function publishNewsPost() {
       if (!canPostNews()) return;
@@ -2963,38 +3015,46 @@
         if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
         let jpeg = rawFile;
         try { jpeg = dataUrlToFile(await compressSwipePhoto(rawFile), "news.jpg"); } catch (_) {}
-        const stamp = Date.now();
+        const recordName = "news." + ((crypto.randomUUID && crypto.randomUUID()) || String(Date.now()));
         let saved = null;
         try {
           saved = await ckCreateNews({
-            recordType: NEWS_TYPE,
-            fields: Object.assign({ image: { value: jpeg } }, newsTextFields(title, story, stamp))
+            recordType: PASS_TYPE,
+            recordName,
+            fields: newsPassFields(title, story, jpeg)
           });
         } catch (error) {
           if (error && error.apple) throw error;
         }
         if (!saved) {
-          const uploaded = await restUploadAsset(NEWS_TYPE, "image", jpeg);
-          const attempts = [
-            newsTextFields(title, story, stamp),
-            newsTextFields(title, story, stamp, { published: 1000000 }),
-            newsTextFields(title, story, stamp, { postedAt: false, published: 1000000 }),
-            newsTextFields(title, story, stamp, { postedAt: false, published: false })
-          ];
-          let lastError = null;
-          for (let i = 0; i < attempts.length; i += 1) {
-            try {
-              saved = await saveNewsRecord(uploaded.recordName, Object.assign({
-                image: { value: uploaded.value }
-              }, attempts[i]));
-              if (saved) break;
-            } catch (error) {
-              lastError = error;
-              if (error && error.apple) throw error;
-            }
+          try {
+            const uploaded = await restUploadAsset(PASS_TYPE, "signature", jpeg, recordName);
+            saved = await ckCreateNews({
+              recordType: PASS_TYPE,
+              recordName: uploaded.recordName || recordName,
+              fields: newsPassFields(title, story, uploaded.value)
+            });
+          } catch (error) {
+            if (error && error.apple) throw error;
           }
-          if (!saved) throw lastError || Object.assign(new Error("FAIL"), { reason: "FAIL" });
         }
+        if (!saved) {
+          try {
+            saved = await ckCreateNews({
+              recordType: PASS_TYPE,
+              recordName,
+              fields: newsPassFields(title, story, null)
+            });
+          } catch (error) {
+            if (error && error.apple) throw error;
+            saved = await restModify({
+              recordType: PASS_TYPE,
+              recordName,
+              fields: newsPassFields(title, story, null)
+            }, "create");
+          }
+        }
+        await addNewsToManifest(recordName);
         window._pendingNewsPost = false;
         window._newsDraftFile = null;
         closeSheet();
