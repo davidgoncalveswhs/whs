@@ -181,6 +181,8 @@
       width: 100%; max-height: 220px; object-fit: contain; display: block;
       border-radius: 12px; background: #F2F2F7; margin: 8px 0 0;
     }
+    .admin-post { cursor: default; }
+    .news-delete { flex: none; color: #B42318; padding: 8px 12px; }
     button, .btn { appearance: none; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
     input, select, textarea {
       width: 100%; padding: 14px; border-radius: 16px; border: 1px solid #E5E5EA;
@@ -486,6 +488,7 @@
       <section id="view-lunch" class="hidden"></section>
       <section id="view-contacts" class="hidden"></section>
       <section id="view-more" class="hidden"></section>
+      <section id="view-posts" class="hidden"></section>
       <section id="view-passes" class="hidden"></section>
       <section id="view-mypasses" class="hidden"></section>
       <section id="view-swipe" class="hidden"></section>
@@ -752,6 +755,14 @@
         newsPublishFail: "Could not publish that post.",
         newsPublishNeedApple: "Sign in with Apple in More first. Publishing a notification needs the same iCloud sign-in teachers use on iPhone.",
         newsPublished: "Posted. Students will see it in Notifications.",
+        postsNav: "Posts",
+        postsList: "Current posts",
+        postsEmpty: "No posts yet.",
+        deletePost: "Delete",
+        deletePostTitle: "Delete this post?",
+        deletePostBody: "Students will no longer see it in Notifications on the website or iPhone.",
+        deletePostFail: "Could not delete that post.",
+        deletePostNeedApple: "Sign in with Apple in More first. Deleting a post needs the same iCloud sign-in teachers use on iPhone.",
         language: "Language",
         email: "Email",
         idTitle: "Swipe Card",
@@ -944,6 +955,14 @@
         newsPublishFail: "No se pudo publicar ese aviso.",
         newsPublishNeedApple: "Entra con Apple en Más primero. Publicar un aviso necesita la misma sesión de iCloud que usan los maestros en iPhone.",
         newsPublished: "Publicado. Los estudiantes lo verán en Notificaciones.",
+        postsNav: "Avisos",
+        postsList: "Avisos actuales",
+        postsEmpty: "Aún no hay avisos.",
+        deletePost: "Eliminar",
+        deletePostTitle: "¿Eliminar este aviso?",
+        deletePostBody: "Los estudiantes ya no lo verán en Notificaciones en el sitio ni en iPhone.",
+        deletePostFail: "No se pudo eliminar ese aviso.",
+        deletePostNeedApple: "Entra con Apple en Más primero. Eliminar un aviso necesita la misma sesión de iCloud que usan los maestros en iPhone.",
         language: "Idioma",
         email: "Correo",
         idTitle: "Tarjeta Swipe",
@@ -1140,6 +1159,12 @@
     function findDownloadURL(node) {
       if (!node || typeof node !== "object") return "";
       if (typeof node.downloadURL === "string" && node.downloadURL) return node.downloadURL;
+      if (typeof node.downloadURL === "function") {
+        try {
+          const got = node.downloadURL();
+          if (got) return String(got);
+        } catch (_) {}
+      }
       if (typeof node.getDownloadURL === "function") {
         try {
           const got = node.getDownloadURL();
@@ -1357,7 +1382,9 @@
         CloudKit.getDefaultContainer().whenUserSignsIn().then(() => {
           const id = window._pendingRevokeId;
           window._pendingRevokeId = "";
+          const newsId = window._pendingDeleteNewsId;
           if (id) handleRevokePass(id);
+          else if (newsId) deleteNewsPost(newsId);
           else if (window._pendingNewsPost) publishNewsPost();
           else if (view === "passes") loadPasses();
         }).catch(() => {});
@@ -1659,6 +1686,7 @@
       const contactsIco = '<img class="tab-glyph" src="./person-crop-rectangle-stack.png" alt="">';
       const tabItems = [["home", icons.house, c.home]];
       if (isPairedStudent() || isGuestStudent()) tabItems.push(["classes", booksIco, c.classes]);
+      if (canPostNews()) tabItems.push(["posts", icons.mega, c.postsNav]);
       tabItems.push(["contacts", contactsIco, c.contacts], ["more", icons.more, c.more]);
       tabs.classList.toggle("with-classes", tabItems.length > 3);
       const tabOn = (id) => {
@@ -1672,8 +1700,9 @@
       view = id;
       if (id !== "study") document.body.classList.remove("ql-open");
       closeSheet();
-      ["home", "news", "lunch", "contacts", "more", "passes", "mypasses", "swipe", "classes", "class", "study"].forEach((name) => {
-        document.getElementById("view-" + name).classList.toggle("hidden", name !== id);
+      ["home", "news", "lunch", "contacts", "more", "posts", "passes", "mypasses", "swipe", "classes", "class", "study"].forEach((name) => {
+        const node = document.getElementById("view-" + name);
+        if (node) node.classList.toggle("hidden", name !== id);
       });
       applyChrome();
       if (profile && profile.key) loadProfilePhoto();
@@ -1712,6 +1741,14 @@
       if (id === "lunch") renderLunch();
       if (id === "contacts") renderStaff(document.getElementById("staffQuery") ? document.getElementById("staffQuery").value : "");
       if (id === "more") renderMore();
+      if (id === "posts") {
+        if (!canPostNews()) {
+          show("home");
+          return;
+        }
+        renderPosts();
+        loadNewsFeed();
+      }
       if (id === "passes") {
         if (!canSeePassLog()) {
           show("home");
@@ -1816,7 +1853,6 @@
             </select>
             <button class="primary" type="button" id="saveToken">${c.saveToken}</button>
             <p class="ok hidden" id="tokenSaved"></p>
-            ${canPostNews() ? `<button class="ghost" type="button" data-action="composeNews" style="width:100%;margin-top:8px;">${c.composeNews}</button>` : ""}
             <button class="ghost" type="button" id="openPasses" style="width:100%;margin-top:8px;">${c.openPasses}</button>
             ${canSeePassLog() ? `<div id="ck-auth-more"></div>` : ""}
           </div>` : "";
@@ -2791,12 +2827,173 @@
       if (view === "news") {
         document.getElementById("view-news").innerHTML = newsPage(`<div class="t" style="margin-bottom:8px;">${c.newsFeed}</div>${rows}`);
       }
+      if (view === "posts") paintAdminNews(items);
+    }
+    function isManagedNewsPost(id) {
+      const key = String(id || "");
+      if (!key || key === NEWS_MANIFEST) return false;
+      return !bundledNewsItems().some((item) => item.id === key);
+    }
+    function adminNewsRowsHTML(items) {
+      const c = t();
+      const posts = (items || []).filter((item) => isManagedNewsPost(item.id));
+      if (!posts.length) return `<p class="muted" style="margin:8px 0 0;">${c.postsEmpty}</p>`;
+      return posts.map((item) => {
+        const art = item.image
+          ? `<img class="news-art" alt="" src="${escapeHtml(item.image)}">`
+          : `<span class="news-art empty">${icons.mega}</span>`;
+        return `<div class="news-row admin-post">
+          ${art}
+          <span style="flex:1;min-width:0"><div class="t">${escapeHtml(item.title)}</div><div class="s">${escapeHtml(item.subtitle)}</div></span>
+          <button class="ghost news-delete" type="button" data-action="askDeleteNews" data-news-id="${escapeHtml(item.id)}">${c.deletePost}</button>
+        </div>`;
+      }).join("");
+    }
+    function paintAdminNews(items) {
+      const list = document.getElementById("adminNewsList");
+      if (!list) return;
+      list.innerHTML = adminNewsRowsHTML(items);
+    }
+    function renderPosts() {
+      if (!canPostNews()) return;
+      const c = t();
+      window._newsDraftFile = null;
+      document.getElementById("view-posts").innerHTML = `<div class="dash">
+        <div class="card wide">
+          <div class="t">${c.composeNews}</div>
+          <p class="muted">${c.composeNewsBody}</p>
+          <div class="sheet-field"><span>${c.newsImageLabel}</span>
+            <input id="newsImage" class="hidden" type="file" accept="image/*">
+            <button class="ghost" type="button" data-action="pickNewsImage" style="width:100%;">${c.newsPickImage}</button>
+            <img id="newsImagePreview" class="news-compose-preview hidden" alt="">
+          </div>
+          <label class="sheet-field"><span>${c.newsTitleLabel}</span>
+            <input id="newsTitle" type="text" maxlength="120" autocomplete="off">
+          </label>
+          <label class="sheet-field"><span>${c.newsStoryLabel}</span>
+            <textarea id="newsStory" rows="4" maxlength="800"></textarea>
+          </label>
+          <p class="error" id="newsComposeError"></p>
+          <p class="ok hidden" id="newsComposeOk"></p>
+          <button class="primary" type="button" data-action="publishNews" id="newsPublishBtn">${c.newsPublish}</button>
+        </div>
+        <div class="card wide">
+          <div class="t" style="margin-bottom:8px;">${c.postsList}</div>
+          <div id="adminNewsList">${adminNewsRowsHTML(Object.values(window._newsItems || {}))}</div>
+        </div>
+      </div>`;
+    }
+    function confirmDeleteNews(id) {
+      if (!canPostNews() || !isManagedNewsPost(id)) return;
+      const c = t();
+      openSheet(`
+        <div class="card-title"><b>${c.deletePostTitle}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
+        <p class="muted">${c.deletePostBody}</p>
+        <button class="primary" type="button" data-action="closeSheet">${c.close}</button>
+        <button class="ghost" type="button" data-action="deleteNews" data-news-id="${escapeHtml(id || "")}" style="width:100%;margin-top:8px;color:#B42318;">${c.deletePost}</button>`);
+    }
+    async function deleteNewsPost(id) {
+      if (!canPostNews() || !isManagedNewsPost(id)) return;
+      const c = t();
+      window._pendingDeleteNewsId = id;
+      try {
+        await ensureCloud();
+        watchAppleSignIn();
+        if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
+        let gone = false;
+        try { gone = await ckDeleteNames([id]); } catch (error) {
+          if (error && error.apple) throw error;
+        }
+        if (!gone) {
+          try { gone = await restDeleteNames([id]); } catch (error) {
+            if (error && error.apple) throw error;
+          }
+        }
+        await removeNewsFromManifest(id);
+        window._pendingDeleteNewsId = "";
+        closeSheet();
+        await loadNewsFeed();
+      } catch (error) {
+        const apple = (error && error.apple) || error.message === "APPLE" || isAuthError(error);
+        openSheet(`
+          <div class="card-title"><b>${apple ? c.deletePostNeedApple : c.deletePostFail}</b><button type="button" data-action="closeSheet">${c.close}</button></div>`);
+      }
+    }
+    function newsFieldRaw(record, key) {
+      if (!record) return null;
+      if (typeof record.get === "function") {
+        try {
+          const got = record.get(key);
+          if (got != null) return got;
+        } catch (_) {}
+      }
+      if (record[key] != null) return record[key];
+      return record.fields && record.fields[key];
+    }
+    function newsImageParts(record) {
+      let raw = newsFieldRaw(record, "imageParts");
+      if (raw && typeof raw === "object" && Object.prototype.hasOwnProperty.call(raw, "value")) raw = raw.value;
+      if (Array.isArray(raw)) return raw.map(String).filter(Boolean);
+      if (typeof raw === "string" && raw.trim()) return [raw.trim()];
+      return [];
+    }
+    function newsImageFromRecord(record) {
+      const direct = fieldValue(record, "signature") || fieldValue(record, "newsImage") || fieldValue(record, "image");
+      if (direct && (/^(https?:|data:|\.\/)/.test(direct) || direct.indexOf("${apiToken}") !== -1)) return direct;
+      const parts = newsImageParts(record);
+      return parts.length ? "data:image/jpeg;base64," + parts.join("") : "";
+    }
+    function chunkNewsImage(dataUrl) {
+      const raw = String(dataUrl || "").split(",")[1] || "";
+      const size = 240;
+      const parts = [];
+      for (let i = 0; i < raw.length; i += size) parts.push(raw.slice(i, i + size));
+      return parts.slice(0, 180);
+    }
+    function compressNewsPhoto(file) {
+      return new Promise((resolve, reject) => {
+        if (!file) {
+          reject(new Error("image"));
+          return;
+        }
+        const img = new Image();
+        const blobURL = URL.createObjectURL(file);
+        const budget = 180 * 240;
+        const finish = (canvas, quality) => canvas.toDataURL("image/jpeg", quality);
+        img.onload = () => {
+          URL.revokeObjectURL(blobURL);
+          let max = 720;
+          let quality = 0.62;
+          let dataUrl = "";
+          for (let step = 0; step < 8; step += 1) {
+            const scale = Math.min(1, max / Math.max(img.width, img.height));
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.max(1, Math.round(img.width * scale));
+            canvas.height = Math.max(1, Math.round(img.height * scale));
+            canvas.getContext("2d").drawImage(img, 0, 0, canvas.width, canvas.height);
+            dataUrl = finish(canvas, quality);
+            const raw = (dataUrl.split(",")[1] || "").length;
+            if (raw <= budget) {
+              resolve(dataUrl);
+              return;
+            }
+            quality = Math.max(0.32, quality - 0.08);
+            max = Math.max(240, Math.round(max * 0.82));
+          }
+          resolve(dataUrl);
+        };
+        img.onerror = () => {
+          URL.revokeObjectURL(blobURL);
+          reject(new Error("image"));
+        };
+        img.src = blobURL;
+      });
     }
     function newsItemFromPass(record) {
       const created = record && record.created && typeof record.created.timestamp === "number" ? record.created.timestamp : newsStamp(record);
       return {
         id: record.recordName || "",
-        image: fieldValue(record, "signature") || fieldValue(record, "image"),
+        image: newsImageFromRecord(record),
         title: fieldValue(record, "studentName") || newsHeading(record),
         subtitle: fieldValue(record, "destination") || newsBody(record),
         published: Number(fieldValue(record, "published") || created || 1),
@@ -2838,7 +3035,7 @@
         }
         return {
           id: record.recordName || "",
-          image: fieldValue(record, "image"),
+          image: newsImageFromRecord(record) || fieldValue(record, "image"),
           title: newsHeading(record),
           subtitle: newsBody(record),
           published: Number(fieldValue(record, "published") || 1),
@@ -2917,12 +3114,20 @@
     }
     async function ckCreateNews(record) {
       const db = cloudDb();
-      if (!(db && typeof db.newRecordsBatch === "function")) return null;
-      const result = await db.newRecordsBatch().create(record).commit();
-      if (result && result.hasErrors) {
-        throw cloudRecordError(result, result.errors && result.errors[0] || result.records && result.records[0]);
+      if (!db) return null;
+      const fail = (result) => {
+        if (result && result.hasErrors) {
+          throw cloudRecordError(result, result.errors && result.errors[0] || result.records && result.records[0]);
+        }
+        return (result && result.records && result.records[0]) || result;
+      };
+      if (typeof db.saveRecords === "function") {
+        return fail(await db.saveRecords([record]));
       }
-      return (result && result.records && result.records[0]) || result;
+      if (typeof db.newRecordsBatch === "function") {
+        return fail(await db.newRecordsBatch().create(record).commit());
+      }
+      return null;
     }
     async function restUploadAsset(recordType, fieldName, file, recordName) {
       const tokenBody = { recordType, fieldName };
@@ -2952,7 +3157,7 @@
       if (!value) throw Object.assign(new Error("FAIL"), { reason: "image" });
       return { recordName: token.recordName || recordName, value };
     }
-    function newsPassFields(title, story, imageValue) {
+    function newsPassFields(title, story, imageValue, imageParts) {
       const fields = {
         kind: { value: "news" },
         studentName: { value: title },
@@ -2961,21 +3166,16 @@
         dates: { value: new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) }
       };
       if (imageValue) fields.signature = { value: imageValue };
+      if (imageParts && imageParts.length) fields.imageParts = { value: imageParts };
       return fields;
     }
-    async function addNewsToManifest(id) {
-      const unique = String(id || "").trim();
-      if (!unique) return;
-      let existing = null;
-      try { existing = (await fetchByNames(cloudDb(), [NEWS_MANIFEST]))[0] || null; } catch (_) {}
-      const ids = parsePassIDs(existing && fieldValue(existing, "passIDs"));
-      if (ids.indexOf(unique) === -1) ids.unshift(unique);
+    async function saveNewsManifest(ids, existing) {
       const record = {
         recordType: PASS_TYPE,
         recordName: NEWS_MANIFEST,
         fields: {
           kind: { value: "news" },
-          passIDs: { value: ids.join(",") }
+          passIDs: { value: (ids || []).join(",") }
         }
       };
       if (existing && existing.recordChangeTag) {
@@ -2995,6 +3195,23 @@
         await restModify(record, existing ? "forceUpdate" : "create");
       }
     }
+    async function addNewsToManifest(id) {
+      const unique = String(id || "").trim();
+      if (!unique) return;
+      let existing = null;
+      try { existing = (await fetchByNames(cloudDb(), [NEWS_MANIFEST]))[0] || null; } catch (_) {}
+      const ids = parsePassIDs(existing && fieldValue(existing, "passIDs"));
+      if (ids.indexOf(unique) === -1) ids.unshift(unique);
+      await saveNewsManifest(ids, existing);
+    }
+    async function removeNewsFromManifest(id) {
+      const unique = String(id || "").trim();
+      if (!unique) return;
+      let existing = null;
+      try { existing = (await fetchByNames(cloudDb(), [NEWS_MANIFEST]))[0] || null; } catch (_) {}
+      const ids = parsePassIDs(existing && fieldValue(existing, "passIDs")).filter((item) => item !== unique);
+      await saveNewsManifest(ids, existing);
+    }
     async function publishNewsPost() {
       if (!canPostNews()) return;
       const c = t();
@@ -3013,18 +3230,27 @@
         await ensureCloud();
         watchAppleSignIn();
         if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
+        let dataUrl = "";
+        try { dataUrl = await compressNewsPhoto(rawFile); } catch (_) {
+          try { dataUrl = await compressSwipePhoto(rawFile); } catch (_) {}
+        }
+        const imageParts = chunkNewsImage(dataUrl);
         let jpeg = rawFile;
-        try { jpeg = dataUrlToFile(await compressSwipePhoto(rawFile), "news.jpg"); } catch (_) {}
+        try { jpeg = dataUrl ? dataUrlToFile(dataUrl, "news.jpg") : rawFile; } catch (_) {}
         const recordName = "news." + ((crypto.randomUUID && crypto.randomUUID()) || String(Date.now()));
+        const attempts = [
+          newsPassFields(title, story, jpeg, imageParts),
+          newsPassFields(title, story, null, imageParts),
+          newsPassFields(title, story, jpeg, null)
+        ];
         let saved = null;
-        try {
-          saved = await ckCreateNews({
-            recordType: PASS_TYPE,
-            recordName,
-            fields: newsPassFields(title, story, jpeg)
-          });
-        } catch (error) {
-          if (error && error.apple) throw error;
+        for (const fields of attempts) {
+          if (saved) break;
+          try {
+            saved = await ckCreateNews({ recordType: PASS_TYPE, recordName, fields });
+          } catch (error) {
+            if (error && error.apple) throw error;
+          }
         }
         if (!saved) {
           try {
@@ -3032,36 +3258,44 @@
             saved = await ckCreateNews({
               recordType: PASS_TYPE,
               recordName: uploaded.recordName || recordName,
-              fields: newsPassFields(title, story, uploaded.value)
+              fields: newsPassFields(title, story, uploaded.value, imageParts)
             });
           } catch (error) {
             if (error && error.apple) throw error;
           }
         }
         if (!saved) {
+          const fields = newsPassFields(title, story, null, imageParts);
           try {
-            saved = await ckCreateNews({
-              recordType: PASS_TYPE,
-              recordName,
-              fields: newsPassFields(title, story, null)
-            });
+            saved = await ckCreateNews({ recordType: PASS_TYPE, recordName, fields });
           } catch (error) {
             if (error && error.apple) throw error;
-            saved = await restModify({
-              recordType: PASS_TYPE,
-              recordName,
-              fields: newsPassFields(title, story, null)
-            }, "create");
+            saved = await restModify({ recordType: PASS_TYPE, recordName, fields }, "create");
           }
         }
         await addNewsToManifest(recordName);
         window._pendingNewsPost = false;
         window._newsDraftFile = null;
-        closeSheet();
-        await loadNewsFeed();
-        if (view === "more") {
-          openSheet(`
-            <div class="card-title"><b>${c.newsPublished}</b><button type="button" data-action="closeSheet">${c.close}</button></div>`);
+        if (view === "posts") {
+          const titleEl = document.getElementById("newsTitle");
+          const storyEl = document.getElementById("newsStory");
+          const preview = document.getElementById("newsImagePreview");
+          const ok = document.getElementById("newsComposeOk");
+          if (titleEl) titleEl.value = "";
+          if (storyEl) storyEl.value = "";
+          if (preview) {
+            preview.removeAttribute("src");
+            preview.classList.add("hidden");
+          }
+          if (ok) {
+            ok.textContent = c.newsPublished;
+            ok.classList.remove("hidden");
+          }
+          setNewsComposeError("");
+          await loadNewsFeed();
+        } else {
+          closeSheet();
+          await loadNewsFeed();
         }
       } catch (error) {
         const apple = (error && error.apple) || error.message === "APPLE" || isAuthError(error);
@@ -3310,7 +3544,9 @@
               <p class="muted">${escapeHtml(item.subtitle)}</p>`);
           }
         }
-        if (name === "composeNews") showComposeNews();
+        if (name === "composeNews") show("posts");
+        if (name === "askDeleteNews") confirmDeleteNews(action.dataset.newsId || "");
+        if (name === "deleteNews") deleteNewsPost(action.dataset.newsId || "");
         if (name === "pickNewsImage") {
           const picker = document.getElementById("newsImage");
           if (picker) picker.click();
