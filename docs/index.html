@@ -377,6 +377,38 @@
       padding: 14px 16px; font-size: 16px; width: 100%;
     }
     .gate-row select { appearance: none; background-image: none; }
+    #guestAppleRow { overflow: visible; }
+    .gate-apple {
+      background: #FFF1E6;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 6px 12px;
+      min-height: 56px;
+      overflow: visible;
+    }
+    .gate-apple #ck-auth {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      width: 100%;
+      min-height: 40px;
+      overflow: visible;
+    }
+    .gate-apple #ck-auth.hidden { display: none !important; }
+    .gate-apple .apple-auth-button {
+      overflow: hidden !important;
+      flex: none;
+    }
+    .gate-apple iframe {
+      max-width: 100%;
+      display: block;
+    }
+    .gate-apple-status {
+      font-size: 16px;
+      color: #1d1d1f;
+      font-weight: 600;
+    }
     .gate-actions {
       display: flex; justify-content: flex-end;
       margin-top: 16px; padding-right: var(--sign-inset);
@@ -565,6 +597,13 @@
                 <option value="12">12</option>
               </select>
             </div>
+            <div class="gate-row hidden" id="guestAppleRow">
+              <label id="appleSignLabel">Apple ID</label>
+              <div class="gate-apple">
+                <div id="ck-auth-gate"></div>
+                <span class="gate-apple-status hidden" id="guestAppleStatus"></span>
+              </div>
+            </div>
             <div class="gate-row hidden" id="guestAccessRow">
               <label id="staffCodeLabel" for="guestAccess">Staff access code</label>
               <input id="guestAccess" type="password" inputmode="numeric" autocomplete="off" spellcheck="false">
@@ -609,7 +648,9 @@
         guestNeedInfo: "Enter your name and grade.",
         guestNeedRole: "Choose student, teacher, or administrator.",
         guestNeedStaff: "Sign in with Apple, then enter the staff access code the first time.",
-        staffNeedApple: "Sign in with Apple on this page first.",
+        staffNeedApple: "Use Sign in with Apple above first.",
+        appleSignLabel: "Apple ID",
+        appleSignedIn: "Signed in with Apple",
         staffCodeWrong: "That access code is not correct.",
         issuePassNeedStaff: "This Apple ID is not enrolled as staff. Enter the school code once, then try again.",
         staffCodeLabel: "Staff access code",
@@ -847,7 +888,9 @@
         guestNeedInfo: "Escribe tu nombre y grado.",
         guestNeedRole: "Elige estudiante, maestro o administrador.",
         guestNeedStaff: "Entra con Apple y escribe el codigo de acceso del personal la primera vez.",
-        staffNeedApple: "Entra con Apple en esta pagina primero.",
+        staffNeedApple: "Usa Sign in with Apple arriba primero.",
+        appleSignLabel: "Apple ID",
+        appleSignedIn: "Sesion iniciada con Apple",
         staffCodeWrong: "Ese código de acceso no es correcto.",
         issuePassNeedStaff: "Este Apple ID no esta inscrito como personal. Escribe el codigo de la escuela una vez e intentalo de nuevo.",
         staffCodeLabel: "Código de acceso del personal",
@@ -1635,6 +1678,10 @@
       window._ckWatch = true;
       try {
         CloudKit.getDefaultContainer().whenUserSignsIn().then(() => {
+          window._ckWatch = false;
+          refreshGateAppleAuth();
+          const setupErr = document.getElementById("setupError");
+          if (setupErr && ckWebAuthToken()) setupErr.textContent = "";
           const id = window._pendingRevokeId;
           window._pendingRevokeId = "";
           const newsId = window._pendingDeleteNewsId;
@@ -1643,8 +1690,32 @@
           else if (window._pendingNewsPost) publishNewsPost();
           else if (window._pendingIssuePass) issuePassFromWeb();
           else if (view === "passes") loadPasses();
-        }).catch(() => {});
-      } catch (_) {}
+          watchAppleSignIn();
+        }).catch(() => { window._ckWatch = false; });
+      } catch (_) { window._ckWatch = false; }
+    }
+    async function refreshGateAppleAuth() {
+      const row = document.getElementById("guestAppleRow");
+      const slot = document.getElementById("ck-auth-gate");
+      const status = document.getElementById("guestAppleStatus");
+      const role = normalizeRole((document.getElementById("guestRole") || {}).value);
+      const staff = role === "teacher" || role === "administrator";
+      const onGate = window._gateStep === "guest" && gate && !gate.classList.contains("hidden");
+      if (!(row && slot)) return;
+      row.classList.toggle("hidden", !(staff && onGate));
+      if (!(staff && onGate)) {
+        if (document.getElementById("ck-auth-more")) mountCkAuth(document.getElementById("ck-auth-more"));
+        else parkCkAuth();
+        return;
+      }
+      try { await ensureCloud(); } catch (_) {}
+      watchAppleSignIn();
+      mountCkAuth(slot);
+      const signed = !!ckWebAuthToken();
+      if (status) {
+        status.textContent = signed ? t().appleSignedIn : "";
+        status.classList.toggle("hidden", !signed);
+      }
     }
     function isAuthError(error, payload) {
       const text = [
@@ -2121,6 +2192,10 @@
       if (gradeLabel) gradeLabel.textContent = c.gradeLabel;
       if (rolePickLabel) rolePickLabel.textContent = c.role;
       if (staffCodeLabel) staffCodeLabel.textContent = c.staffCodeLabel;
+      const appleSignLabel = document.getElementById("appleSignLabel");
+      if (appleSignLabel) appleSignLabel.textContent = c.appleSignLabel;
+      const appleStatus = document.getElementById("guestAppleStatus");
+      if (appleStatus && !appleStatus.classList.contains("hidden")) appleStatus.textContent = c.appleSignedIn;
       if (roleOptStudent) roleOptStudent.textContent = c.roleStudent;
       if (roleOptTeacher) roleOptTeacher.textContent = c.roleTeacher;
       if (roleOptAdmin) roleOptAdmin.textContent = c.admin;
@@ -4689,6 +4764,7 @@
       const accessRow = document.getElementById("guestAccessRow");
       if (gradeRow) gradeRow.classList.toggle("hidden", staff);
       if (accessRow) accessRow.classList.toggle("hidden", !staff);
+      refreshGateAppleAuth();
     }
     async function enterGuest() {
       const name = String((document.getElementById("guestName") || {}).value || "").trim();
@@ -4707,10 +4783,6 @@
       }
       if (role === "student" && !grade) {
         if (err) err.textContent = t().guestNeedInfo;
-        return;
-      }
-      if (staff && !code) {
-        if (err) err.textContent = t().guestNeedStaff;
         return;
       }
       if (err) err.textContent = "";
