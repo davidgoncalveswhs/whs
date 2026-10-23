@@ -11,5 +11,6 @@ DerivedData/
 *.dSYM
 .env
 .env.*
+docs/config.js
 *.p12
 *.mobileprovision

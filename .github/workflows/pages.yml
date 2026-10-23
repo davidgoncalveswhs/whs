@@ -21,6 +21,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Write CloudKit config from secrets
+        env:
+          WHS_SCHOOL_TOKEN: ${{ secrets.WHS_SCHOOL_TOKEN }}
+          WHS_CK_ENV: ${{ secrets.WHS_CK_ENV }}
+        run: |
+          set -euo pipefail
+          if [ -z "${WHS_SCHOOL_TOKEN}" ]; then
+            echo "Set repository secret WHS_SCHOOL_TOKEN" >&2
+            exit 1
+          fi
+          ENV="${WHS_CK_ENV:-development}"
+          printf 'window.WHS_SCHOOL_TOKEN = "%s";\nwindow.WHS_CK_ENV = "%s";\n' "$WHS_SCHOOL_TOKEN" "$ENV" > docs/config.js
       - uses: actions/upload-pages-artifact@v3
         with:
           path: docs

@@ -1461,7 +1461,7 @@
     }
     function isGateRecordName(id) {
       const key = String(id || "").toLowerCase();
-      return key.indexOf("whs-staff-gate.") === 0 || key.indexOf("whs-wipe-gate.") === 0;
+      return key.indexOf("whs-staff-gate.") === 0 || key.indexOf("whs-wipe-gate.") === 0 || key.indexOf("whs-staff-user.") === 0;
     }
     async function cloudGateAllows(kind, code) {
       const typed = String(code || "").trim();
@@ -1598,7 +1598,7 @@
       if (!id || key === MANIFEST.toLowerCase() || key === CLEARED.toLowerCase() || key === NEWS_MANIFEST.toLowerCase()) return true;
       if (key.indexOf("cleared.") === 0 || key.indexOf("revoked.") === 0 || key.indexOf("news.") === 0 || key.indexOf("newsimg.") === 0 || key.indexOf("webpass.") === 0 || key.indexOf("passimg.") === 0) return true;
       if (isGateRecordName(id)) return true;
-      if (kind === "cleared" || kind === "revoked" || kind === "news" || kind === "newsimg" || kind === "webpass" || kind === "passimg" || kind === "staffgate" || kind === "wipegate" || kind === "manifest") return true;
+      if (kind === "cleared" || kind === "revoked" || kind === "news" || kind === "newsimg" || kind === "webpass" || kind === "passimg" || kind === "staffgate" || kind === "wipegate" || kind === "staffuser" || kind === "manifest") return true;
       return false;
     }
     function isRevokedFlag(record) {
