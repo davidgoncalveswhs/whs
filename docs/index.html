@@ -595,8 +595,6 @@
     const CLEARED = "whs-cleared-passes";
     const NEWS_MANIFEST = "whs-news-manifest";
     const LUNCH = "https://drive.google.com/file/d/1FcyUw6LwftfJC6cDnOQrlXgBXC4UjB57/preview";
-    const STAFF_GATE = "105310";
-    const PASS_WIPE_CODE = "5203";
     const copy = {
       en: {
         welcome: "Welcome",
@@ -1168,12 +1166,21 @@
       closeSheet();
       if (view === "more") renderMore();
     }
+    function staffProofShape(value) {
+      return /^[a-f0-9]{64}$/.test(String(value || "").trim());
+    }
+    function guestStaffNeedsProof() {
+      const role = currentRole();
+      return isGuest() && (role === "teacher" || role === "administrator");
+    }
     function canSeePassLog() {
       const role = currentRole();
-      return role === "administrator" || role === "teacher";
+      if (role !== "administrator" && role !== "teacher") return false;
+      if (guestStaffNeedsProof() && !staffProofShape(profile && profile.staffProof)) return false;
+      return true;
     }
     function canClearPassLog() {
-      return currentRole() === "administrator";
+      return currentRole() === "administrator" && canSeePassLog();
     }
     function canRevokePass() {
       return canSeePassLog();
@@ -1182,7 +1189,7 @@
       return canSeePassLog();
     }
     function canPostNews() {
-      return currentRole() === "administrator";
+      return currentRole() === "administrator" && canSeePassLog();
     }
     function signedIn() {
       if (isGuest()) return true;
@@ -1416,6 +1423,77 @@
       const payload = await response.json();
       return recordsFrom(payload).filter(usableRecord);
     }
+    async function restLookupExact(names) {
+      const unique = [...new Set((names || []).map((name) => String(name || "").trim()).filter(Boolean))];
+      if (!unique.length) return [];
+      const token = schoolToken();
+      if (token) {
+        try {
+          const url = restUrl("lookup");
+          const response = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ records: unique.map((recordName) => ({ recordName })) })
+          });
+          const payload = await response.json();
+          const found = recordsFrom(payload).filter(usableRecord);
+          if (found.length) return found;
+        } catch (_) {}
+      }
+      const db = cloudDb();
+      const found = [];
+      if (db && typeof db.fetchRecord === "function") {
+        for (const name of unique) {
+          try { recordsFrom(await db.fetchRecord(name)).forEach((record) => { if (usableRecord(record)) found.push(record); }); } catch (_) {}
+        }
+      }
+      return found;
+    }
+    async function sha256Hex(text) {
+      const bytes = new TextEncoder().encode(String(text || ""));
+      const hash = await crypto.subtle.digest("SHA-256", bytes);
+      return Array.from(new Uint8Array(hash)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    }
+    function gateRecordName(kind, digest) {
+      const hex = String(digest || "").trim().toLowerCase();
+      if (!staffProofShape(hex)) return "";
+      return (kind === "wipe" ? "whs-wipe-gate." : "whs-staff-gate.") + hex;
+    }
+    function isGateRecordName(id) {
+      const key = String(id || "").toLowerCase();
+      return key.indexOf("whs-staff-gate.") === 0 || key.indexOf("whs-wipe-gate.") === 0;
+    }
+    async function cloudGateAllows(kind, code) {
+      const typed = String(code || "").trim();
+      if (!typed) return "";
+      const digest = await sha256Hex(typed);
+      const name = gateRecordName(kind, digest);
+      if (!name) return "";
+      try { await ensureCloud(); } catch (_) {}
+      const expected = kind === "wipe" ? "wipegate" : "staffgate";
+      const records = await restLookupExact([name]);
+      const record = records.find((item) => String(item.recordName || "") === name);
+      if (!record) return "";
+      const got = String(fieldValue(record, "kind") || "").toLowerCase();
+      if (got && got !== expected) return "";
+      return digest;
+    }
+    async function enforceGuestStaffProof() {
+      if (!guestStaffNeedsProof()) return;
+      if (!staffProofShape(profile && profile.staffProof)) {
+        returnToCodeGate();
+        return;
+      }
+      try { await ensureCloud(); } catch (_) {}
+      const name = gateRecordName("staff", profile.staffProof);
+      const records = name ? await restLookupExact([name]) : [];
+      const ok = records.some((item) => {
+        if (String(item.recordName || "") !== name) return false;
+        const got = String(fieldValue(item, "kind") || "").toLowerCase();
+        return !got || got === "staffgate";
+      });
+      if (!ok) returnToCodeGate();
+    }
     async function restModify(record, operationType) {
       const token = schoolToken();
       if (!token || !record || !record.recordName) return null;
@@ -1519,7 +1597,8 @@
       const kind = String(fieldValue(record, "kind") || "").toLowerCase();
       if (!id || key === MANIFEST.toLowerCase() || key === CLEARED.toLowerCase() || key === NEWS_MANIFEST.toLowerCase()) return true;
       if (key.indexOf("cleared.") === 0 || key.indexOf("revoked.") === 0 || key.indexOf("news.") === 0 || key.indexOf("newsimg.") === 0 || key.indexOf("webpass.") === 0 || key.indexOf("passimg.") === 0) return true;
-      if (kind === "cleared" || kind === "revoked" || kind === "news" || kind === "newsimg" || kind === "webpass" || kind === "passimg") return true;
+      if (isGateRecordName(id)) return true;
+      if (kind === "cleared" || kind === "revoked" || kind === "news" || kind === "newsimg" || kind === "webpass" || kind === "passimg" || kind === "staffgate" || kind === "wipegate" || kind === "manifest") return true;
       return false;
     }
     function isRevokedFlag(record) {
@@ -1671,16 +1750,22 @@
       if (err) err.textContent = message || "";
       if (ok) ok.classList.toggle("hidden", !!message);
     }
-    function confirmClearPassLog() {
+    async function confirmClearPassLog() {
       if (!canClearPassLog()) return;
       const c = t();
       const typed = String((document.getElementById("passWipeCode") || {}).value || "").trim();
-      if (typed !== PASS_WIPE_CODE) {
+      if (!typed) {
+        setPassWipeError(c.adminPassWipeBadCode);
+        return;
+      }
+      let proof = "";
+      try { proof = await cloudGateAllows("wipe", typed); } catch (_) {}
+      if (!proof) {
         setPassWipeError(c.adminPassWipeBadCode);
         return;
       }
       setPassWipeError("");
-      window._passWipeCode = typed;
+      window._passWipeProof = proof;
       openSheet(`
         <div class="card-title"><b>${c.adminPassWipeConfirmTitle}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
         <p>${c.adminPassWipeConfirmBody}</p>
@@ -1765,18 +1850,26 @@
         const id = passRecordName(record);
         if (id) names.add(id);
       });
-      return [...names].filter((id) => id && id !== MANIFEST && id !== CLEARED);
+      return [...names].filter((id) => {
+        if (!id || id === MANIFEST || id === CLEARED || isGateRecordName(id)) return false;
+        return true;
+      });
     }
     async function handleClearPassLog() {
       if (!canClearPassLog() || window._passWipeBusy) return;
       const c = t();
-      const typed = String(window._passWipeCode || (document.getElementById("passWipeCode") || {}).value || "").trim();
-      if (typed !== PASS_WIPE_CODE) {
+      const typed = String((document.getElementById("passWipeCode") || {}).value || "").trim();
+      let proof = String(window._passWipeProof || "").trim();
+      if (!staffProofShape(proof) && typed) {
+        try { proof = await cloudGateAllows("wipe", typed); } catch (_) { proof = ""; }
+      }
+      if (!staffProofShape(proof)) {
         window._passWipeBusy = false;
         setPassWipeError(c.adminPassWipeBadCode);
         closeSheet();
         return;
       }
+      window._passWipeProof = proof;
       window._passWipeBusy = true;
       let ids = [];
       try {
@@ -1810,7 +1903,7 @@
         setPassWipeError("");
         const code = document.getElementById("passWipeCode");
         if (code) code.value = "";
-        window._passWipeCode = "";
+        window._passWipeProof = "";
         if (view === "passes") await loadPasses();
         window._passWipeBusy = false;
         showPassWipeProgress(100, c.adminPassWipeDone, "", true, false);
@@ -1824,6 +1917,7 @@
     }
     function finishPassWipe() {
       window._passWipeBusy = false;
+      window._passWipeProof = "";
       closeSheet();
       if (view === "more") renderMore();
     }
@@ -4527,15 +4621,23 @@
         if (err) err.textContent = t().guestNeedInfo;
         return;
       }
-      if (staff && code !== STAFF_GATE) {
-        if (err) err.textContent = code ? t().staffCodeWrong : t().guestNeedStaff;
+      if (staff && !code) {
+        if (err) err.textContent = t().guestNeedStaff;
         return;
       }
       if (err) err.textContent = "";
+      const finish = document.getElementById("guestFinish");
       if (staff) {
-        profile = { displayName: name, firstName: name, role, key: "", guest: true };
+        if (finish) finish.disabled = true;
+        let proof = "";
+        try { proof = await cloudGateAllows("staff", code); } catch (_) {}
+        if (finish) finish.disabled = false;
+        if (!proof) {
+          if (err) err.textContent = t().staffCodeWrong;
+          return;
+        }
+        profile = { displayName: name, firstName: name, role, key: "", guest: true, staffProof: proof };
       } else {
-        const finish = document.getElementById("guestFinish");
         if (finish) finish.disabled = true;
         const key = await allocateGuestStudentKey({ displayName: name, firstName: name, grade })
           || makeWebUnlockKey();
@@ -4555,7 +4657,9 @@
       navigator.serviceWorker.register("./sw.js").catch(() => {});
     }
     showGate();
-    if (signedIn()) show("home");
+    if (signedIn()) {
+      enforceGuestStaffProof().then(() => { if (signedIn()) show("home"); }).catch(() => { if (signedIn()) show("home"); });
+    }
   </script>
 </body>
 </html>
