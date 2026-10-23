@@ -553,7 +553,7 @@
             <div class="t" id="guestTitle">Don't use an iPhone?</div>
             <div class="gate-guest-row">
               <p class="muted" id="guestBody" style="margin:0;">Setup WHS WebView portal and homescreen shortcut</p>
-              <button class="gate-signin" type="button" id="skipSite">Sign In</button>
+              <button class="gate-signin" type="button" id="skipSite" data-action="guestSetup">Sign In</button>
             </div>
           </div>
         </div>
@@ -4555,6 +4555,10 @@
       const action = event.target.closest("[data-action]");
       if (action) {
         const name = action.dataset.action;
+        if (name === "guestSetup") {
+          showGuestStep();
+          return;
+        }
         if (name === "swipe") show("swipe");
         if (name === "passesInfo") openPassesInfo();
         if (name === "ask") openAsk("");
@@ -4806,6 +4810,7 @@
       if (ckWebAuthToken() && window._pendingGuestStaff) {
         await finishPendingGuestStaff();
       }
+    }
     async function enterGuest() {
       const name = String((document.getElementById("guestName") || {}).value || "").trim();
       const role = normalizeRole((document.getElementById("guestRole") || {}).value);
