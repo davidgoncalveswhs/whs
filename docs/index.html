@@ -633,6 +633,7 @@
         appleStepTitle: "Sign in with Apple",
         appleStepBody: "Staff uses the same Apple ID as on iPhone. Sign in to finish.",
         appleSignedIn: "Signed in with Apple",
+        staffAppleFail: "Signed in, but WHS could not save staff access. Tap Sign in with Apple again.",
         staffCodeWrong: "That access code is not correct.",
         issuePassNeedStaff: "This Apple ID is not enrolled as staff. Enter the school code once, then try again.",
         staffCodeLabel: "Staff access code",
@@ -873,6 +874,7 @@
         appleStepTitle: "Entra con Apple",
         appleStepBody: "El personal usa el mismo Apple ID que en iPhone. Entra para terminar.",
         appleSignedIn: "Sesion iniciada con Apple",
+        staffAppleFail: "Entraste, pero WHS no pudo guardar el acceso de personal. Toca Sign in with Apple otra vez.",
         staffCodeWrong: "Ese código de acceso no es correcto.",
         issuePassNeedStaff: "Este Apple ID no esta inscrito como personal. Escribe el codigo de la escuela una vez e intentalo de nuevo.",
         staffCodeLabel: "Código de acceso del personal",
@@ -1403,13 +1405,59 @@
       } catch (_) {}
       return "";
     }
+    function userNameFromInfo(info) {
+      if (!info) return "";
+      if (typeof info === "string") return info.trim();
+      const name = info.userRecordName
+        || (info.userInfo && info.userInfo.userRecordName)
+        || (info.userIdentity && info.userIdentity.userRecordName);
+      return String(name || "").trim();
+    }
     async function ckUserRecordName() {
+      if (window._ckUserRecordName) return String(window._ckUserRecordName);
       try {
         const container = CloudKit.getDefaultContainer();
-        if (container && typeof container.fetchUserRecordName === "function") {
-          const result = await container.fetchUserRecordName();
-          if (typeof result === "string" && result.trim()) return result.trim();
-          if (result && result.userRecordName) return String(result.userRecordName).trim();
+        if (!container) return "";
+        try {
+          const info = await container.setUpAuth();
+          const fromAuth = userNameFromInfo(info);
+          if (fromAuth) {
+            window._ckUserRecordName = fromAuth;
+            return fromAuth;
+          }
+        } catch (_) {}
+        if (typeof container.fetchCurrentUserIdentity === "function") {
+          try {
+            const identity = await container.fetchCurrentUserIdentity();
+            const fromId = userNameFromInfo(identity) || userNameFromInfo(identity && identity.userInfo);
+            if (fromId) {
+              window._ckUserRecordName = fromId;
+              return fromId;
+            }
+          } catch (_) {}
+        }
+        if (typeof container.fetchUserRecordName === "function") {
+          const result = await new Promise((resolve) => {
+            let settled = false;
+            const done = (value) => { if (!settled) { settled = true; resolve(value); } };
+            try {
+              const pending = container.fetchUserRecordName({
+                success: (name) => done(name),
+                failure: () => done("")
+              });
+              if (pending && typeof pending.then === "function") {
+                pending.then((name) => done(name)).catch(() => done(""));
+              }
+            } catch (_) {
+              done("");
+            }
+            setTimeout(() => done(""), 4000);
+          });
+          const fromFetch = userNameFromInfo(result);
+          if (fromFetch) {
+            window._ckUserRecordName = fromFetch;
+            return fromFetch;
+          }
         }
       } catch (_) {}
       return "";
@@ -1431,31 +1479,42 @@
       if (role === "teacher" || role === "administrator") return role;
       return "";
     }
-    async function enrollWebStaff(role, code) {
-      requireCloudWrite();
-      const wanted = normalizeRole(role);
-      if (wanted !== "teacher" && wanted !== "administrator") return "";
-      const existing = await fetchEnrolledWebRole();
-      if (existing === wanted) return existing;
-      const proof = await cloudGateAllows("staff", code);
-      if (!proof) return "";
-      const user = await ckUserRecordName();
-      const name = staffUserRecordName(user);
-      if (!name) return "";
+    async function saveStaffUserRecord(name, role) {
       const record = {
         recordType: PASS_TYPE,
         recordName: name,
         fields: {
           kind: { value: "staffuser" },
-          role: { value: wanted }
+          role: { value: role }
         }
       };
       try {
-        await restModify(record, "forceUpdate");
-      } catch (_) {
-        try { await restModify(record, "create"); } catch (_) { return ""; }
+        if (await restModify(record, "create")) return true;
+      } catch (_) {}
+      try {
+        if (await restModify(record, "forceUpdate")) return true;
+      } catch (_) {}
+      try {
+        if (await ckCreateRecords([record])) return true;
+      } catch (_) {}
+      return false;
+    }
+    async function enrollWebStaff(role, code, gateAlreadyOk) {
+      requireCloudWrite();
+      const wanted = normalizeRole(role);
+      if (wanted !== "teacher" && wanted !== "administrator") return "";
+      const existing = await fetchEnrolledWebRole();
+      if (existing === wanted) return existing;
+      if (!gateAlreadyOk) {
+        const proof = await cloudGateAllows("staff", code);
+        if (!proof) return "";
       }
-      return wanted;
+      const user = await ckUserRecordName();
+      const name = staffUserRecordName(user);
+      if (!name) return existing || "";
+      const saved = await saveStaffUserRecord(name, wanted);
+      if (saved) return wanted;
+      return existing || "";
     }
     async function requireEnrolledStaff() {
       requireCloudWrite();
@@ -1659,8 +1718,10 @@
       if (window._ckWatch) return;
       window._ckWatch = true;
       try {
-        CloudKit.getDefaultContainer().whenUserSignsIn().then(() => {
+        CloudKit.getDefaultContainer().whenUserSignsIn().then((userInfo) => {
           window._ckWatch = false;
+          const signedName = userNameFromInfo(userInfo);
+          if (signedName) window._ckUserRecordName = signedName;
           if (window._pendingGuestStaff) {
             finishPendingGuestStaff();
             watchAppleSignIn();
@@ -4742,7 +4803,9 @@
       try { await ensureCloud(); } catch (_) {}
       watchAppleSignIn();
       mountCkAuth(document.getElementById("ck-auth-gate"));
-    }
+      if (ckWebAuthToken() && window._pendingGuestStaff) {
+        await finishPendingGuestStaff();
+      }
     async function enterGuest() {
       const name = String((document.getElementById("guestName") || {}).value || "").trim();
       const role = normalizeRole((document.getElementById("guestRole") || {}).value);
@@ -4805,10 +4868,14 @@
         if (appleErr) appleErr.textContent = t().appleStepBody;
         return;
       }
+      if (appleErr) appleErr.textContent = "";
       let enrolled = "";
-      try { enrolled = await enrollWebStaff(pending.role, pending.code); } catch (_) { enrolled = ""; }
-      if (enrolled !== pending.role) {
-        if (appleErr) appleErr.textContent = t().staffCodeWrong;
+      for (let i = 0; i < 4 && !enrolled; i += 1) {
+        if (i) await new Promise((resolve) => setTimeout(resolve, 350));
+        try { enrolled = await enrollWebStaff(pending.role, pending.code, true); } catch (_) { enrolled = ""; }
+      }
+      if (enrolled !== "teacher" && enrolled !== "administrator") {
+        if (appleErr) appleErr.textContent = t().staffAppleFail;
         return;
       }
       window._pendingGuestStaff = null;
@@ -4816,7 +4883,7 @@
       profile = {
         displayName: pending.name,
         firstName: pending.name,
-        role: pending.role,
+        role: enrolled,
         key: "",
         guest: true,
         staffEnrolled: true
