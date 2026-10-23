@@ -608,8 +608,10 @@
         gradeLabel: "Grade",
         guestNeedInfo: "Enter your name and grade.",
         guestNeedRole: "Choose student, teacher, or administrator.",
-        guestNeedStaff: "Enter your name and the staff access code.",
+        guestNeedStaff: "Sign in with Apple, then enter the staff access code the first time.",
+        staffNeedApple: "Sign in with Apple on this page first.",
         staffCodeWrong: "That access code is not correct.",
+        issuePassNeedStaff: "This Apple ID is not enrolled as staff. Enter the school code once, then try again.",
         staffCodeLabel: "Staff access code",
         roleStudent: "Student",
         roleTeacher: "Teacher",
@@ -844,8 +846,10 @@
         gradeLabel: "Grado",
         guestNeedInfo: "Escribe tu nombre y grado.",
         guestNeedRole: "Elige estudiante, maestro o administrador.",
-        guestNeedStaff: "Escribe tu nombre y el código de acceso del personal.",
+        guestNeedStaff: "Entra con Apple y escribe el codigo de acceso del personal la primera vez.",
+        staffNeedApple: "Entra con Apple en esta pagina primero.",
         staffCodeWrong: "Ese código de acceso no es correcto.",
+        issuePassNeedStaff: "Este Apple ID no esta inscrito como personal. Escribe el codigo de la escuela una vez e intentalo de nuevo.",
         staffCodeLabel: "Código de acceso del personal",
         roleStudent: "Estudiante",
         roleTeacher: "Maestro",
@@ -1176,8 +1180,10 @@
     function canSeePassLog() {
       const role = currentRole();
       if (role !== "administrator" && role !== "teacher") return false;
-      if (guestStaffNeedsProof() && !staffProofShape(profile && profile.staffProof)) return false;
-      return true;
+      if (!isGuest()) return true;
+      if (profile && profile.staffEnrolled) return true;
+      if (staffProofShape(profile && profile.staffProof)) return true;
+      return false;
     }
     function canClearPassLog() {
       return currentRole() === "administrator" && canSeePassLog();
@@ -1372,6 +1378,68 @@
       } catch (_) {}
       return "";
     }
+    async function ckUserRecordName() {
+      try {
+        const container = CloudKit.getDefaultContainer();
+        if (container && typeof container.fetchUserRecordName === "function") {
+          const result = await container.fetchUserRecordName();
+          if (typeof result === "string" && result.trim()) return result.trim();
+          if (result && result.userRecordName) return String(result.userRecordName).trim();
+        }
+      } catch (_) {}
+      return "";
+    }
+    function staffUserRecordName(user) {
+      const id = String(user || "").trim();
+      return id ? "whs-staff-user." + id : "";
+    }
+    async function fetchEnrolledWebRole() {
+      if (!ckWebAuthToken()) return "";
+      const user = await ckUserRecordName();
+      const name = staffUserRecordName(user);
+      if (!name) return "";
+      try { await ensureCloud(); } catch (_) {}
+      const records = await restLookupExact([name]);
+      const record = records.find((item) => String(item.recordName || "") === name);
+      if (!record) return "";
+      const role = normalizeRole(fieldValue(record, "role"));
+      if (role === "teacher" || role === "administrator") return role;
+      return "";
+    }
+    async function enrollWebStaff(role, code) {
+      requireCloudWrite();
+      const wanted = normalizeRole(role);
+      if (wanted !== "teacher" && wanted !== "administrator") return "";
+      const existing = await fetchEnrolledWebRole();
+      if (existing === wanted) return existing;
+      const proof = await cloudGateAllows("staff", code);
+      if (!proof) return "";
+      const user = await ckUserRecordName();
+      const name = staffUserRecordName(user);
+      if (!name) return "";
+      const record = {
+        recordType: PASS_TYPE,
+        recordName: name,
+        fields: {
+          kind: { value: "staffuser" },
+          role: { value: wanted }
+        }
+      };
+      try {
+        await restModify(record, "forceUpdate");
+      } catch (_) {
+        try { await restModify(record, "create"); } catch (_) { return ""; }
+      }
+      return wanted;
+    }
+    async function requireEnrolledStaff() {
+      requireCloudWrite();
+      const role = await fetchEnrolledWebRole();
+      if (role !== "teacher" && role !== "administrator") {
+        throw Object.assign(new Error("STAFF"), { staff: true });
+      }
+      return role;
+    }
     function restUrl(action) {
       return restPublicUrl("records/" + action);
     }
@@ -1480,11 +1548,19 @@
     }
     async function enforceGuestStaffProof() {
       if (!guestStaffNeedsProof()) return;
+      try { await ensureCloud(); } catch (_) {}
+      if (ckWebAuthToken()) {
+        const enrolled = await fetchEnrolledWebRole();
+        if (enrolled === currentRole()) {
+          profile.staffEnrolled = true;
+          localStorage.setItem("whsWebProfile", JSON.stringify(profile));
+          return;
+        }
+      }
       if (!staffProofShape(profile && profile.staffProof)) {
         returnToCodeGate();
         return;
       }
-      try { await ensureCloud(); } catch (_) {}
       const name = gateRecordName("staff", profile.staffProof);
       const records = name ? await restLookupExact([name]) : [];
       const ok = records.some((item) => {
@@ -1494,7 +1570,12 @@
       });
       if (!ok) returnToCodeGate();
     }
+    function requireCloudWrite() {
+      if (ckWebAuthToken()) return true;
+      throw Object.assign(new Error("APPLE"), { apple: true, serverErrorCode: "AUTHENTICATION_REQUIRED" });
+    }
     async function restModify(record, operationType) {
+      requireCloudWrite();
       const token = schoolToken();
       if (!token || !record || !record.recordName) return null;
       const url = restUrl("modify");
@@ -1514,6 +1595,7 @@
       throw cloudRecordError(payload, payload.records && payload.records[0]);
     }
     async function restModifyOps(operations) {
+      requireCloudWrite();
       const token = schoolToken();
       if (!token || !operations.length) return {};
       const url = restUrl("modify");
@@ -1598,7 +1680,7 @@
       if (!id || key === MANIFEST.toLowerCase() || key === CLEARED.toLowerCase() || key === NEWS_MANIFEST.toLowerCase()) return true;
       if (key.indexOf("cleared.") === 0 || key.indexOf("revoked.") === 0 || key.indexOf("news.") === 0 || key.indexOf("newsimg.") === 0 || key.indexOf("webpass.") === 0 || key.indexOf("passimg.") === 0) return true;
       if (isGateRecordName(id)) return true;
-      if (kind === "cleared" || kind === "revoked" || kind === "news" || kind === "newsimg" || kind === "webpass" || kind === "passimg" || kind === "staffgate" || kind === "wipegate" || kind === "staffuser" || kind === "manifest") return true;
+      if (kind === "cleared" || kind === "revoked" || kind === "news" || kind === "newsimg" || kind === "webpass" || kind === "passimg" || kind === "staffgate" || kind === "wipegate" || kind === "staffuser" || kind === "manifest" || kind === "nfchomework" || kind === "nfccourse") return true;
       return false;
     }
     function isRevokedFlag(record) {
@@ -1639,6 +1721,7 @@
       return !!(window._revokedPassIDs && window._revokedPassIDs.has(id));
     }
     async function ckDeleteNames(names) {
+      if (!ckWebAuthToken()) return false;
       const db = cloudDb();
       if (!(db && names.length && typeof db.deleteRecords === "function")) return false;
       const result = await db.deleteRecords(names);
@@ -1646,6 +1729,7 @@
       return true;
     }
     async function ckCreateRecords(records) {
+      if (!ckWebAuthToken()) return false;
       const db = cloudDb();
       if (!(db && records.length && typeof db.saveRecords === "function")) return false;
       const result = await db.saveRecords(records);
@@ -3364,6 +3448,7 @@
         await ensureCloud();
         watchAppleSignIn();
         if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
+        await requireEnrolledStaff();
         const recordName = newPassRecordName();
         const fields = {
           kind: { value: kind },
@@ -3413,8 +3498,9 @@
         window._pendingIssuePass = false;
         window._issuePassBusy = false;
         const apple = (error && error.apple) || error.message === "APPLE" || isAuthError(error);
+        const staff = error && (error.staff || error.message === "STAFF");
         const badCode = error && (error.code === "CODE" || error.message === "CODE");
-        const message = apple ? c.issuePassNeedApple : (badCode ? c.issuePassBadCode : c.issuePassFail);
+        const message = apple ? c.issuePassNeedApple : (staff ? c.issuePassNeedStaff : (badCode ? c.issuePassBadCode : c.issuePassFail));
         setIssuePassError(message);
         showWorkProgress(100, message, "", "", true, "finishIssuePass");
       } finally {
@@ -3946,6 +4032,7 @@
       return value;
     }
     async function ckCreateNews(record) {
+      requireCloudWrite();
       const db = cloudDb();
       if (!db) return null;
       const fail = (result) => {
@@ -3965,6 +4052,7 @@
       return null;
     }
     async function restUploadAsset(recordType, fieldName, file, recordName) {
+      requireCloudWrite();
       const tokenBody = { recordType, fieldName };
       if (recordName) tokenBody.recordName = recordName;
       const response = await fetch(restPublicUrl("assets/upload"), {
@@ -4629,14 +4717,33 @@
       const finish = document.getElementById("guestFinish");
       if (staff) {
         if (finish) finish.disabled = true;
-        let proof = "";
-        try { proof = await cloudGateAllows("staff", code); } catch (_) {}
+        try { await ensureCloud(); } catch (_) {}
+        watchAppleSignIn();
+        if (!ckWebAuthToken()) {
+          if (finish) finish.disabled = false;
+          if (err) err.textContent = t().staffNeedApple;
+          return;
+        }
+        let enrolled = "";
+        try { enrolled = await fetchEnrolledWebRole(); } catch (_) { enrolled = ""; }
+        if (enrolled !== role) {
+          if (!code) {
+            if (finish) finish.disabled = false;
+            if (err) err.textContent = t().guestNeedStaff;
+            return;
+          }
+          try { enrolled = await enrollWebStaff(role, code); } catch (error) {
+            if (finish) finish.disabled = false;
+            if (err) err.textContent = (error && error.apple) ? t().staffNeedApple : t().staffCodeWrong;
+            return;
+          }
+        }
         if (finish) finish.disabled = false;
-        if (!proof) {
+        if (enrolled !== role) {
           if (err) err.textContent = t().staffCodeWrong;
           return;
         }
-        profile = { displayName: name, firstName: name, role, key: "", guest: true, staffProof: proof };
+        profile = { displayName: name, firstName: name, role, key: "", guest: true, staffEnrolled: true };
       } else {
         if (finish) finish.disabled = true;
         const key = await allocateGuestStudentKey({ displayName: name, firstName: name, grade })
