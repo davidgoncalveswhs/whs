@@ -377,35 +377,6 @@
       padding: 14px 16px; font-size: 16px; width: 100%;
     }
     .gate-row select { appearance: none; background-image: none; }
-    #ck-auth-anchor {
-      position: fixed;
-      left: 8px;
-      top: 8px;
-      width: 240px;
-      height: 48px;
-      opacity: 0;
-      pointer-events: none;
-      z-index: 80;
-      overflow: visible;
-    }
-    body.whs-apple-gate #ck-auth-anchor {
-      opacity: 1;
-      pointer-events: auto;
-    }
-    .apple-slot {
-      width: 240px;
-      height: 44px;
-      min-height: 44px;
-    }
-    #gateApple.is-off {
-      display: block !important;
-      visibility: hidden;
-      position: absolute;
-      width: 320px;
-      height: 72px;
-      overflow: visible;
-      pointer-events: none;
-    }
     .gate-apple-step {
       display: block;
       min-height: 56px;
@@ -634,9 +605,12 @@
           </div>
           <p class="error" id="setupError"></p>
         </div>
-        <div id="gateApple" class="is-off">
-          <div class="gate-apple-step">
-            <div id="apple-slot" class="apple-slot"></div>
+        <div id="gateApple" class="hidden">
+          <div class="gate-apple-step" id="ck-auth-gate">
+            <div id="ck-auth">
+              <div id="apple-sign-in-placeholder"></div>
+              <div id="apple-sign-out-placeholder"></div>
+            </div>
           </div>
           <p class="error" id="appleError"></p>
         </div>
@@ -647,12 +621,6 @@
     <div class="sheet-card" id="sheetCard"></div>
   </div>
 
-  <div id="ck-auth-anchor">
-    <div id="ck-auth">
-      <div id="apple-sign-in-placeholder"></div>
-      <div id="apple-sign-out-placeholder"></div>
-    </div>
-  </div>
   <script src="https://cdn.apple-cloudkit.com/ck/2/cloudkit.js"></script>
   <script>
     const CONTAINER = "iCloud.com.davidgoncalvespersonalteam.UntitledProject";
@@ -679,6 +647,7 @@
         appleStepTitle: "Sign in with Apple",
         appleStepBody: "Staff uses the same Apple ID as on iPhone. Sign in to finish.",
         appleSignOutFirst: "This browser is still signed in. Sign out, then sign in with your Apple ID.",
+        appleButtonMissing: "The Apple button did not load. Reload this page and try again.",
         appleSignLabel: "Apple ID",
         appleSignedIn: "Signed in with Apple",
         staffAppleFail: "Signed in, but WHS could not save staff access. Tap Sign in with Apple again.",
@@ -922,6 +891,7 @@
         appleStepTitle: "Entra con Apple",
         appleStepBody: "El personal usa el mismo Apple ID que en iPhone. Entra para terminar.",
         appleSignOutFirst: "Este navegador sigue con una sesión. Cierra sesión y entra con tu Apple ID.",
+        appleButtonMissing: "El botón de Apple no cargó. Recarga la página e inténtalo de nuevo.",
         appleSignLabel: "Apple ID",
         appleSignedIn: "Sesion iniciada con Apple",
         staffAppleFail: "Entraste, pero WHS no pudo guardar el acceso de personal. Toca Sign in with Apple otra vez.",
@@ -1395,24 +1365,9 @@
     function gateWantsAppleAuth() {
       return window._gateStep === "apple" && !!window._pendingGuestStaff;
     }
-    function placeAppleButton() {
-      const anchor = document.getElementById("ck-auth-anchor");
-      const slot = document.getElementById("apple-slot");
-      if (!anchor) return;
-      const show = document.body.classList.contains("whs-apple-gate") && slot && gate && !gate.classList.contains("hidden");
-      if (!show) {
-        anchor.style.left = "8px";
-        anchor.style.top = "8px";
-        return;
-      }
-      const rect = slot.getBoundingClientRect();
-      anchor.style.left = Math.max(8, rect.left) + "px";
-      anchor.style.top = Math.max(8, rect.top) + "px";
-    }
     function parkCkAuth() {
       if (gateWantsAppleAuth()) return;
       document.body.classList.remove("whs-apple-gate");
-      placeAppleButton();
     }
     function closeSheet() {
       if (window._passWipeBusy || window._issuePassBusy) return;
@@ -1440,16 +1395,8 @@
       showGate();
     }
 
-    async function ensureCloud(opts) {
-      const token = schoolToken();
-      if (!token) return false;
-      if (opts && opts.skipAuth) return true;
-      if (!configured) {
-        const node = document.getElementById("apple-sign-in-placeholder");
-        if (node) node.getBoundingClientRect();
-        return setupCloudAuth();
-      }
-      return true;
+    async function ensureCloud() {
+      return !!schoolToken();
     }
     async function refreshCloudAuth() {
       if (!configured) return;
@@ -1869,9 +1816,7 @@
     function passRecordName(record) {
       return String((record && record.recordName) || fieldValue(record, "recordName") || "").trim();
     }
-    function mountCkAuth() {
-      placeAppleButton();
-    }
+    function mountCkAuth() {}
     async function waitForVisibleSlot(node) {
       for (let i = 0; i < 40; i += 1) {
         if (node && node.getBoundingClientRect().width > 40 && node.getBoundingClientRect().height > 20) return true;
@@ -1887,21 +1832,29 @@
       document.getElementById("gatePair").classList.add("hidden");
       document.getElementById("gateSetup").classList.add("hidden");
       const apple = document.getElementById("gateApple");
-      if (apple) apple.classList.remove("is-off", "hidden");
+      if (apple) apple.classList.remove("hidden");
       applyChrome();
-      placeAppleButton();
       const slot = document.getElementById("apple-sign-in-placeholder");
       await waitForVisibleSlot(slot);
       try { await setupCloudAuth(); } catch (_) {}
-      placeAppleButton();
+      let ready = false;
+      for (let i = 0; i < 25; i += 1) {
+        const node = document.querySelector("#ck-auth .apple-auth-button, #ck-auth iframe");
+        const rect = node ? node.getBoundingClientRect() : null;
+        if (rect && rect.width > 40 && rect.height > 20) {
+          ready = true;
+          break;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 80));
+      }
+      const err = document.getElementById("appleError");
       if (ckWebAuthToken()) {
-        const err = document.getElementById("appleError");
         if (err) err.textContent = t().appleSignOutFirst;
         watchAppleSignOut(epoch);
         return;
       }
-      const err = document.getElementById("appleError");
-      if (err) err.textContent = "";
+      if (!ready && err) err.textContent = t().appleButtonMissing;
+      else if (err) err.textContent = "";
       watchAppleSignIn(epoch);
     }
     function watchAppleSignOut(epoch) {
@@ -5083,10 +5036,7 @@
       document.getElementById("gatePair").classList.remove("hidden");
       document.getElementById("gateSetup").classList.add("hidden");
       const apple = document.getElementById("gateApple");
-      if (apple) {
-        apple.classList.add("is-off");
-        apple.classList.remove("hidden");
-      }
+      if (apple) apple.classList.add("hidden");
       parkCkAuth();
       const err = document.getElementById("setupError");
       if (err) err.textContent = "";
@@ -5098,10 +5048,7 @@
       document.getElementById("gatePair").classList.add("hidden");
       document.getElementById("gateSetup").classList.remove("hidden");
       const apple = document.getElementById("gateApple");
-      if (apple) {
-        apple.classList.add("is-off");
-        apple.classList.remove("hidden");
-      }
+      if (apple) apple.classList.add("hidden");
       const access = document.getElementById("guestAccess");
       if (access) access.value = "";
       applyChrome();
@@ -5229,10 +5176,6 @@
     window.openAsk = openAsk;
     window.openAide = openAide;
     window.openPassesInfo = openPassesInfo;
-    window.addEventListener("resize", placeAppleButton);
-    const applePlaceholder = document.getElementById("apple-sign-in-placeholder");
-    if (applePlaceholder) applePlaceholder.getBoundingClientRect();
-    setupCloudAuth().catch(() => {});
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("./sw.js").catch(() => {});
     }
