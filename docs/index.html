@@ -2253,7 +2253,7 @@
         try { existing = await restLookup([key]); } catch (_) { existing = []; }
         if (existing.length) continue;
         try {
-          await restModify({
+          await restModifySchool({
             recordType: "WHSWebProfile",
             recordName: key,
             fields: {
@@ -2263,7 +2263,20 @@
               grade: { value: String(person.grade || "") }
             }
           }, "create");
-        } catch (_) {}
+        } catch (_) {
+          try {
+            await restModify({
+              recordType: "WHSWebProfile",
+              recordName: key,
+              fields: {
+                displayName: { value: person.displayName || person.firstName || "Warrior" },
+                firstName: { value: person.firstName || person.displayName || "" },
+                role: { value: "student" },
+                grade: { value: String(person.grade || "") }
+              }
+            }, "create");
+          } catch (_) {}
+        }
         return key;
       }
       return makeWebUnlockKey();
@@ -3594,8 +3607,10 @@
           fields: { passIDs: { value: ids.join(",") } }
         };
         if (profileRec.recordChangeTag) rec.recordChangeTag = profileRec.recordChangeTag;
-        try { await ckCreateRecords([rec]); } catch (_) {
-          try { await restModify(rec, "update"); } catch (_) {}
+        try { await restModifySchool(rec, "forceUpdate"); } catch (_) {
+          try { await ckCreateRecords([rec]); } catch (_) {
+            try { await restModify(rec, "update"); } catch (_) {}
+          }
         }
       }
       const linkName = "webpass." + key;
@@ -3614,10 +3629,14 @@
       };
       if (link && link.recordChangeTag) record.recordChangeTag = link.recordChangeTag;
       try {
-        if (record.recordChangeTag) await ckCreateRecords([record]);
-        else await ckCreateNews(record);
+        await restModifySchool(record, link ? "forceUpdate" : "create");
       } catch (_) {
-        await restModify(record, link ? "forceUpdate" : "create");
+        try {
+          if (record.recordChangeTag) await ckCreateRecords([record]);
+          else await ckCreateNews(record);
+        } catch (_) {
+          await restModify(record, link ? "forceUpdate" : "create");
+        }
       }
     }
     async function attachPassIcon(recordName, file, onProgress) {
@@ -3790,9 +3809,10 @@
       try { await ensureCloud(); } catch (_) {}
       try {
         const key = normalizeCode(profile.key);
-        const profiles = await fetchByNames(cloudDb(), [key, "webpass." + key]);
+        const dashed = key.length === 10 ? `${key.slice(0, 5)}-${key.slice(5)}` : "";
+        const profiles = await fetchByNames(cloudDb(), [key, dashed, "webpass." + key, dashed ? "webpass." + dashed : ""]);
         const mine = profiles.find((item) => normalizeCode(item.recordName) === key);
-        const linked = profiles.find((item) => String(item.recordName || "").toLowerCase() === ("webpass." + key).toLowerCase());
+        const linked = profiles.find((item) => String(item.recordName || "").toLowerCase().replace(/-/g, "") === ("webpass." + key).toLowerCase());
         const ids = [...new Set(
           String(fieldValue(mine, "passIDs") || "").split(",").concat(String(fieldValue(linked, "passIDs") || "").split(","))
             .map((part) => part.trim()).filter(Boolean)
