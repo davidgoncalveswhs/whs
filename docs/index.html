@@ -377,24 +377,21 @@
       padding: 14px 16px; font-size: 16px; width: 100%;
     }
     .gate-row select { appearance: none; background-image: none; }
-    .gate-apple-step {
-      display: flex;
-      align-items: center;
-      min-height: 72px;
-      margin: 4px 0 8px;
+    #guestAppleRow {
+      min-height: 52px;
     }
-    .gate-apple-step #ck-auth,
+    #ck-auth-setup,
+    #ck-auth-setup #ck-auth,
     body.whs-apple-gate #ck-auth {
       display: flex !important;
       align-items: center;
       min-height: 44px;
       width: 100%;
     }
-    .gate-apple-step #apple-sign-in-placeholder {
+    #ck-auth-setup #apple-sign-in-placeholder,
+    #ck-auth-setup .apple-auth-button {
       min-height: 44px;
       min-width: 220px;
-    }
-    .gate-apple-step .apple-auth-button {
       overflow: visible !important;
     }
     .gate-actions {
@@ -589,17 +586,15 @@
               <label id="staffCodeLabel" for="guestAccess">Staff access code</label>
               <input id="guestAccess" type="password" inputmode="numeric" autocomplete="off" spellcheck="false">
             </div>
+            <div class="gate-row hidden" id="guestAppleRow">
+              <p class="muted" id="guestAppleHint" style="margin:0 0 8px;">Staff uses the same Apple ID as on iPhone. Sign in to finish.</p>
+              <div id="ck-auth-setup"></div>
+            </div>
           </div>
           <div class="gate-actions">
             <button class="gate-signin" type="button" id="guestFinish">Sign In</button>
           </div>
           <p class="error" id="setupError"></p>
-        </div>
-        <div id="gateApple" class="hidden">
-          <div class="gate-apple-step">
-            <div id="ck-auth-gate"></div>
-          </div>
-          <p class="error" id="appleError"></p>
         </div>
       </div>
     </div>
@@ -1344,8 +1339,16 @@
     function normalizeCode(value) {
       return String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
     }
+    function gateIsOpen() {
+      return gate && !gate.classList.contains("hidden");
+    }
+    function staffSetupVisible() {
+      if (window._gateStep !== "guest" || !gateIsOpen()) return false;
+      const role = normalizeRole((document.getElementById("guestRole") || {}).value);
+      return role === "teacher" || role === "administrator";
+    }
     function gateWantsAppleAuth() {
-      return window._gateStep === "apple" && !!window._pendingGuestStaff;
+      return staffSetupVisible();
     }
     function parkCkAuth() {
       if (gateWantsAppleAuth()) return;
@@ -1406,8 +1409,8 @@
         watchAppleSignIn();
         return true;
       }
-      window._ckAuthReady = true;
       try { await CloudKit.getDefaultContainer().setUpAuth(); } catch (_) {}
+      window._ckAuthReady = true;
       watchAppleSignIn();
       return true;
     }
@@ -1787,6 +1790,8 @@
           window._ckWatch = false;
           const signedName = userNameFromInfo(userInfo);
           if (signedName) window._ckUserRecordName = signedName;
+          const fromForm = pendingStaffFromForm();
+          if (fromForm) window._pendingGuestStaff = fromForm;
           if (window._pendingGuestStaff) {
             finishPendingGuestStaff();
             watchAppleSignIn();
@@ -2263,13 +2268,12 @@
       if (window._gateStep === "guest") {
         gateTitle.textContent = c.guestTitle;
         gateBody.textContent = c.guestBody;
-      } else if (window._gateStep === "apple") {
-        gateTitle.textContent = c.appleStepTitle;
-        gateBody.textContent = c.appleStepBody;
       } else {
         gateTitle.textContent = c.welcome;
         gateBody.textContent = c.gateBody;
       }
+      const guestAppleHint = document.getElementById("guestAppleHint");
+      if (guestAppleHint) guestAppleHint.textContent = c.appleStepBody;
       codeLabel.textContent = c.codeLabel;
       const nameLabel = document.getElementById("nameLabel");
       const gradeLabel = document.getElementById("gradeLabel");
@@ -4836,20 +4840,14 @@
       document.body.classList.remove("whs-apple-gate");
       document.getElementById("gatePair").classList.remove("hidden");
       document.getElementById("gateSetup").classList.add("hidden");
-      const apple = document.getElementById("gateApple");
-      if (apple) apple.classList.add("hidden");
       parkCkAuth();
       const err = document.getElementById("setupError");
       if (err) err.textContent = "";
     }
     function showGuestStep() {
       window._gateStep = "guest";
-      document.body.classList.remove("whs-apple-gate");
       document.getElementById("gatePair").classList.add("hidden");
       document.getElementById("gateSetup").classList.remove("hidden");
-      const apple = document.getElementById("gateApple");
-      if (apple) apple.classList.add("hidden");
-      parkCkAuth();
       const access = document.getElementById("guestAccess");
       if (access) access.value = "";
       applyChrome();
@@ -4861,23 +4859,26 @@
       const staff = role === "teacher" || role === "administrator";
       const gradeRow = document.getElementById("guestGradeRow");
       const accessRow = document.getElementById("guestAccessRow");
+      const appleRow = document.getElementById("guestAppleRow");
       if (gradeRow) gradeRow.classList.toggle("hidden", staff);
       if (accessRow) accessRow.classList.toggle("hidden", !staff);
-    }
-    async function showAppleStep() {
-      window._gateStep = "apple";
-      document.body.classList.add("whs-apple-gate");
-      document.getElementById("gatePair").classList.add("hidden");
-      document.getElementById("gateSetup").classList.add("hidden");
-      const apple = document.getElementById("gateApple");
-      if (apple) apple.classList.remove("hidden");
-      applyChrome();
-      mountCkAuth(document.getElementById("ck-auth-gate"));
-      try { await ensureCloud(); } catch (_) {}
-      watchAppleSignIn();
-      if (ckWebAuthToken() && window._pendingGuestStaff) {
-        await finishPendingGuestStaff();
+      if (appleRow) appleRow.classList.toggle("hidden", !staff);
+      if (staff && window._gateStep === "guest" && gateIsOpen()) {
+        document.body.classList.add("whs-apple-gate");
+        mountCkAuth(document.getElementById("ck-auth-setup"));
+        ensureCloud().then(() => watchAppleSignIn()).catch(() => {});
+      } else if (window._gateStep === "guest" && gateIsOpen()) {
+        document.body.classList.remove("whs-apple-gate");
+        parkCkAuth();
       }
+    }
+    function pendingStaffFromForm() {
+      if (!(window._gateStep === "guest" && gateIsOpen())) return null;
+      const name = String((document.getElementById("guestName") || {}).value || "").trim();
+      const role = normalizeRole((document.getElementById("guestRole") || {}).value);
+      const code = String((document.getElementById("guestAccess") || {}).value || "").trim();
+      if ((role !== "teacher" && role !== "administrator") || !name || !code) return null;
+      return { name, role, code };
     }
     async function enterGuest() {
       const name = String((document.getElementById("guestName") || {}).value || "").trim();
@@ -4906,8 +4907,11 @@
       const finish = document.getElementById("guestFinish");
       if (staff) {
         window._pendingGuestStaff = { name, role, code };
+        mountCkAuth(document.getElementById("ck-auth-setup"));
+        try { await ensureCloud(); } catch (_) {}
+        watchAppleSignIn();
         if (!ckWebAuthToken()) {
-          await showAppleStep();
+          if (err) err.textContent = t().appleStepBody;
           return;
         }
         if (finish) finish.disabled = true;
@@ -4928,22 +4932,22 @@
     }
     async function finishPendingGuestStaff() {
       const pending = window._pendingGuestStaff;
-      const appleErr = document.getElementById("appleError");
+      const err = document.getElementById("setupError");
       if (!pending) return;
       if (!ckWebAuthToken()) {
-        if (appleErr) appleErr.textContent = t().appleStepBody;
+        if (err) err.textContent = t().appleStepBody;
         return;
       }
-      if (appleErr) appleErr.textContent = "";
+      if (err) err.textContent = "";
       let proof = "";
       try { proof = await allowStaffGate(pending.code); } catch (error) {
         if (error && error.apple) {
-          if (appleErr) appleErr.textContent = t().appleStepBody;
+          if (err) err.textContent = t().appleStepBody;
           return;
         }
       }
       if (!proof) {
-        if (appleErr) appleErr.textContent = t().staffCodeWrong;
+        if (err) err.textContent = t().staffCodeWrong;
         return;
       }
       let enrolled = "";
@@ -4952,16 +4956,18 @@
         try { enrolled = await enrollWebStaff(pending.role, pending.code); } catch (error) {
           enrolled = "";
           if (error && error.apple) {
-            if (appleErr) appleErr.textContent = t().appleStepBody;
+            if (err) err.textContent = t().appleStepBody;
             return;
           }
         }
       }
       if (enrolled !== "teacher" && enrolled !== "administrator") {
-        if (appleErr) appleErr.textContent = t().staffAppleFail;
+        if (err) err.textContent = t().staffAppleFail;
         return;
       }
       window._pendingGuestStaff = null;
+      document.body.classList.remove("whs-apple-gate");
+      window._gateStep = "pair";
       parkCkAuth();
       profile = {
         displayName: pending.name,
