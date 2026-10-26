@@ -15,6 +15,7 @@
   <link rel="apple-touch-icon" href="./app-icon.png">
   <link rel="preconnect" href="https://cdn.apple-cloudkit.com">
   <script src="./config.js"></script>
+  <script src="./ck-public.js"></script>
   <style>
     :root {
       --orange: #E87722;
@@ -648,6 +649,7 @@
         appleStepBody: "Staff uses the same Apple ID as on iPhone. Sign in to finish.",
         appleSignOutFirst: "This browser is still signed in. Sign out, then sign in with your Apple ID.",
         appleButtonMissing: "The Apple button did not load. Reload this page and try again.",
+        appleNoSchool: "The school connection did not load. Reload this page.",
         appleSignLabel: "Apple ID",
         appleSignedIn: "Signed in with Apple",
         staffAppleFail: "Signed in, but WHS could not save staff access. Tap Sign in with Apple again.",
@@ -892,6 +894,7 @@
         appleStepBody: "El personal usa el mismo Apple ID que en iPhone. Entra para terminar.",
         appleSignOutFirst: "Este navegador sigue con una sesión. Cierra sesión y entra con tu Apple ID.",
         appleButtonMissing: "El botón de Apple no cargó. Recarga la página e inténtalo de nuevo.",
+        appleNoSchool: "La conexión de la escuela no cargó. Recarga la página.",
         appleSignLabel: "Apple ID",
         appleSignedIn: "Sesion iniciada con Apple",
         staffAppleFail: "Entraste, pero WHS no pudo guardar el acceso de personal. Toca Sign in with Apple otra vez.",
@@ -1834,11 +1837,16 @@
       const apple = document.getElementById("gateApple");
       if (apple) apple.classList.remove("hidden");
       applyChrome();
+      const err = document.getElementById("appleError");
+      if (!schoolToken()) {
+        if (err) err.textContent = t().appleNoSchool;
+        return;
+      }
       const slot = document.getElementById("apple-sign-in-placeholder");
       await waitForVisibleSlot(slot);
       try { await setupCloudAuth(); } catch (_) {}
       let ready = false;
-      for (let i = 0; i < 25; i += 1) {
+      for (let i = 0; i < 80; i += 1) {
         const node = document.querySelector("#ck-auth .apple-auth-button, #ck-auth iframe");
         const rect = node ? node.getBoundingClientRect() : null;
         if (rect && rect.width > 40 && rect.height > 20) {
@@ -1847,7 +1855,6 @@
         }
         await new Promise((resolve) => setTimeout(resolve, 80));
       }
-      const err = document.getElementById("appleError");
       if (ckWebAuthToken()) {
         if (err) err.textContent = t().appleSignOutFirst;
         watchAppleSignOut(epoch);
