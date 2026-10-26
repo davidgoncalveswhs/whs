@@ -1846,7 +1846,6 @@
           else if (newsId) deleteNewsPost(newsId);
           else if (window._pendingNewsPost) publishNewsPost();
           else if (window._pendingIssuePass) issuePassFromWeb();
-          else if (view === "passes") loadPasses();
           watchAppleSignIn();
         }).catch(() => { window._ckWatch = false; });
       } catch (_) { window._ckWatch = false; }
@@ -4561,13 +4560,24 @@
       )).join("");
     }
     async function loadPasses() {
+      if (view !== "passes") return;
+      if (window._passLoadBusy) {
+        window._passLoadAgain = true;
+        return;
+      }
+      window._passLoadBusy = true;
       const node = document.getElementById("view-passes");
       const c = t();
       const query = String((document.getElementById("passQuery") || {}).value || window._passQuery || "");
       window._passQuery = query;
-      node.innerHTML = `<div class="toolbar" style="display:flex;gap:8px;flex-wrap:wrap;">${canIssuePass() ? `<button class="ghost" type="button" data-go="issuepass">${c.issuePass}</button>` : ""}<button class="ghost" type="button" id="refreshPasses">${c.refresh}</button></div><input class="search" id="passQuery" placeholder="${c.passSearch}" value="${escapeHtml(query)}"><div id="passes"></div>`;
+      if (!document.getElementById("passes")) {
+        node.innerHTML = `<div class="toolbar" style="display:flex;gap:8px;flex-wrap:wrap;">${canIssuePass() ? `<button class="ghost" type="button" data-go="issuepass">${c.issuePass}</button>` : ""}<button class="ghost" type="button" id="refreshPasses">${c.refresh}</button></div><input class="search" id="passQuery" placeholder="${c.passSearch}" value="${escapeHtml(query)}"><div id="passes"></div>`;
+      }
       if (!(await ensureCloud())) {
-        node.insertAdjacentHTML("beforeend", `<div class="card"><p class="muted">${c.adminHint}</p></div>`);
+        window._passLoadBusy = false;
+        if (!document.getElementById("passes")) {
+          node.insertAdjacentHTML("beforeend", `<div class="card"><p class="muted">${c.adminHint}</p></div>`);
+        }
         return;
       }
       const seen = new Map();
@@ -4598,9 +4608,16 @@
           if (id) window._passRecords[id] = record;
         });
         window._passLogList = usable;
-        paintPassLog();
+        if (view === "passes") paintPassLog();
       } catch (error) {
-        node.insertAdjacentHTML("beforeend", `<p class="error">${escapeHtml(error.message)}</p>`);
+        if (view === "passes" && node && !document.getElementById("passes")) {
+          node.insertAdjacentHTML("beforeend", `<p class="error">${escapeHtml(error.message)}</p>`);
+        }
+      }
+      window._passLoadBusy = false;
+      if (window._passLoadAgain) {
+        window._passLoadAgain = false;
+        loadPasses();
       }
     }
 
