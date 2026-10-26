@@ -1526,6 +1526,12 @@
         }
       };
       try {
+        if (await restModifySchool(record, "create")) return true;
+      } catch (_) {}
+      try {
+        if (await restModifySchool(record, "forceUpdate")) return true;
+      } catch (_) {}
+      try {
         if (await restModify(record, "create")) return true;
       } catch (_) {}
       try {
@@ -1563,10 +1569,10 @@
     function restUrl(action) {
       return restPublicUrl("records/" + action);
     }
-    function restPublicUrl(path) {
+    function restPublicUrl(path, schoolOnly) {
       const token = schoolToken();
       let url = `https://api.apple-cloudkit.com/database/1/${CONTAINER}/${schoolEnv()}/public/${path}?ckAPIToken=${encodeURIComponent(token)}`;
-      const web = ckWebAuthToken();
+      const web = schoolOnly ? "" : ckWebAuthToken();
       if (web) url += `&ckWebAuthToken=${encodeURIComponent(web)}`;
       return url;
     }
@@ -1702,6 +1708,12 @@
         }
       };
       try {
+        if (await restModifySchool(record, "create")) return true;
+      } catch (_) {}
+      try {
+        if (await restModifySchool(record, "forceUpdate")) return true;
+      } catch (_) {}
+      try {
         if (await restModify(record, "create")) return true;
       } catch (_) {}
       try {
@@ -1744,6 +1756,25 @@
     function requireCloudWrite() {
       if (ckWebAuthToken()) return true;
       throw Object.assign(new Error("APPLE"), { apple: true, serverErrorCode: "AUTHENTICATION_REQUIRED" });
+    }
+    async function restModifySchool(record, operationType) {
+      const token = schoolToken();
+      if (!token || !record || !record.recordName) return null;
+      const url = restPublicUrl("records/modify", true);
+      const response = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          operations: [{
+            operationType: operationType || "create",
+            record
+          }]
+        })
+      });
+      const payload = await response.json();
+      const records = recordsFrom(payload).filter(usableRecord);
+      if (records.length) return records[0];
+      throw cloudRecordError(payload, payload.records && payload.records[0]);
     }
     async function restModify(record, operationType) {
       requireCloudWrite();
@@ -3534,11 +3565,14 @@
       };
       if (existing && existing.recordChangeTag) {
         record.recordChangeTag = existing.recordChangeTag;
+        try { await restModifySchool(record, "forceUpdate"); return; } catch (_) {}
         try { await ckCreateRecords([record]); return; } catch (_) {}
         try { await restModify(record, "update"); return; } catch (_) {}
       }
-      try { await ckCreateNews(record); } catch (_) {
-        await restModify(record, existing ? "forceUpdate" : "create");
+      try { await restModifySchool(record, existing ? "forceUpdate" : "create"); } catch (_) {
+        try { await ckCreateNews(record); } catch (_) {
+          await restModify(record, existing ? "forceUpdate" : "create");
+        }
       }
     }
     async function attachPassToStudent(passId, webCode, studentName) {
