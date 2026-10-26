@@ -383,15 +383,19 @@
       min-height: 72px;
       margin: 4px 0 8px;
     }
-    .gate-apple-step #ck-auth {
-      display: flex;
+    .gate-apple-step #ck-auth,
+    body.whs-apple-gate #ck-auth {
+      display: flex !important;
       align-items: center;
       min-height: 44px;
       width: 100%;
     }
-    .gate-apple-step #ck-auth.hidden { display: none !important; }
+    .gate-apple-step #apple-sign-in-placeholder {
+      min-height: 44px;
+      min-width: 220px;
+    }
     .gate-apple-step .apple-auth-button {
-      overflow: hidden !important;
+      overflow: visible !important;
     }
     .gate-actions {
       display: flex; justify-content: flex-end;
@@ -1340,7 +1344,11 @@
     function normalizeCode(value) {
       return String(value || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
     }
+    function gateWantsAppleAuth() {
+      return window._gateStep === "apple" && !!window._pendingGuestStaff;
+    }
     function parkCkAuth() {
+      if (gateWantsAppleAuth()) return;
       const box = document.getElementById("ck-auth");
       if (!box) return;
       if (box.parentNode !== document.body) document.body.appendChild(box);
@@ -1348,7 +1356,7 @@
     }
     function closeSheet() {
       if (window._passWipeBusy || window._issuePassBusy) return;
-      parkCkAuth();
+      if (!gateWantsAppleAuth()) parkCkAuth();
       sheet.classList.add("hidden");
       sheetCard.innerHTML = "";
     }
@@ -1372,7 +1380,7 @@
       showGate();
     }
 
-    async function ensureCloud() {
+    async function ensureCloud(opts) {
       const token = schoolToken();
       if (!token) return false;
       if (!configured) {
@@ -1389,9 +1397,18 @@
           }]
         });
         configured = true;
-        try { await CloudKit.getDefaultContainer().setUpAuth(); } catch (_) {}
-        watchAppleSignIn();
       }
+      if (opts && opts.skipAuth) return true;
+      return setupCloudAuth();
+    }
+    async function setupCloudAuth() {
+      if (window._ckAuthReady) {
+        watchAppleSignIn();
+        return true;
+      }
+      window._ckAuthReady = true;
+      try { await CloudKit.getDefaultContainer().setUpAuth(); } catch (_) {}
+      watchAppleSignIn();
       return true;
     }
     function ckWebAuthToken() {
@@ -1755,7 +1772,7 @@
     function mountCkAuth(parent) {
       const box = document.getElementById("ck-auth");
       if (!(box && parent)) return;
-      parent.appendChild(box);
+      if (box.parentNode !== parent) parent.appendChild(box);
       box.classList.remove("hidden");
     }
     function showRevokePassError(kind) {
@@ -4827,6 +4844,7 @@
     function showPairStep() {
       window._gateStep = "pair";
       window._pendingGuestStaff = null;
+      document.body.classList.remove("whs-apple-gate");
       document.getElementById("gatePair").classList.remove("hidden");
       document.getElementById("gateSetup").classList.add("hidden");
       const apple = document.getElementById("gateApple");
@@ -4837,6 +4855,7 @@
     }
     function showGuestStep() {
       window._gateStep = "guest";
+      document.body.classList.remove("whs-apple-gate");
       document.getElementById("gatePair").classList.add("hidden");
       document.getElementById("gateSetup").classList.remove("hidden");
       const apple = document.getElementById("gateApple");
@@ -4858,6 +4877,7 @@
     }
     async function showAppleStep() {
       window._gateStep = "apple";
+      document.body.classList.add("whs-apple-gate");
       document.getElementById("gatePair").classList.add("hidden");
       document.getElementById("gateSetup").classList.add("hidden");
       const apple = document.getElementById("gateApple");
@@ -4865,7 +4885,6 @@
       applyChrome();
       mountCkAuth(document.getElementById("ck-auth-gate"));
       try { await ensureCloud(); } catch (_) {}
-      try { await CloudKit.getDefaultContainer().setUpAuth(); } catch (_) {}
       watchAppleSignIn();
       if (ckWebAuthToken() && window._pendingGuestStaff) {
         await finishPendingGuestStaff();
