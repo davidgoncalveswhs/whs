@@ -1680,13 +1680,15 @@
       const payload = await response.json();
       return recordsFrom(payload).filter(usableRecord);
     }
-    async function restLookup(names) {
+    async function restLookupDetailed(names, exact) {
+      const unique = exact
+        ? [...new Set((names || []).map((name) => String(name || "").trim()).filter(Boolean))]
+        : [...new Set((names || []).filter(Boolean).flatMap(lookupNames))];
       const token = schoolToken();
-      const unique = [...new Set(names.filter(Boolean).flatMap(lookupNames))];
-      if (!token || !unique.length) return [];
-      const found = [];
-      for (let start = 0; start < unique.length; start += 150) {
-        const slice = unique.slice(start, start + 150);
+      if (!token || !unique.length) return { records: [], complete: false, failed: unique };
+      const slices = [];
+      for (let start = 0; start < unique.length; start += 150) slices.push(unique.slice(start, start + 150));
+      const results = await Promise.all(slices.map(async (slice) => {
         try {
           const response = await fetch(restUrl("lookup"), {
             method: "POST",
@@ -1694,34 +1696,31 @@
             body: JSON.stringify({ records: slice.map((recordName) => ({ recordName })) })
           });
           const payload = await response.json();
-          recordsFrom(payload).filter(usableRecord).forEach((record) => found.push(record));
-        } catch (_) {}
-      }
-      return found;
+          const ok = response.ok || !!(payload && payload.records);
+          return { records: recordsFrom(payload).filter(usableRecord), ok, failed: ok ? [] : slice };
+        } catch (_) {
+          return { records: [], ok: false, failed: slice };
+        }
+      }));
+      const records = [];
+      const failed = [];
+      results.forEach((item) => {
+        item.records.forEach((record) => records.push(record));
+        failed.push(...item.failed);
+      });
+      return { records, complete: results.every((item) => item.ok), failed };
+    }
+    async function restLookup(names) {
+      return (await restLookupDetailed(names, false)).records;
     }
     async function restLookupExact(names) {
-      const unique = [...new Set((names || []).map((name) => String(name || "").trim()).filter(Boolean))];
-      if (!unique.length) return [];
-      const token = schoolToken();
-      const found = [];
-      if (token) {
-        for (let start = 0; start < unique.length; start += 150) {
-          const slice = unique.slice(start, start + 150);
-          try {
-            const response = await fetch(restUrl("lookup"), {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ records: slice.map((recordName) => ({ recordName })) })
-            });
-            const payload = await response.json();
-            recordsFrom(payload).filter(usableRecord).forEach((record) => found.push(record));
-          } catch (_) {}
-        }
-        if (found.length) return found;
-      }
+      const looked = await restLookupDetailed(names, true);
+      if (looked.complete) return looked.records;
+      const found = looked.records.slice();
       const db = cloudDb();
+      const pending = looked.failed || [];
       if (db && typeof db.fetchRecord === "function") {
-        for (const name of unique) {
+        for (const name of pending) {
           try { recordsFrom(await db.fetchRecord(name)).forEach((record) => { if (usableRecord(record)) found.push(record); }); } catch (_) {}
         }
       }
@@ -2442,8 +2441,8 @@
     }
     async function fetchByNames(db, names) {
       try {
-        const rest = await restLookup(names);
-        if (rest.length) return rest;
+        const looked = await restLookupDetailed(names, false);
+        if (looked.complete || looked.records.length) return looked.records;
       } catch (_) {}
       const unique = [...new Set(names.filter(Boolean).flatMap(lookupNames))];
       if (!unique.length) return [];
@@ -3987,57 +3986,63 @@
       </article>`;
     }
 
-    async function loadStudentPasses() {
+    function paintStudentPasses(usable) {
       const c = t();
       const list = document.getElementById("view-mypasses");
       const tileSub = document.getElementById("passTileSub");
-      if (!canSeeOwnPasses()) return;
-      if (list && view === "mypasses") {
-        list.innerHTML = `${backBar()}<p class="muted">${c.yourPasses}</p>`;
+      window._studentPassUsable = usable || [];
+      if (tileSub) {
+        if (!usable.length) tileSub.textContent = c.noneYet;
+        else {
+          const first = usable[0];
+          const teacher = fieldValue(first, "teacherName");
+          const dest = fieldValue(first, "destination");
+          tileSub.textContent = dest ? `${teacher} · ${dest}` : (teacher || c.yourPasses);
+        }
       }
+      if (!(list && view === "mypasses")) return;
+      if (!usable.length) {
+        list.innerHTML = `${backBar()}<p class="muted">${c.noStudentPasses}</p>`;
+        return;
+      }
+      window._passRecords = window._passRecords || {};
+      list.innerHTML = backBar() + usable.map((record) => {
+        const id = record.recordName || fieldValue(record, "recordName") || String(Math.random());
+        window._passRecords[id] = record;
+        return `<button type="button" class="action" style="margin-bottom:12px;max-width:560px;" data-action="openPass" data-pass-id="${escapeHtml(id)}">${passPaper(record, false)}</button>`;
+      }).join("");
+    }
+    async function loadStudentPasses() {
+      const c = t();
+      const list = document.getElementById("view-mypasses");
+      if (!canSeeOwnPasses()) return;
+      if (window._studentPassUsable && window._studentPassUsable.length) paintStudentPasses(window._studentPassUsable);
+      else if (list && view === "mypasses") list.innerHTML = `${backBar()}<p class="muted">${c.yourPasses}</p>`;
       if (!schoolToken()) {
-        if (tileSub) tileSub.textContent = c.noneYet;
-        if (list && view === "mypasses") list.innerHTML = `${backBar()}<p class="muted">${c.noStudentPasses}</p>`;
+        paintStudentPasses([]);
         return;
       }
       try { await ensureCloud(); } catch (_) {}
       try {
         const key = normalizeCode(profile.key);
         const dashed = key.length === 10 ? `${key.slice(0, 5)}-${key.slice(5)}` : "";
-        const profiles = await fetchByNames(cloudDb(), [key, dashed, "webpass." + key, dashed ? "webpass." + dashed : ""].concat(inboxNames(key)));
+        const profiles = await restLookupExact([key, dashed, "webpass." + key, dashed ? "webpass." + dashed : ""].concat(inboxNames(key)));
         const ids = [...new Set(profiles.flatMap((record) => parsePassIDs(fieldValue(record, "passIDs"))))];
-        const records = await fetchByNames(cloudDb(), ids);
-        await applyPassIcons(records);
-        const byName = new Map(records.map((record) => [String(record.recordName || "").toLowerCase(), record]));
-        const markers = await fetchByNames(cloudDb(), ids.flatMap((id) => [revokedName(id), tombstoneName(id)]).concat([CLEARED]));
-        window._revokedPassIDs = collectRevokedIDs(records.concat(markers));
+        const packed = await fetchByNames(cloudDb(), ids.concat(ids.flatMap((id) => [revokedName(id), tombstoneName(id)]), [CLEARED]));
+        const byName = new Map(packed.map((record) => [String(record.recordName || "").toLowerCase(), record]));
+        window._revokedPassIDs = collectRevokedIDs(packed);
         const usable = ids.map((id) => byName.get(id.toLowerCase())).filter((record) => {
           if (!(record && (fieldValue(record, "studentName") || fieldValue(record, "teacherName")))) return false;
           if (isPassMarker(record) || passIsRevoked(record)) return false;
           return true;
         });
-        if (tileSub) {
-          if (!usable.length) tileSub.textContent = c.noneYet;
-          else {
-            const first = usable[0];
-            const teacher = fieldValue(first, "teacherName");
-            const dest = fieldValue(first, "destination");
-            tileSub.textContent = dest ? `${teacher} · ${dest}` : (teacher || c.yourPasses);
-          }
-        }
-        if (!(list && view === "mypasses")) return;
-        if (!usable.length) {
-          list.innerHTML = `${backBar()}<p class="muted">${c.noStudentPasses}</p>`;
-          return;
-        }
-        window._passRecords = {};
-        list.innerHTML = backBar() + usable.map((record) => {
-          const id = record.recordName || fieldValue(record, "recordName") || String(Math.random());
-          window._passRecords[id] = record;
-          return `<button type="button" class="action" style="margin-bottom:12px;max-width:560px;" data-action="openPass" data-pass-id="${escapeHtml(id)}">${passPaper(record, false)}</button>`;
-        }).join("");
+        paintStudentPasses(usable);
+        await applyPassIcons(usable);
+        paintStudentPasses(usable);
       } catch (error) {
-        if (list && view === "mypasses") list.innerHTML = `${backBar()}<p class="error">${escapeHtml(error.message)}</p>`;
+        if (list && view === "mypasses" && !(window._studentPassUsable && window._studentPassUsable.length)) {
+          list.innerHTML = `${backBar()}<p class="error">${escapeHtml(error.message)}</p>`;
+        }
       }
     }
 
@@ -4255,26 +4260,36 @@
         if (parts.length) record._newsIcon = "data:image/jpeg;base64," + parts.join("");
       });
     }
-    function passIconChunkNames(id) {
-      const names = [];
-      for (let i = 0; i < 200; i += 1) names.push("passimg." + id + "." + i);
-      return names;
+    function rememberPassIconChunk(grouped, record) {
+      if (String(fieldValue(record, "kind") || "").toLowerCase() !== "passimg") return;
+      const parent = fieldValue(record, "studentName");
+      const idx = Number(String(record.recordName || "").split(".").pop());
+      if (!parent || !Number.isFinite(idx) || idx < 0) return;
+      if (!grouped[parent]) grouped[parent] = [];
+      grouped[parent][idx] = fieldValue(record, "destination");
     }
     async function applyPassIcons(records) {
-      const missing = (records || []).filter((record) => record && !record._passIcon && String(passSignatureSrc(record) || "").indexOf("data:") !== 0);
-      const names = missing.flatMap((record) => passIconChunkNames(record.recordName));
-      if (!names.length) return;
-      let chunks = [];
-      try { chunks = await fetchByNames(cloudDb(), names); } catch (_) { return; }
+      const missing = (records || []).filter((record) => record && record.recordName && !record._passIcon && String(passSignatureSrc(record) || "").indexOf("data:") !== 0);
+      if (!missing.length) return;
       const grouped = {};
-      chunks.forEach((record) => {
-        if (String(fieldValue(record, "kind") || "").toLowerCase() !== "passimg") return;
+      let heads = [];
+      try { heads = await restLookupExact(missing.map((record) => "passimg." + record.recordName + ".0")); } catch (_) { return; }
+      const counts = {};
+      heads.forEach((record) => {
+        rememberPassIconChunk(grouped, record);
         const parent = fieldValue(record, "studentName");
-        const idx = Number(String(record.recordName || "").split(".").pop());
-        if (!parent || !Number.isFinite(idx) || idx < 0) return;
-        if (!grouped[parent]) grouped[parent] = [];
-        grouped[parent][idx] = fieldValue(record, "destination");
+        const parsed = parseInt(fieldValue(record, "dates"), 10);
+        if (parent) counts[parent] = Number.isFinite(parsed) && parsed > 0 ? Math.min(200, parsed) : 200;
       });
+      const rest = [];
+      missing.forEach((record) => {
+        const count = counts[record.recordName];
+        if (!count || count < 2) return;
+        for (let i = 1; i < count; i += 1) rest.push("passimg." + record.recordName + "." + i);
+      });
+      if (rest.length) {
+        try { (await restLookupExact(rest)).forEach((record) => rememberPassIconChunk(grouped, record)); } catch (_) {}
+      }
       missing.forEach((record) => {
         const parts = (grouped[record.recordName] || []).filter(Boolean);
         if (parts.length) record._passIcon = "data:image/jpeg;base64," + parts.join("");
@@ -4816,6 +4831,7 @@
       if (!document.getElementById("passes")) {
         node.innerHTML = `<div class="toolbar" style="display:flex;gap:8px;flex-wrap:wrap;">${canIssuePass() ? `<button class="ghost" type="button" data-go="issuepass">${c.issuePass}</button>` : ""}<button class="ghost" type="button" id="refreshPasses">${c.refresh}</button></div><input class="search" id="passQuery" placeholder="${c.passSearch}" value="${escapeHtml(query)}"><div id="passes"></div>`;
       }
+      if (window._passLogList && window._passLogList.length) paintPassLog();
       if (!(await ensureCloud())) {
         window._passLoadBusy = false;
         if (!document.getElementById("passes")) {
@@ -4829,28 +4845,34 @@
         const db = CloudKit.getDefaultContainer().publicCloudDatabase;
         (await fetchByNames(db, [MANIFEST])).forEach(remember);
         const hasManifest = !!seen.get(MANIFEST);
-        const raw = hasManifest ? fieldValue(seen.get(MANIFEST), "passIDs") : "";
-        (await fetchByNames(db, String(raw || "").split(",").map((part) => part.trim()).filter(Boolean))).forEach(remember);
-        if (!hasManifest) {
+        const ids = hasManifest ? parsePassIDs(fieldValue(seen.get(MANIFEST), "passIDs")) : [];
+        if (ids.length) {
+          (await fetchByNames(db, ids.concat(ids.flatMap((id) => [tombstoneName(id), revokedName(id)]), [CLEARED]))).forEach(remember);
+        } else if (!hasManifest) {
           try { recordsFrom(await db.performQuery({ recordType: PASS_TYPE })).forEach(remember); } catch (_) {}
+          const queried = [...seen.keys()];
+          if (queried.length) {
+            (await fetchByNames(db, queried.flatMap((id) => [tombstoneName(id), revokedName(id)]).concat([CLEARED]))).forEach(remember);
+          }
+        } else {
+          (await fetchByNames(db, [CLEARED])).forEach(remember);
         }
-        const allIDs = [...seen.keys()];
-        const marked = await loadClearedIDs(allIDs);
-        window._revokedPassIDs = new Set([...marked, ...collectRevokedIDs([...seen.values()])]);
-        window._clearedPassIDs = collectClearedIDs([...seen.values()].concat(await fetchByNames(cloudDb(), [CLEARED]).catch(() => [])));
+        window._revokedPassIDs = collectRevokedIDs([...seen.values()]);
+        window._clearedPassIDs = collectClearedIDs([...seen.values()]);
         const usable = [...seen.values()].filter((r) => {
           if (isPassMarker(r)) return false;
           const id = passRecordName(r).toLowerCase();
           if (window._clearedPassIDs && window._clearedPassIDs.has(id)) return false;
           return !!(fieldValue(r, "studentName") || fieldValue(r, "teacherName"));
         });
-        await applyPassIcons(usable);
         window._passRecords = {};
         usable.forEach((record) => {
           const id = passRecordName(record);
           if (id) window._passRecords[id] = record;
         });
         window._passLogList = usable;
+        if (view === "passes") paintPassLog();
+        await applyPassIcons(usable);
         if (view === "passes") paintPassLog();
       } catch (error) {
         if (view === "passes" && node && !document.getElementById("passes")) {
