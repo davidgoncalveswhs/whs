@@ -380,13 +380,14 @@
     .gate-apple-step {
       display: flex;
       align-items: center;
-      min-height: 48px;
+      min-height: 72px;
       margin: 4px 0 8px;
     }
     .gate-apple-step #ck-auth {
       display: flex;
       align-items: center;
-      min-height: 40px;
+      min-height: 44px;
+      width: 100%;
     }
     .gate-apple-step #ck-auth.hidden { display: none !important; }
     .gate-apple-step .apple-auth-button {
@@ -1506,7 +1507,7 @@
       const existing = await fetchEnrolledWebRole();
       if (existing === wanted) return existing;
       if (!gateAlreadyOk) {
-        const proof = await cloudGateAllows("staff", code);
+        const proof = await allowStaffGate(code);
         if (!proof) return "";
       }
       const user = await ckUserRecordName();
@@ -1615,20 +1616,78 @@
       const key = String(id || "").toLowerCase();
       return key.indexOf("whs-staff-gate.") === 0 || key.indexOf("whs-wipe-gate.") === 0 || key.indexOf("whs-staff-user.") === 0;
     }
-    async function cloudGateAllows(kind, code) {
+    async function gateDigests(kind, code) {
       const typed = String(code || "").trim();
-      if (!typed) return "";
-      const digest = await sha256Hex(typed);
-      const name = gateRecordName(kind, digest);
-      if (!name) return "";
+      if (!typed) return [];
+      const variants = kind === "staff"
+        ? [...new Set([typed, normalizeCode(typed)].filter(Boolean))]
+        : [typed];
+      const digests = [];
+      for (const value of variants) {
+        const digest = await sha256Hex(value);
+        if (staffProofShape(digest)) digests.push(digest);
+      }
+      return [...new Set(digests)];
+    }
+    async function cloudGateAllows(kind, code) {
+      const digests = await gateDigests(kind, code);
+      if (!digests.length) return "";
       try { await ensureCloud(); } catch (_) {}
       const expected = kind === "wipe" ? "wipegate" : "staffgate";
-      const records = await restLookupExact([name]);
-      const record = records.find((item) => String(item.recordName || "") === name);
-      if (!record) return "";
-      const got = String(fieldValue(record, "kind") || "").toLowerCase();
-      if (got && got !== expected) return "";
-      return digest;
+      const names = digests.map((digest) => gateRecordName(kind, digest)).filter(Boolean);
+      const records = names.length ? await restLookupExact(names) : [];
+      for (let i = 0; i < names.length; i += 1) {
+        const name = names[i];
+        const record = records.find((item) => String(item.recordName || "") === name);
+        if (!record) continue;
+        const got = String(fieldValue(record, "kind") || "").toLowerCase();
+        if (got && got !== expected) continue;
+        return digests[i];
+      }
+      return "";
+    }
+    async function anyGateRecord(kind) {
+      const expected = kind === "wipe" ? "wipegate" : "staffgate";
+      const prefix = kind === "wipe" ? "whs-wipe-gate." : "whs-staff-gate.";
+      try {
+        const records = await restQuery(PASS_TYPE, 200);
+        return records.some((item) => {
+          const name = String(item.recordName || "").toLowerCase();
+          const got = String(fieldValue(item, "kind") || "").toLowerCase();
+          return name.indexOf(prefix) === 0 || got === expected;
+        });
+      } catch (_) {
+        return false;
+      }
+    }
+    async function saveGateRecord(kind, digest) {
+      const name = gateRecordName(kind, digest);
+      if (!name) return false;
+      const record = {
+        recordType: PASS_TYPE,
+        recordName: name,
+        fields: {
+          kind: { value: kind === "wipe" ? "wipegate" : "staffgate" }
+        }
+      };
+      try {
+        if (await restModify(record, "create")) return true;
+      } catch (_) {}
+      try {
+        if (await restModify(record, "forceUpdate")) return true;
+      } catch (_) {}
+      return false;
+    }
+    async function allowStaffGate(code) {
+      const typed = String(code || "").trim();
+      if (!typed) return "";
+      const proof = await cloudGateAllows("staff", typed);
+      if (proof) return proof;
+      if (await anyGateRecord("staff")) return "";
+      const digest = (await gateDigests("staff", typed))[0] || "";
+      if (!digest) return "";
+      const saved = await saveGateRecord("staff", digest);
+      return saved ? digest : "";
     }
     async function enforceGuestStaffProof() {
       if (!guestStaffNeedsProof()) return;
@@ -4804,9 +4863,10 @@
       const apple = document.getElementById("gateApple");
       if (apple) apple.classList.remove("hidden");
       applyChrome();
-      try { await ensureCloud(); } catch (_) {}
-      watchAppleSignIn();
       mountCkAuth(document.getElementById("ck-auth-gate"));
+      try { await ensureCloud(); } catch (_) {}
+      try { await CloudKit.getDefaultContainer().setUpAuth(); } catch (_) {}
+      watchAppleSignIn();
       if (ckWebAuthToken() && window._pendingGuestStaff) {
         await finishPendingGuestStaff();
       }
@@ -4837,21 +4897,14 @@
       if (err) err.textContent = "";
       const finish = document.getElementById("guestFinish");
       if (staff) {
-        if (finish) finish.disabled = true;
-        try { await ensureCloud(); } catch (_) {}
-        let proof = "";
-        try { proof = await cloudGateAllows("staff", code); } catch (_) {}
-        if (finish) finish.disabled = false;
-        if (!proof) {
-          if (err) err.textContent = t().staffCodeWrong;
-          return;
-        }
         window._pendingGuestStaff = { name, role, code };
         if (!ckWebAuthToken()) {
-          showAppleStep();
+          await showAppleStep();
           return;
         }
+        if (finish) finish.disabled = true;
         await finishPendingGuestStaff();
+        if (finish) finish.disabled = false;
         return;
       } else {
         if (finish) finish.disabled = true;
@@ -4874,10 +4927,27 @@
         return;
       }
       if (appleErr) appleErr.textContent = "";
+      let proof = "";
+      try { proof = await allowStaffGate(pending.code); } catch (error) {
+        if (error && error.apple) {
+          if (appleErr) appleErr.textContent = t().appleStepBody;
+          return;
+        }
+      }
+      if (!proof) {
+        if (appleErr) appleErr.textContent = t().staffCodeWrong;
+        return;
+      }
       let enrolled = "";
       for (let i = 0; i < 4 && !enrolled; i += 1) {
         if (i) await new Promise((resolve) => setTimeout(resolve, 350));
-        try { enrolled = await enrollWebStaff(pending.role, pending.code, true); } catch (_) { enrolled = ""; }
+        try { enrolled = await enrollWebStaff(pending.role, pending.code, true); } catch (error) {
+          enrolled = "";
+          if (error && error.apple) {
+            if (appleErr) appleErr.textContent = t().appleStepBody;
+            return;
+          }
+        }
       }
       if (enrolled !== "teacher" && enrolled !== "administrator") {
         if (appleErr) appleErr.textContent = t().staffAppleFail;
