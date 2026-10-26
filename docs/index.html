@@ -348,7 +348,7 @@
       background: #fff;
       border-radius: 2px;
       box-shadow: 0 10px 40px rgba(0,0,0,0.35);
-      overflow: hidden;
+      overflow: visible;
     }
     .gate-bar {
       display: flex; align-items: center; gap: 10px;
@@ -384,15 +384,16 @@
       margin: 8px 0 12px;
       overflow: visible;
     }
-    .gate-apple-step #ck-auth {
-      display: flex;
-      align-items: center;
+    #ck-auth {
+      position: fixed;
+      left: -10000px;
+      top: 0;
+      width: 240px;
       min-height: 44px;
-      overflow: visible;
+      z-index: 80;
     }
-    .gate-apple-step .apple-auth-button {
-      overflow: hidden !important;
-      flex: none;
+    #ck-auth.ck-auth-live {
+      z-index: 80;
     }
     .gate-actions {
       display: flex; justify-content: flex-end;
@@ -593,12 +594,7 @@
           <p class="error" id="setupError"></p>
         </div>
         <div id="gateApple" class="hidden">
-          <div class="gate-apple-step" id="ck-auth-gate">
-            <div id="ck-auth">
-              <div id="apple-sign-in-placeholder"></div>
-              <div id="apple-sign-out-placeholder"></div>
-            </div>
-          </div>
+          <div class="gate-apple-step" id="ck-auth-gate"></div>
           <p class="error" id="appleError"></p>
         </div>
       </div>
@@ -606,6 +602,10 @@
   </div>
   <div class="sheet hidden" id="sheet">
     <div class="sheet-card" id="sheetCard"></div>
+  </div>
+  <div id="ck-auth">
+    <div id="apple-sign-in-placeholder"></div>
+    <div id="apple-sign-out-placeholder"></div>
   </div>
 
   <script src="https://cdn.apple-cloudkit.com/ck/2/cloudkit.js"></script>
@@ -1351,8 +1351,24 @@
     function parkCkAuth() {
       if (gateWantsAppleAuth()) return;
       const box = document.getElementById("ck-auth");
-      const home = document.getElementById("ck-auth-gate");
-      if (box && home && box.parentNode !== home) home.appendChild(box);
+      if (!box) return;
+      if (box.parentNode !== document.body) document.body.appendChild(box);
+      box.classList.remove("ck-auth-live");
+      box.style.left = "-10000px";
+      box.style.top = "0px";
+      box.style.width = "240px";
+    }
+    function revealCkAuth(slot) {
+      const box = document.getElementById("ck-auth");
+      const host = slot || document.getElementById("ck-auth-gate") || document.getElementById("ck-auth-more");
+      if (!(box && host)) return;
+      if (box.parentNode !== document.body) document.body.appendChild(box);
+      const rect = host.getBoundingClientRect();
+      if (rect.width < 8 || rect.height < 8) return;
+      box.classList.add("ck-auth-live");
+      box.style.left = rect.left + "px";
+      box.style.top = rect.top + "px";
+      box.style.width = Math.max(240, rect.width) + "px";
     }
     function closeSheet() {
       if (window._passWipeBusy || window._issuePassBusy) return;
@@ -1399,10 +1415,6 @@
         configured = true;
       }
       if (opts && opts.skipAuth) return true;
-      if (!ckAuthHostVisible()) {
-        watchAppleSignIn();
-        return true;
-      }
       return setupCloudAuth();
     }
     function appleButtonPresent() {
@@ -1773,20 +1785,22 @@
       return String((record && record.recordName) || fieldValue(record, "recordName") || "").trim();
     }
     function mountCkAuth(parent) {
-      const box = document.getElementById("ck-auth");
-      if (!(box && parent)) return;
-      if (box.parentNode !== parent) parent.appendChild(box);
+      revealCkAuth(parent);
     }
     async function showAppleStep() {
       window._gateStep = "apple";
+      document.body.classList.add("whs-apple-gate");
       document.getElementById("gatePair").classList.add("hidden");
       document.getElementById("gateSetup").classList.add("hidden");
       const apple = document.getElementById("gateApple");
       if (apple) apple.classList.remove("hidden");
       applyChrome();
-      mountCkAuth(document.getElementById("ck-auth-gate"));
+      await new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
+      revealCkAuth(document.getElementById("ck-auth-gate"));
       try { await ensureCloud(); } catch (_) {}
       watchAppleSignIn();
+      window.setTimeout(() => revealCkAuth(document.getElementById("ck-auth-gate")), 50);
+      window.setTimeout(() => revealCkAuth(document.getElementById("ck-auth-gate")), 300);
     }
     function showRevokePassError(kind) {
       const c = t();
