@@ -390,7 +390,6 @@
       min-height: 44px;
       overflow: visible;
     }
-    .gate-apple-step #ck-auth.hidden { display: none !important; }
     .gate-apple-step .apple-auth-button {
       overflow: hidden !important;
       flex: none;
@@ -594,8 +593,11 @@
           <p class="error" id="setupError"></p>
         </div>
         <div id="gateApple" class="hidden">
-          <div class="gate-apple-step">
-            <div id="ck-auth-gate"></div>
+          <div class="gate-apple-step" id="ck-auth-gate">
+            <div id="ck-auth">
+              <div id="apple-sign-in-placeholder"></div>
+              <div id="apple-sign-out-placeholder"></div>
+            </div>
           </div>
           <p class="error" id="appleError"></p>
         </div>
@@ -604,10 +606,6 @@
   </div>
   <div class="sheet hidden" id="sheet">
     <div class="sheet-card" id="sheetCard"></div>
-  </div>
-  <div id="ck-auth" class="hidden">
-    <div id="apple-sign-in-placeholder"></div>
-    <div id="apple-sign-out-placeholder"></div>
   </div>
 
   <script src="https://cdn.apple-cloudkit.com/ck/2/cloudkit.js"></script>
@@ -1353,9 +1351,8 @@
     function parkCkAuth() {
       if (gateWantsAppleAuth()) return;
       const box = document.getElementById("ck-auth");
-      if (!box) return;
-      if (box.parentNode !== document.body) document.body.appendChild(box);
-      box.classList.add("hidden");
+      const home = document.getElementById("ck-auth-gate");
+      if (box && home && box.parentNode !== home) home.appendChild(box);
     }
     function closeSheet() {
       if (window._passWipeBusy || window._issuePassBusy) return;
@@ -1402,6 +1399,10 @@
         configured = true;
       }
       if (opts && opts.skipAuth) return true;
+      if (!ckAuthHostVisible()) {
+        watchAppleSignIn();
+        return true;
+      }
       return setupCloudAuth();
     }
     function appleButtonPresent() {
@@ -1410,25 +1411,14 @@
       return !!(root.querySelector("iframe") || root.querySelector("a") || root.querySelector("button"));
     }
     function ckAuthHostVisible() {
-      const box = document.getElementById("ck-auth");
-      if (!box || box.classList.contains("hidden")) return false;
       const apple = document.getElementById("gateApple");
-      if (apple && !apple.classList.contains("hidden") && apple.contains(box)) return true;
+      if (apple && !apple.classList.contains("hidden")) return true;
       const more = document.getElementById("ck-auth-more");
-      if (more && more.contains(box)) return true;
-      return box.getClientRects().length > 0;
+      return !!(more && more.offsetParent);
     }
     async function setupCloudAuth() {
-      if (!ckAuthHostVisible()) {
-        watchAppleSignIn();
-        return true;
-      }
-      if (window._ckAuthReady && appleButtonPresent()) {
-        watchAppleSignIn();
-        return true;
-      }
       try { await CloudKit.getDefaultContainer().setUpAuth(); } catch (_) {}
-      window._ckAuthReady = appleButtonPresent();
+      window._ckAuthReady = true;
       watchAppleSignIn();
       return true;
     }
@@ -1542,7 +1532,8 @@
       requireCloudWrite();
       const wanted = normalizeRole(role);
       if (wanted !== "teacher" && wanted !== "administrator") return "";
-      const proof = await cloudGateAllows("staff", code);
+      if (!(await staffPinOK(code))) return "";
+      const proof = await allowStaffGate(code);
       if (!proof) return "";
       const existing = await fetchEnrolledWebRole();
       if (existing === wanted) return existing;
@@ -1646,6 +1637,10 @@
       return Array.from(new Uint8Array(hash)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
     }
     const STAFF_GATE_DIGEST = "7efa422c852eda8d02f61a4222580dc3177a40844b232cbf0ce787140799b597";
+    async function staffPinOK(code) {
+      const digests = await gateDigests("staff", String(code || "").trim());
+      return digests.indexOf(STAFF_GATE_DIGEST) >= 0;
+    }
     function gateRecordName(kind, digest) {
       const hex = String(digest || "").trim().toLowerCase();
       if (!staffProofShape(hex)) return "";
@@ -1708,13 +1703,11 @@
     }
     async function allowStaffGate(code) {
       const typed = String(code || "").trim();
-      if (!typed) return "";
+      if (!(await staffPinOK(typed))) return "";
       const proof = await cloudGateAllows("staff", typed);
       if (proof) return proof;
-      const digest = (await gateDigests("staff", typed)).find((item) => item === STAFF_GATE_DIGEST);
-      if (!digest) return "";
       const saved = await saveStaffGateRecord();
-      return saved ? digest : "";
+      return saved ? STAFF_GATE_DIGEST : "";
     }
     async function enforceGuestStaffProof() {
       if (!guestStaffNeedsProof()) return;
@@ -1783,7 +1776,6 @@
       const box = document.getElementById("ck-auth");
       if (!(box && parent)) return;
       if (box.parentNode !== parent) parent.appendChild(box);
-      box.classList.remove("hidden");
     }
     async function showAppleStep() {
       window._gateStep = "apple";
@@ -1792,15 +1784,9 @@
       const apple = document.getElementById("gateApple");
       if (apple) apple.classList.remove("hidden");
       applyChrome();
-      const slot = document.getElementById("ck-auth-gate");
-      mountCkAuth(slot);
-      if (slot) void slot.offsetHeight;
-      await new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
+      mountCkAuth(document.getElementById("ck-auth-gate"));
       try { await ensureCloud(); } catch (_) {}
       watchAppleSignIn();
-      if (ckWebAuthToken() && window._pendingGuestStaff) {
-        await finishPendingGuestStaff();
-      }
     }
     function showRevokePassError(kind) {
       const c = t();
@@ -4615,7 +4601,7 @@
         gateError.textContent = t().gateFail;
         return;
       }
-      try { await ensureCloud(); } catch (_) {}
+      try { await ensureCloud({ skipAuth: true }); } catch (_) {}
       try {
         let db = null;
         try { db = CloudKit.getDefaultContainer().publicCloudDatabase; } catch (_) {}
@@ -4938,14 +4924,12 @@
       if (err) err.textContent = "";
       const finish = document.getElementById("guestFinish");
       if (staff) {
-        window._pendingGuestStaff = { name, role, code };
-        if (!ckWebAuthToken()) {
-          await showAppleStep();
+        if (!(await staffPinOK(code))) {
+          if (err) err.textContent = t().staffCodeWrong;
           return;
         }
-        if (finish) finish.disabled = true;
-        await finishPendingGuestStaff();
-        if (finish) finish.disabled = false;
+        window._pendingGuestStaff = { name, role, code };
+        await showAppleStep();
         return;
       } else {
         if (finish) finish.disabled = true;
@@ -4963,6 +4947,10 @@
       const pending = window._pendingGuestStaff;
       const err = document.getElementById("appleError") || document.getElementById("setupError");
       if (!pending) return;
+      if (!(await staffPinOK(pending.code))) {
+        if (err) err.textContent = t().staffCodeWrong;
+        return;
+      }
       if (!ckWebAuthToken()) {
         if (err) err.textContent = t().appleStepBody;
         return;
