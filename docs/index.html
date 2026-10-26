@@ -377,6 +377,26 @@
       padding: 14px 16px; font-size: 16px; width: 100%;
     }
     .gate-row select { appearance: none; background-image: none; }
+    #ck-auth-anchor {
+      position: fixed;
+      left: 8px;
+      top: 8px;
+      width: 240px;
+      height: 48px;
+      opacity: 0;
+      pointer-events: none;
+      z-index: 80;
+      overflow: visible;
+    }
+    body.whs-apple-gate #ck-auth-anchor {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .apple-slot {
+      width: 240px;
+      height: 44px;
+      min-height: 44px;
+    }
     #gateApple.is-off {
       display: block !important;
       visibility: hidden;
@@ -615,11 +635,8 @@
           <p class="error" id="setupError"></p>
         </div>
         <div id="gateApple" class="is-off">
-          <div class="gate-apple-step" id="ck-auth-gate">
-            <div id="ck-auth">
-              <div id="apple-sign-in-placeholder"></div>
-              <div id="apple-sign-out-placeholder"></div>
-            </div>
+          <div class="gate-apple-step">
+            <div id="apple-slot" class="apple-slot"></div>
           </div>
           <p class="error" id="appleError"></p>
         </div>
@@ -630,6 +647,12 @@
     <div class="sheet-card" id="sheetCard"></div>
   </div>
 
+  <div id="ck-auth-anchor">
+    <div id="ck-auth">
+      <div id="apple-sign-in-placeholder"></div>
+      <div id="apple-sign-out-placeholder"></div>
+    </div>
+  </div>
   <script src="https://cdn.apple-cloudkit.com/ck/2/cloudkit.js"></script>
   <script>
     const CONTAINER = "iCloud.com.davidgoncalvespersonalteam.UntitledProject";
@@ -655,6 +678,7 @@
         guestNeedStaff: "Enter your name and the staff access code.",
         appleStepTitle: "Sign in with Apple",
         appleStepBody: "Staff uses the same Apple ID as on iPhone. Sign in to finish.",
+        appleSignOutFirst: "This browser is still signed in. Sign out, then sign in with your Apple ID.",
         appleSignLabel: "Apple ID",
         appleSignedIn: "Signed in with Apple",
         staffAppleFail: "Signed in, but WHS could not save staff access. Tap Sign in with Apple again.",
@@ -897,6 +921,7 @@
         guestNeedStaff: "Escribe tu nombre y el código de acceso del personal.",
         appleStepTitle: "Entra con Apple",
         appleStepBody: "El personal usa el mismo Apple ID que en iPhone. Entra para terminar.",
+        appleSignOutFirst: "Este navegador sigue con una sesión. Cierra sesión y entra con tu Apple ID.",
         appleSignLabel: "Apple ID",
         appleSignedIn: "Sesion iniciada con Apple",
         staffAppleFail: "Entraste, pero WHS no pudo guardar el acceso de personal. Toca Sign in with Apple otra vez.",
@@ -1370,11 +1395,24 @@
     function gateWantsAppleAuth() {
       return window._gateStep === "apple" && !!window._pendingGuestStaff;
     }
+    function placeAppleButton() {
+      const anchor = document.getElementById("ck-auth-anchor");
+      const slot = document.getElementById("apple-slot");
+      if (!anchor) return;
+      const show = document.body.classList.contains("whs-apple-gate") && slot && gate && !gate.classList.contains("hidden");
+      if (!show) {
+        anchor.style.left = "8px";
+        anchor.style.top = "8px";
+        return;
+      }
+      const rect = slot.getBoundingClientRect();
+      anchor.style.left = Math.max(8, rect.left) + "px";
+      anchor.style.top = Math.max(8, rect.top) + "px";
+    }
     function parkCkAuth() {
       if (gateWantsAppleAuth()) return;
-      const box = document.getElementById("ck-auth");
-      const home = document.getElementById("ck-auth-gate");
-      if (box && home && box.parentNode !== home) home.appendChild(box);
+      document.body.classList.remove("whs-apple-gate");
+      placeAppleButton();
     }
     function closeSheet() {
       if (window._passWipeBusy || window._issuePassBusy) return;
@@ -1406,11 +1444,22 @@
       const token = schoolToken();
       if (!token) return false;
       if (opts && opts.skipAuth) return true;
-      return setupCloudAuth();
+      if (!configured) {
+        const node = document.getElementById("apple-sign-in-placeholder");
+        if (node) node.getBoundingClientRect();
+        return setupCloudAuth();
+      }
+      return true;
+    }
+    async function refreshCloudAuth() {
+      if (!configured) return;
+      try { await CloudKit.getDefaultContainer().setUpAuth(); } catch (_) {}
     }
     async function setupCloudAuth() {
       const token = schoolToken();
       if (!token) return false;
+      const node = document.getElementById("apple-sign-in-placeholder");
+      if (node) node.getBoundingClientRect();
       if (!configured) {
         CloudKit.configure({
           containers: [{
@@ -1427,7 +1476,6 @@
         configured = true;
       }
       try { await CloudKit.getDefaultContainer().setUpAuth(); } catch (_) {}
-      watchAppleSignIn();
       return true;
     }
     function ckWebAuthToken() {
@@ -1567,7 +1615,7 @@
       return role;
     }
     function restUrl(action) {
-      return restPublicUrl("records/" + action);
+      return restPublicUrl("records/" + action, true);
     }
     function restPublicUrl(path, schoolOnly) {
       const token = schoolToken();
@@ -1610,34 +1658,42 @@
       const token = schoolToken();
       const unique = [...new Set(names.filter(Boolean).flatMap(lookupNames))];
       if (!token || !unique.length) return [];
-      const url = restUrl("lookup");
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ records: unique.map((recordName) => ({ recordName })) })
-      });
-      const payload = await response.json();
-      return recordsFrom(payload).filter(usableRecord);
+      const found = [];
+      for (let start = 0; start < unique.length; start += 150) {
+        const slice = unique.slice(start, start + 150);
+        try {
+          const response = await fetch(restUrl("lookup"), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ records: slice.map((recordName) => ({ recordName })) })
+          });
+          const payload = await response.json();
+          recordsFrom(payload).filter(usableRecord).forEach((record) => found.push(record));
+        } catch (_) {}
+      }
+      return found;
     }
     async function restLookupExact(names) {
       const unique = [...new Set((names || []).map((name) => String(name || "").trim()).filter(Boolean))];
       if (!unique.length) return [];
       const token = schoolToken();
+      const found = [];
       if (token) {
-        try {
-          const url = restUrl("lookup");
-          const response = await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ records: unique.map((recordName) => ({ recordName })) })
-          });
-          const payload = await response.json();
-          const found = recordsFrom(payload).filter(usableRecord);
-          if (found.length) return found;
-        } catch (_) {}
+        for (let start = 0; start < unique.length; start += 150) {
+          const slice = unique.slice(start, start + 150);
+          try {
+            const response = await fetch(restUrl("lookup"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ records: slice.map((recordName) => ({ recordName })) })
+            });
+            const payload = await response.json();
+            recordsFrom(payload).filter(usableRecord).forEach((record) => found.push(record));
+          } catch (_) {}
+        }
+        if (found.length) return found;
       }
       const db = cloudDb();
-      const found = [];
       if (db && typeof db.fetchRecord === "function") {
         for (const name of unique) {
           try { recordsFrom(await db.fetchRecord(name)).forEach((record) => { if (usableRecord(record)) found.push(record); }); } catch (_) {}
@@ -1777,10 +1833,11 @@
       throw cloudRecordError(payload, payload.records && payload.records[0]);
     }
     async function restModify(record, operationType) {
+      await refreshCloudAuth();
       requireCloudWrite();
       const token = schoolToken();
       if (!token || !record || !record.recordName) return null;
-      const url = restUrl("modify");
+      const url = restPublicUrl("records/modify", false);
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1797,10 +1854,11 @@
       throw cloudRecordError(payload, payload.records && payload.records[0]);
     }
     async function restModifyOps(operations) {
+      await refreshCloudAuth();
       requireCloudWrite();
       const token = schoolToken();
       if (!token || !operations.length) return {};
-      const url = restUrl("modify");
+      const url = restPublicUrl("records/modify", false);
       const response = await fetch(url, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1811,10 +1869,8 @@
     function passRecordName(record) {
       return String((record && record.recordName) || fieldValue(record, "recordName") || "").trim();
     }
-    function mountCkAuth(parent) {
-      const box = document.getElementById("ck-auth");
-      if (!(box && parent)) return;
-      if (box.parentNode !== parent) parent.appendChild(box);
+    function mountCkAuth() {
+      placeAppleButton();
     }
     async function waitForVisibleSlot(node) {
       for (let i = 0; i < 40; i += 1) {
@@ -1825,20 +1881,56 @@
     }
     async function showAppleStep() {
       window._gateStep = "apple";
+      window._appleEpoch = (window._appleEpoch || 0) + 1;
+      const epoch = window._appleEpoch;
       document.body.classList.add("whs-apple-gate");
       document.getElementById("gatePair").classList.add("hidden");
       document.getElementById("gateSetup").classList.add("hidden");
       const apple = document.getElementById("gateApple");
       if (apple) apple.classList.remove("is-off", "hidden");
       applyChrome();
-      const slot = document.getElementById("ck-auth-gate");
-      mountCkAuth(slot);
+      placeAppleButton();
+      const slot = document.getElementById("apple-sign-in-placeholder");
       await waitForVisibleSlot(slot);
       try { await setupCloudAuth(); } catch (_) {}
-      watchAppleSignIn();
-      if (ckWebAuthToken() && window._pendingGuestStaff) {
-        await finishPendingGuestStaff();
+      placeAppleButton();
+      if (ckWebAuthToken()) {
+        const err = document.getElementById("appleError");
+        if (err) err.textContent = t().appleSignOutFirst;
+        watchAppleSignOut(epoch);
+        return;
       }
+      const err = document.getElementById("appleError");
+      if (err) err.textContent = "";
+      watchAppleSignIn(epoch);
+    }
+    function watchAppleSignOut(epoch) {
+      try {
+        const container = CloudKit.getDefaultContainer();
+        if (container && typeof container.whenUserSignsOut === "function") {
+          container.whenUserSignsOut().then(() => {
+            if (epoch !== window._appleEpoch) return;
+            window._ckUserRecordName = "";
+            const err = document.getElementById("appleError");
+            if (err) err.textContent = "";
+            watchAppleSignIn(epoch);
+          }).catch(() => {});
+        }
+      } catch (_) {}
+      const wait = async () => {
+        for (let i = 0; i < 400; i += 1) {
+          if (epoch !== window._appleEpoch || window._gateStep !== "apple") return;
+          if (!ckWebAuthToken()) {
+            window._ckUserRecordName = "";
+            const err = document.getElementById("appleError");
+            if (err) err.textContent = "";
+            watchAppleSignIn(epoch);
+            return;
+          }
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
+      };
+      wait();
     }
     function showRevokePassError(kind) {
       const c = t();
@@ -1855,12 +1947,14 @@
         <button class="primary" type="button" data-action="closeSheet">${c.close}</button>
         <button class="ghost" type="button" data-action="revokePass" data-pass-id="${escapeHtml(id || "")}" style="width:100%;margin-top:8px;color:#B42318;">${c.revokePass}</button>`);
     }
-    function watchAppleSignIn() {
+    function watchAppleSignIn(epoch) {
       if (window._ckWatch) return;
       window._ckWatch = true;
+      const ticket = epoch == null ? window._appleEpoch : epoch;
       try {
         CloudKit.getDefaultContainer().whenUserSignsIn().then((userInfo) => {
           window._ckWatch = false;
+          if (window._gateStep === "apple" && ticket != null && ticket !== window._appleEpoch) return;
           const signedName = userNameFromInfo(userInfo);
           if (signedName) window._ckUserRecordName = signedName;
           const fromForm = pendingStaffFromForm();
@@ -1913,9 +2007,9 @@
       const key = id.toLowerCase();
       const kind = String(fieldValue(record, "kind") || "").toLowerCase();
       if (!id || key === MANIFEST.toLowerCase() || key === CLEARED.toLowerCase() || key === NEWS_MANIFEST.toLowerCase()) return true;
-      if (key.indexOf("cleared.") === 0 || key.indexOf("revoked.") === 0 || key.indexOf("news.") === 0 || key.indexOf("newsimg.") === 0 || key.indexOf("webpass.") === 0 || key.indexOf("passimg.") === 0) return true;
+      if (key.indexOf("cleared.") === 0 || key.indexOf("revoked.") === 0 || key.indexOf("news.") === 0 || key.indexOf("newsimg.") === 0 || key.indexOf("webpass.") === 0 || key.indexOf("passimg.") === 0 || key.indexOf("inbox.") === 0) return true;
       if (isGateRecordName(id)) return true;
-      if (kind === "cleared" || kind === "revoked" || kind === "news" || kind === "newsimg" || kind === "webpass" || kind === "passimg" || kind === "staffgate" || kind === "wipegate" || kind === "staffuser" || kind === "manifest" || kind === "nfchomework" || kind === "nfccourse") return true;
+      if (kind === "cleared" || kind === "revoked" || kind === "news" || kind === "newsimg" || kind === "webpass" || kind === "passimg" || kind === "inbox" || kind === "staffgate" || kind === "wipegate" || kind === "staffuser" || kind === "manifest" || kind === "nfchomework" || kind === "nfccourse") return true;
       return false;
     }
     function isRevokedFlag(record) {
@@ -3588,9 +3682,48 @@
         }
       }
     }
+    function inboxNames(key) {
+      const code = normalizeCode(key);
+      if (code.length !== 10) return [];
+      const names = [];
+      for (let i = 0; i < 160; i += 1) names.push("inbox." + code + "." + i);
+      return names;
+    }
+    async function deliverPassToInbox(passId, webCode, studentName) {
+      const key = normalizeCode(webCode);
+      const id = String(passId || "").trim();
+      if (key.length !== 10 || !id) return false;
+      const names = inboxNames(key);
+      let existing = [];
+      try { existing = await restLookupExact(names); } catch (_) { existing = []; }
+      const taken = new Set(existing.map((record) => String(record.recordName || "").toLowerCase()));
+      const already = existing.some((record) => parsePassIDs(fieldValue(record, "passIDs")).some((item) => item.toLowerCase() === id.toLowerCase()));
+      if (already) return true;
+      for (const name of names) {
+        if (taken.has(name.toLowerCase())) continue;
+        try {
+          await restModify({
+            recordType: PASS_TYPE,
+            recordName: name,
+            fields: {
+              kind: { value: "inbox" },
+              passIDs: { value: id },
+              destination: { value: key },
+              studentName: { value: studentName || "" }
+            }
+          }, "create");
+          return true;
+        } catch (error) {
+          taken.add(name.toLowerCase());
+          if (isAuthError(error)) throw error;
+        }
+      }
+      return false;
+    }
     async function attachPassToStudent(passId, webCode, studentName) {
       const key = normalizeCode(webCode);
       if (key.length !== 10) throw Object.assign(new Error("CODE"), { code: "CODE" });
+      await deliverPassToInbox(passId, key, studentName);
       let profileRec = null;
       try { profileRec = (await fetchByNames(cloudDb(), [key]))[0] || null; } catch (_) {}
       const role = normalizeRole(fieldValue(profileRec, "role"));
@@ -3810,13 +3943,8 @@
       try {
         const key = normalizeCode(profile.key);
         const dashed = key.length === 10 ? `${key.slice(0, 5)}-${key.slice(5)}` : "";
-        const profiles = await fetchByNames(cloudDb(), [key, dashed, "webpass." + key, dashed ? "webpass." + dashed : ""]);
-        const mine = profiles.find((item) => normalizeCode(item.recordName) === key);
-        const linked = profiles.find((item) => String(item.recordName || "").toLowerCase().replace(/-/g, "") === ("webpass." + key).toLowerCase());
-        const ids = [...new Set(
-          String(fieldValue(mine, "passIDs") || "").split(",").concat(String(fieldValue(linked, "passIDs") || "").split(","))
-            .map((part) => part.trim()).filter(Boolean)
-        )];
+        const profiles = await fetchByNames(cloudDb(), [key, dashed, "webpass." + key, dashed ? "webpass." + dashed : ""].concat(inboxNames(key)));
+        const ids = [...new Set(profiles.flatMap((record) => parsePassIDs(fieldValue(record, "passIDs"))))];
         const records = await fetchByNames(cloudDb(), ids);
         await applyPassIcons(records);
         const byName = new Map(records.map((record) => [String(record.recordName || "").toLowerCase(), record]));
@@ -5101,6 +5229,10 @@
     window.openAsk = openAsk;
     window.openAide = openAide;
     window.openPassesInfo = openPassesInfo;
+    window.addEventListener("resize", placeAppleButton);
+    const applePlaceholder = document.getElementById("apple-sign-in-placeholder");
+    if (applePlaceholder) applePlaceholder.getBoundingClientRect();
+    setupCloudAuth().catch(() => {});
     if ("serviceWorker" in navigator) {
       navigator.serviceWorker.register("./sw.js").catch(() => {});
     }
