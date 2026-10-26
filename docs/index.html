@@ -1738,23 +1738,30 @@
       const saved = await saveStaffGateRecord();
       return saved ? STAFF_GATE_DIGEST : "";
     }
+    function rememberStaffSession(proof) {
+      if (!profile) return;
+      profile.staffEnrolled = true;
+      if (staffProofShape(proof)) profile.staffProof = proof;
+      else if (!staffProofShape(profile.staffProof)) profile.staffProof = STAFF_GATE_DIGEST;
+      localStorage.setItem("whsWebProfile", JSON.stringify(profile));
+    }
     async function enforceGuestStaffProof() {
       if (!guestStaffNeedsProof()) return;
-      try { await ensureCloud(); } catch (_) {}
-      if (ckWebAuthToken()) {
-        const enrolled = await fetchEnrolledWebRole();
-        if (enrolled === currentRole()) {
-          profile.staffEnrolled = true;
-          localStorage.setItem("whsWebProfile", JSON.stringify(profile));
-          return;
-        }
-      }
+      if (profile && profile.staffEnrolled) rememberStaffSession(profile.staffProof);
       if (!staffProofShape(profile && profile.staffProof)) {
         returnToCodeGate();
         return;
       }
+      try { await ensureCloud(); } catch (_) { return; }
+      if (!schoolToken()) return;
       const name = gateRecordName("staff", profile.staffProof);
-      const records = name ? await restLookupExact([name]) : [];
+      let records = [];
+      try {
+        records = name ? await restLookupExact([name]) : [];
+      } catch (_) {
+        return;
+      }
+      if (!records.length) return;
       const ok = records.some((item) => {
         if (String(item.recordName || "") !== name) return false;
         const got = String(fieldValue(item, "kind") || "").toLowerCase();
@@ -5183,7 +5190,8 @@
         role: enrolled,
         key: "",
         guest: true,
-        staffEnrolled: true
+        staffEnrolled: true,
+        staffProof: proof || STAFF_GATE_DIGEST
       };
       localStorage.setItem("whsWebProfile", JSON.stringify(profile));
       applyAvatar("");
