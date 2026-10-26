@@ -32,7 +32,21 @@ jobs:
             exit 1
           fi
           ENV="${WHS_CK_ENV:-development}"
-          printf 'window.WHS_SCHOOL_TOKEN = "%s";\nwindow.WHS_CK_ENV = "%s";\n' "$WHS_SCHOOL_TOKEN" "$ENV" > docs/ck-public.js
+          python3 - << 'PY'
+          import os
+          token = os.environ["WHS_SCHOOL_TOKEN"].replace("\\", "\\\\").replace('"', '\\"')
+          env = (os.environ.get("WHS_CK_ENV") or "development").replace("\\", "\\\\").replace('"', '\\"')
+          path = "docs/index.html"
+          text = open(path, encoding="utf-8").read()
+          needle = 'window.WHS_SCHOOL_TOKEN=window.WHS_SCHOOL_TOKEN||"";window.WHS_CK_ENV=window.WHS_CK_ENV||"development";'
+          repl = f'window.WHS_SCHOOL_TOKEN="{token}";window.WHS_CK_ENV="{env}";'
+          if needle not in text:
+              raise SystemExit("school connection placeholder missing")
+          open(path, "w", encoding="utf-8").write(text.replace(needle, repl, 1))
+          open("docs/ck-public.js", "w", encoding="utf-8").write(
+              f'window.WHS_SCHOOL_TOKEN = "{token}";\nwindow.WHS_CK_ENV = "{env}";\n'
+          )
+          PY
       - uses: actions/upload-pages-artifact@v3
         with:
           path: docs

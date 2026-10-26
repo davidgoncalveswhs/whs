@@ -15,7 +15,8 @@
   <link rel="apple-touch-icon" href="./app-icon.png">
   <link rel="preconnect" href="https://cdn.apple-cloudkit.com">
   <script src="./config.js"></script>
-  <script src="./ck-public.js"></script>
+  <script>window.WHS_SCHOOL_TOKEN=window.WHS_SCHOOL_TOKEN||"";window.WHS_CK_ENV=window.WHS_CK_ENV||"development";</script>
+  <script src="./ck-public.js?v=28"></script>
   <style>
     :root {
       --orange: #E87722;
@@ -1257,7 +1258,9 @@
     }
     function t() { return copy[lang] || copy.en; }
     function schoolToken() {
-      return String(window.WHS_SCHOOL_TOKEN || "").trim() || localStorage.getItem("whsAdminToken") || "";
+      const fromWindow = String(window.WHS_SCHOOL_TOKEN || "").trim();
+      if (fromWindow) return fromWindow;
+      try { return localStorage.getItem("whsAdminToken") || ""; } catch (_) { return ""; }
     }
     function schoolEnv() {
       return localStorage.getItem("whsAdminEnv") || window.WHS_CK_ENV || "development";

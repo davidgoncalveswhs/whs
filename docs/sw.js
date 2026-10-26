@@ -1,4 +1,4 @@
-const CACHE = "whs-web-v27";
+const CACHE = "whs-web-v28";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
@@ -10,6 +10,11 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+  const path = new URL(event.request.url).pathname;
+  if (path.endsWith("/ck-public.js") || path.endsWith("/config.js")) {
+    event.respondWith(fetch(event.request, { cache: "no-store" }));
+    return;
+  }
   event.respondWith(
     fetch(event.request)
       .then((response) => {
