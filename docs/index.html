@@ -377,21 +377,20 @@
       padding: 14px 16px; font-size: 16px; width: 100%;
     }
     .gate-row select { appearance: none; background-image: none; }
-    #guestAppleRow { overflow: visible; }
+    #guestAppleRow {
+      margin-top: 18px;
+      min-height: 44px;
+      overflow: visible;
+    }
     .gate-apple {
-      background: #FFF1E6;
       display: flex;
       align-items: center;
-      justify-content: flex-start;
-      padding: 6px 12px;
-      min-height: 56px;
+      min-height: 44px;
       overflow: visible;
     }
     .gate-apple #ck-auth {
       display: flex;
       align-items: center;
-      gap: 10px;
-      width: 100%;
       min-height: 40px;
       overflow: visible;
     }
@@ -400,12 +399,9 @@
       overflow: hidden !important;
       flex: none;
     }
-    .gate-apple iframe {
-      max-width: 100%;
-      display: block;
-    }
     .gate-apple-status {
-      font-size: 16px;
+      margin-left: 10px;
+      font-size: 14px;
       color: #1d1d1f;
       font-weight: 600;
     }
@@ -597,16 +593,15 @@
                 <option value="12">12</option>
               </select>
             </div>
-            <div class="gate-row hidden" id="guestAppleRow">
-              <label id="appleSignLabel">Apple ID</label>
-              <div class="gate-apple">
-                <div id="ck-auth-gate"></div>
-                <span class="gate-apple-status hidden" id="guestAppleStatus"></span>
-              </div>
-            </div>
             <div class="gate-row hidden" id="guestAccessRow">
               <label id="staffCodeLabel" for="guestAccess">Staff access code</label>
               <input id="guestAccess" type="password" inputmode="numeric" autocomplete="off" spellcheck="false">
+            </div>
+          </div>
+          <div id="guestAppleRow" class="hidden">
+            <div class="gate-apple">
+              <div id="ck-auth-gate"></div>
+              <span class="gate-apple-status hidden" id="guestAppleStatus"></span>
             </div>
           </div>
           <div class="gate-actions">
@@ -2338,7 +2333,6 @@
       const nameLabel = document.getElementById("nameLabel");
       const gradeLabel = document.getElementById("gradeLabel");
       const rolePickLabel = document.getElementById("rolePickLabel");
-      const appleSignLabel = document.getElementById("appleSignLabel");
       const staffCodeLabel = document.getElementById("staffCodeLabel");
       const roleOptStudent = document.getElementById("roleOptStudent");
       const roleOptTeacher = document.getElementById("roleOptTeacher");
@@ -2346,7 +2340,6 @@
       if (nameLabel) nameLabel.textContent = c.nameLabel;
       if (gradeLabel) gradeLabel.textContent = c.gradeLabel;
       if (rolePickLabel) rolePickLabel.textContent = c.role;
-      if (appleSignLabel) appleSignLabel.textContent = c.appleSignLabel;
       if (staffCodeLabel) staffCodeLabel.textContent = c.staffCodeLabel;
       if (roleOptStudent) roleOptStudent.textContent = c.roleStudent;
       if (roleOptTeacher) roleOptTeacher.textContent = c.roleTeacher;
