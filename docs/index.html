@@ -1563,7 +1563,9 @@
       return [...new Set([raw, ...codeNames(raw)])];
     }
     function usableRecord(record) {
-      if (!record || record.deleted || record.serverErrorCode) return false;
+      if (!record || record.deleted) return false;
+      const err = String(record.serverErrorCode || record.reason || "").toUpperCase();
+      if (/NOT_FOUND|UNKNOWN|AUTHENTICATION|ACCESS_DENIED|PERMISSION/.test(err)) return false;
       return !!(record.recordName || record.recordType || (record.fields && Object.keys(record.fields).length));
     }
     async function restQuery(recordType, limit) {
@@ -1622,6 +1624,7 @@
       const hash = await crypto.subtle.digest("SHA-256", bytes);
       return Array.from(new Uint8Array(hash)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
     }
+    const STAFF_GATE_DIGEST = "7efa422c852eda8d02f61a4222580dc3177a40844b232cbf0ce787140799b597";
     function gateRecordName(kind, digest) {
       const hex = String(digest || "").trim().toLowerCase();
       if (!staffProofShape(hex)) return "";
@@ -1645,7 +1648,10 @@
       return [...new Set(digests)];
     }
     async function cloudGateAllows(kind, code) {
-      const digests = await gateDigests(kind, code);
+      let digests = await gateDigests(kind, code);
+      if (kind === "staff") {
+        digests = digests.filter((digest) => digest === STAFF_GATE_DIGEST);
+      }
       if (!digests.length) return "";
       try { await ensureCloud(); } catch (_) {}
       const expected = kind === "wipe" ? "wipegate" : "staffgate";
@@ -1656,13 +1662,38 @@
         const record = records.find((item) => String(item.recordName || "") === name);
         if (!record) continue;
         const got = String(fieldValue(record, "kind") || "").toLowerCase();
-        if (got && got !== expected) continue;
+        if (got !== expected) continue;
         return digests[i];
       }
       return "";
     }
+    async function saveStaffGateRecord() {
+      const name = gateRecordName("staff", STAFF_GATE_DIGEST);
+      if (!name) return false;
+      const record = {
+        recordType: PASS_TYPE,
+        recordName: name,
+        fields: {
+          kind: { value: "staffgate" }
+        }
+      };
+      try {
+        if (await restModify(record, "create")) return true;
+      } catch (_) {}
+      try {
+        if (await restModify(record, "forceUpdate")) return true;
+      } catch (_) {}
+      return false;
+    }
     async function allowStaffGate(code) {
-      return cloudGateAllows("staff", String(code || "").trim());
+      const typed = String(code || "").trim();
+      if (!typed) return "";
+      const proof = await cloudGateAllows("staff", typed);
+      if (proof) return proof;
+      const digest = (await gateDigests("staff", typed)).find((item) => item === STAFF_GATE_DIGEST);
+      if (!digest) return "";
+      const saved = await saveStaffGateRecord();
+      return saved ? digest : "";
     }
     async function enforceGuestStaffProof() {
       if (!guestStaffNeedsProof()) return;
