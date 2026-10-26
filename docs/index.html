@@ -337,6 +337,34 @@
     nav.tabs .tab-glyph { width: 22px; height: 22px; object-fit: contain; display: block; }
     nav.tabs.with-classes { grid-template-columns: repeat(4, 1fr); }
     .hidden { display: none !important; }
+    #gate.whs-auth-park {
+      display: block !important;
+      position: fixed !important;
+      inset: auto !important;
+      left: 0 !important;
+      top: 0 !important;
+      right: auto !important;
+      bottom: auto !important;
+      width: 280px !important;
+      height: 180px !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      opacity: 0 !important;
+      pointer-events: none !important;
+      overflow: hidden !important;
+      z-index: -1 !important;
+      background: transparent !important;
+    }
+    #gate.whs-auth-park #gateApple,
+    #gateApple.whs-auth-park {
+      display: block !important;
+    }
+    #gate.whs-auth-park .apple-auth-button,
+    #gate.whs-auth-park .apple-auth-button iframe,
+    #gate.whs-auth-park iframe {
+      opacity: 0 !important;
+      pointer-events: none !important;
+    }
     .overlay, .sheet {
       position: fixed; inset: 0; background: var(--bg); z-index: 30; overflow: auto;
     }
@@ -720,7 +748,7 @@
         issuePassClearSig: "Clear signature",
         issuePassCode: "Student WHS Web Code",
         issuePassNeedFields: "Add a student name, destination, date, signature, and WHS Web Code.",
-        issuePassNeedApple: "Sign in with Apple in More first. Issuing a pass needs the same iCloud sign-in teachers use on iPhone.",
+        issuePassNeedApple: "Sign in with Apple to send this pass.",
         issuePassFail: "Could not issue that pass.",
         issuePassDone: "Pass sent. The student will see it in Teacher Passes.",
         issuePassBadCode: "Could not find that WHS Web Code.",
@@ -965,7 +993,7 @@
         issuePassClearSig: "Borrar firma",
         issuePassCode: "Código web WHS del estudiante",
         issuePassNeedFields: "Agrega nombre, destino, fecha, firma y código web WHS.",
-        issuePassNeedApple: "Entra con Apple en Más primero. Emitir un pase necesita la misma sesión de iCloud que usan los maestros en iPhone.",
+        issuePassNeedApple: "Entra con Apple para enviar este pase.",
         issuePassFail: "No se pudo emitir ese pase.",
         issuePassDone: "Pase enviado. El estudiante lo verá en Pases de maestros.",
         issuePassBadCode: "No se encontró ese código web WHS.",
@@ -1431,6 +1459,51 @@
       try { await CloudKit.getDefaultContainer().setUpAuth(); } catch (_) {}
       return true;
     }
+    function parkAuthForRestore() {
+      const parked = [];
+      ["gate", "gateApple"].forEach((id) => {
+        const node = document.getElementById(id);
+        if (!node) return;
+        parked.push({ node, wasHidden: node.classList.contains("hidden") });
+        node.classList.add("whs-auth-park");
+        node.classList.remove("hidden");
+      });
+      return parked;
+    }
+    function unparkAuth(parked) {
+      (parked || []).forEach(({ node, wasHidden }) => {
+        node.classList.remove("whs-auth-park");
+        if (window._gateStep === "apple") return;
+        node.classList.toggle("hidden", !!wasHidden);
+      });
+    }
+    async function restoreStaffCloudSession() {
+      if (window._staffAuthRestore) return window._staffAuthRestore;
+      window._staffAuthRestore = (async () => {
+        const needsSetup = !configured;
+        const parked = needsSetup ? parkAuthForRestore() : [];
+        try {
+          if (needsSetup) {
+            const slot = document.getElementById("apple-sign-in-placeholder");
+            if (slot) await waitForVisibleSlot(slot);
+          }
+          try { await setupCloudAuth(); } catch (_) {}
+          try {
+            const info = await CloudKit.getDefaultContainer().setUpAuth();
+            const name = userNameFromInfo(info);
+            if (name) window._ckUserRecordName = name;
+          } catch (_) {}
+          if (!window._ckUserRecordName) {
+            try { await ckUserRecordName(); } catch (_) {}
+          }
+        } finally {
+          unparkAuth(parked);
+          window._staffAuthRestore = null;
+        }
+        return !!ckWebAuthToken();
+      })();
+      return window._staffAuthRestore;
+    }
     function ckWebAuthToken() {
       try {
         const auth = CloudKit.getDefaultContainer()._auth;
@@ -1506,7 +1579,7 @@
     }
     async function fetchEnrolledWebRole() {
       if (!ckWebAuthToken()) return "";
-      const user = await ckUserRecordName();
+      const user = await ckUserRecordName() || (profile && profile.appleUser) || "";
       const name = staffUserRecordName(user);
       if (!name) return "";
       try { await ensureCloud(); } catch (_) {}
@@ -3804,7 +3877,8 @@
         setIssuePassError(c.issuePassNeedFields);
         return;
       }
-      window._issuePassSending = true;
+      const sendTicket = {};
+      window._issuePassSending = sendTicket;
       window._pendingIssuePass = false;
       const button = document.getElementById("issuePassBtn");
       if (button) button.disabled = true;
@@ -3813,11 +3887,20 @@
       try {
         showWorkProgress(8, c.issuePassWorking, c.issuePassStepSave, "", false, "finishIssuePass");
         await ensureCloud();
-        if (!ckWebAuthToken()) {
-          window._pendingIssuePass = true;
-          watchAppleSignIn();
-          throw Object.assign(new Error("APPLE"), { apple: true });
+        const signed = await restoreStaffCloudSession();
+        if (!signed) {
+          window._issuePassBusy = false;
+          if (window._issuePassSending === sendTicket) window._issuePassSending = null;
+          closeSheet();
+          if (!window._issuePassAwaitingApple) {
+            window._issuePassAwaitingApple = true;
+            window._pendingIssuePass = true;
+            await showAppleStep();
+          }
+          return;
         }
+        window._issuePassAwaitingApple = false;
+        window._pendingIssuePass = false;
         await requireEnrolledStaff();
         const recordName = newPassRecordName();
         const fields = {
@@ -3874,7 +3957,7 @@
         setIssuePassError(message);
         showWorkProgress(100, message, "", "", true, "finishIssuePass");
       } finally {
-        window._issuePassSending = false;
+        if (window._issuePassSending === sendTicket) window._issuePassSending = null;
         const again = document.getElementById("issuePassBtn");
         if (again) again.disabled = false;
       }
@@ -5184,6 +5267,10 @@
       document.body.classList.remove("whs-apple-gate");
       window._gateStep = "pair";
       parkCkAuth();
+      let appleUser = window._ckUserRecordName || "";
+      if (!appleUser) {
+        try { appleUser = await ckUserRecordName(); } catch (_) { appleUser = ""; }
+      }
       profile = {
         displayName: pending.name,
         firstName: pending.name,
@@ -5191,7 +5278,8 @@
         key: "",
         guest: true,
         staffEnrolled: true,
-        staffProof: proof || STAFF_GATE_DIGEST
+        staffProof: proof || STAFF_GATE_DIGEST,
+        appleUser
       };
       localStorage.setItem("whsWebProfile", JSON.stringify(profile));
       applyAvatar("");
@@ -5207,7 +5295,12 @@
     }
     showGate();
     if (signedIn()) {
-      enforceGuestStaffProof().then(() => { if (signedIn()) show("home"); }).catch(() => { if (signedIn()) show("home"); });
+      enforceGuestStaffProof().catch(() => {}).then(() => {
+        if (!signedIn()) return;
+        show("home");
+        const role = currentRole();
+        if (role === "teacher" || role === "administrator") restoreStaffCloudSession().catch(() => {});
+      });
     }
   </script>
 </body>
