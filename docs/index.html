@@ -348,7 +348,7 @@
       background: #fff;
       border-radius: 2px;
       box-shadow: 0 10px 40px rgba(0,0,0,0.35);
-      overflow: hidden;
+      overflow: visible;
     }
     .gate-bar {
       display: flex; align-items: center; gap: 10px;
@@ -378,20 +378,34 @@
     }
     .gate-row select { appearance: none; background-image: none; }
     #guestAppleRow {
-      min-height: 52px;
+      display: block;
+      overflow: visible;
+      min-height: 88px;
+      padding: 12px 16px;
+    }
+    #guestAppleRow label,
+    #guestAppleHint {
+      display: block;
+      margin: 0 0 10px;
     }
     #ck-auth-setup,
     #ck-auth-setup #ck-auth,
     body.whs-apple-gate #ck-auth {
-      display: flex !important;
-      align-items: center;
-      min-height: 44px;
+      display: block !important;
+      min-height: 48px;
       width: 100%;
+      overflow: visible !important;
     }
     #ck-auth-setup #apple-sign-in-placeholder,
-    #ck-auth-setup .apple-auth-button {
+    #ck-auth-setup .apple-auth-button,
+    #ck-auth-setup iframe,
+    #apple-sign-in-placeholder iframe {
+      display: block;
       min-height: 44px;
-      min-width: 220px;
+      min-width: 240px;
+      width: 100%;
+      max-width: 320px;
+      border: 0;
       overflow: visible !important;
     }
     .gate-actions {
@@ -632,6 +646,7 @@
         guestNeedStaff: "Enter your name and the staff access code.",
         appleStepTitle: "Sign in with Apple",
         appleStepBody: "Staff uses the same Apple ID as on iPhone. Sign in to finish.",
+        appleButtonBlocked: "Apple's sign-in is hidden in this browser. Allow apple.com and icloud.com, or turn Brave Shields down on this site. Chrome usually shows the button.",
         appleSignedIn: "Signed in with Apple",
         staffAppleFail: "Signed in, but WHS could not save staff access. Tap Sign in with Apple again.",
         staffCodeWrong: "That access code is not correct.",
@@ -873,6 +888,7 @@
         guestNeedStaff: "Escribe tu nombre y el código de acceso del personal.",
         appleStepTitle: "Entra con Apple",
         appleStepBody: "El personal usa el mismo Apple ID que en iPhone. Entra para terminar.",
+        appleButtonBlocked: "Este navegador oculta el acceso de Apple. Permite apple.com e icloud.com, o baja Shields de Brave en este sitio. Chrome suele mostrar el boton.",
         appleSignedIn: "Sesion iniciada con Apple",
         staffAppleFail: "Entraste, pero WHS no pudo guardar el acceso de personal. Toca Sign in with Apple otra vez.",
         staffCodeWrong: "Ese código de acceso no es correcto.",
@@ -1404,8 +1420,13 @@
       if (opts && opts.skipAuth) return true;
       return setupCloudAuth();
     }
+    function appleButtonPresent() {
+      const root = document.getElementById("ck-auth");
+      if (!root) return false;
+      return !!(root.querySelector("iframe") || root.querySelector("a") || root.querySelector("button"));
+    }
     async function setupCloudAuth() {
-      if (window._ckAuthReady) {
+      if (window._ckAuthReady && appleButtonPresent()) {
         watchAppleSignIn();
         return true;
       }
@@ -1766,6 +1787,19 @@
       if (!(box && parent)) return;
       if (box.parentNode !== parent) parent.appendChild(box);
       box.classList.remove("hidden");
+    }
+    function paintAppleButtonHint() {
+      const hint = document.getElementById("guestAppleHint");
+      if (!hint) return;
+      if (ckWebAuthToken()) {
+        hint.textContent = t().appleSignedIn;
+        return;
+      }
+      if (appleButtonPresent()) {
+        hint.textContent = t().appleStepBody;
+        return;
+      }
+      hint.textContent = staffSetupVisible() ? t().appleButtonBlocked : t().appleStepBody;
     }
     function showRevokePassError(kind) {
       const c = t();
@@ -2272,8 +2306,7 @@
         gateTitle.textContent = c.welcome;
         gateBody.textContent = c.gateBody;
       }
-      const guestAppleHint = document.getElementById("guestAppleHint");
-      if (guestAppleHint) guestAppleHint.textContent = c.appleStepBody;
+      paintAppleButtonHint();
       codeLabel.textContent = c.codeLabel;
       const nameLabel = document.getElementById("nameLabel");
       const gradeLabel = document.getElementById("gradeLabel");
@@ -4866,7 +4899,11 @@
       if (staff && window._gateStep === "guest" && gateIsOpen()) {
         document.body.classList.add("whs-apple-gate");
         mountCkAuth(document.getElementById("ck-auth-setup"));
-        ensureCloud().then(() => watchAppleSignIn()).catch(() => {});
+        ensureCloud().then(() => {
+          watchAppleSignIn();
+          paintAppleButtonHint();
+          window.setTimeout(paintAppleButtonHint, 700);
+        }).catch(() => paintAppleButtonHint());
       } else if (window._gateStep === "guest" && gateIsOpen()) {
         document.body.classList.remove("whs-apple-gate");
         parkCkAuth();
