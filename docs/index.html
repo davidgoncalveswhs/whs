@@ -377,33 +377,23 @@
       padding: 14px 16px; font-size: 16px; width: 100%;
     }
     .gate-row select { appearance: none; background-image: none; }
-    #guestAppleRow {
-      margin-top: 18px;
-      min-height: 44px;
+    .gate-apple-step {
+      display: flex;
+      align-items: center;
+      min-height: 56px;
+      margin: 8px 0 12px;
       overflow: visible;
     }
-    .gate-apple {
+    .gate-apple-step #ck-auth {
       display: flex;
       align-items: center;
       min-height: 44px;
       overflow: visible;
     }
-    .gate-apple #ck-auth {
-      display: flex;
-      align-items: center;
-      min-height: 40px;
-      overflow: visible;
-    }
-    .gate-apple #ck-auth.hidden { display: none !important; }
-    .gate-apple .apple-auth-button {
+    .gate-apple-step #ck-auth.hidden { display: none !important; }
+    .gate-apple-step .apple-auth-button {
       overflow: hidden !important;
       flex: none;
-    }
-    .gate-apple-status {
-      margin-left: 10px;
-      font-size: 14px;
-      color: #1d1d1f;
-      font-weight: 600;
     }
     .gate-actions {
       display: flex; justify-content: flex-end;
@@ -598,16 +588,16 @@
               <input id="guestAccess" type="password" inputmode="numeric" autocomplete="off" spellcheck="false">
             </div>
           </div>
-          <div id="guestAppleRow" class="hidden">
-            <div class="gate-apple">
-              <div id="ck-auth-gate"></div>
-              <span class="gate-apple-status hidden" id="guestAppleStatus"></span>
-            </div>
-          </div>
           <div class="gate-actions">
             <button class="gate-signin" type="button" id="guestFinish">Sign In</button>
           </div>
           <p class="error" id="setupError"></p>
+        </div>
+        <div id="gateApple" class="hidden">
+          <div class="gate-apple-step">
+            <div id="ck-auth-gate"></div>
+          </div>
+          <p class="error" id="appleError"></p>
         </div>
       </div>
     </div>
@@ -1357,13 +1347,8 @@
     function gateIsOpen() {
       return gate && !gate.classList.contains("hidden");
     }
-    function staffSetupVisible() {
-      if (window._gateStep !== "guest" || !gateIsOpen()) return false;
-      const role = normalizeRole((document.getElementById("guestRole") || {}).value);
-      return role === "teacher" || role === "administrator";
-    }
     function gateWantsAppleAuth() {
-      return staffSetupVisible();
+      return window._gateStep === "apple" && !!window._pendingGuestStaff;
     }
     function parkCkAuth() {
       if (gateWantsAppleAuth()) return;
@@ -1427,8 +1412,8 @@
     function ckAuthHostVisible() {
       const box = document.getElementById("ck-auth");
       if (!box || box.classList.contains("hidden")) return false;
-      const row = document.getElementById("guestAppleRow");
-      if (row && !row.classList.contains("hidden") && row.contains(box)) return true;
+      const apple = document.getElementById("gateApple");
+      if (apple && !apple.classList.contains("hidden") && apple.contains(box)) return true;
       const more = document.getElementById("ck-auth-more");
       if (more && more.contains(box)) return true;
       return box.getClientRects().length > 0;
@@ -1800,27 +1785,21 @@
       if (box.parentNode !== parent) parent.appendChild(box);
       box.classList.remove("hidden");
     }
-    async function refreshGateAppleAuth() {
-      const row = document.getElementById("guestAppleRow");
+    async function showAppleStep() {
+      window._gateStep = "apple";
+      document.getElementById("gatePair").classList.add("hidden");
+      document.getElementById("gateSetup").classList.add("hidden");
+      const apple = document.getElementById("gateApple");
+      if (apple) apple.classList.remove("hidden");
+      applyChrome();
       const slot = document.getElementById("ck-auth-gate");
-      const status = document.getElementById("guestAppleStatus");
-      const role = normalizeRole((document.getElementById("guestRole") || {}).value);
-      const staff = role === "teacher" || role === "administrator";
-      const onGate = window._gateStep === "guest" && gateIsOpen();
-      if (!(row && slot)) return;
-      row.classList.toggle("hidden", !(staff && onGate));
-      if (!(staff && onGate)) {
-        if (document.getElementById("ck-auth-more")) mountCkAuth(document.getElementById("ck-auth-more"));
-        else parkCkAuth();
-        return;
-      }
       mountCkAuth(slot);
+      if (slot) void slot.offsetHeight;
+      await new Promise((resolve) => window.requestAnimationFrame(() => window.requestAnimationFrame(resolve)));
       try { await ensureCloud(); } catch (_) {}
       watchAppleSignIn();
-      const signed = !!ckWebAuthToken();
-      if (status) {
-        status.textContent = signed ? t().appleSignedIn : "";
-        status.classList.toggle("hidden", !signed);
+      if (ckWebAuthToken() && window._pendingGuestStaff) {
+        await finishPendingGuestStaff();
       }
     }
     function showRevokePassError(kind) {
@@ -1846,7 +1825,6 @@
           window._ckWatch = false;
           const signedName = userNameFromInfo(userInfo);
           if (signedName) window._ckUserRecordName = signedName;
-          refreshGateAppleAuth();
           const fromForm = pendingStaffFromForm();
           if (fromForm) window._pendingGuestStaff = fromForm;
           if (window._pendingGuestStaff) {
@@ -2325,6 +2303,9 @@
       if (window._gateStep === "guest") {
         gateTitle.textContent = c.guestTitle;
         gateBody.textContent = c.guestBody;
+      } else if (window._gateStep === "apple") {
+        gateTitle.textContent = c.appleStepTitle;
+        gateBody.textContent = c.appleStepBody;
       } else {
         gateTitle.textContent = c.welcome;
         gateBody.textContent = c.gateBody;
@@ -4895,14 +4876,20 @@
       document.body.classList.remove("whs-apple-gate");
       document.getElementById("gatePair").classList.remove("hidden");
       document.getElementById("gateSetup").classList.add("hidden");
+      const apple = document.getElementById("gateApple");
+      if (apple) apple.classList.add("hidden");
       parkCkAuth();
       const err = document.getElementById("setupError");
       if (err) err.textContent = "";
+      const appleErr = document.getElementById("appleError");
+      if (appleErr) appleErr.textContent = "";
     }
     function showGuestStep() {
       window._gateStep = "guest";
       document.getElementById("gatePair").classList.add("hidden");
       document.getElementById("gateSetup").classList.remove("hidden");
+      const apple = document.getElementById("gateApple");
+      if (apple) apple.classList.add("hidden");
       const access = document.getElementById("guestAccess");
       if (access) access.value = "";
       applyChrome();
@@ -4916,10 +4903,9 @@
       const accessRow = document.getElementById("guestAccessRow");
       if (gradeRow) gradeRow.classList.toggle("hidden", staff);
       if (accessRow) accessRow.classList.toggle("hidden", !staff);
-      refreshGateAppleAuth();
     }
     function pendingStaffFromForm() {
-      if (!(window._gateStep === "guest" && gateIsOpen())) return null;
+      if (!((window._gateStep === "guest" || window._gateStep === "apple") && gateIsOpen())) return null;
       const name = String((document.getElementById("guestName") || {}).value || "").trim();
       const role = normalizeRole((document.getElementById("guestRole") || {}).value);
       const code = String((document.getElementById("guestAccess") || {}).value || "").trim();
@@ -4953,9 +4939,8 @@
       const finish = document.getElementById("guestFinish");
       if (staff) {
         window._pendingGuestStaff = { name, role, code };
-        await refreshGateAppleAuth();
         if (!ckWebAuthToken()) {
-          if (err) err.textContent = t().appleStepBody;
+          await showAppleStep();
           return;
         }
         if (finish) finish.disabled = true;
@@ -4976,7 +4961,7 @@
     }
     async function finishPendingGuestStaff() {
       const pending = window._pendingGuestStaff;
-      const err = document.getElementById("setupError");
+      const err = document.getElementById("appleError") || document.getElementById("setupError");
       if (!pending) return;
       if (!ckWebAuthToken()) {
         if (err) err.textContent = t().appleStepBody;
