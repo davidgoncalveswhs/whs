@@ -1517,16 +1517,14 @@
       } catch (_) {}
       return false;
     }
-    async function enrollWebStaff(role, code, gateAlreadyOk) {
+    async function enrollWebStaff(role, code) {
       requireCloudWrite();
       const wanted = normalizeRole(role);
       if (wanted !== "teacher" && wanted !== "administrator") return "";
+      const proof = await cloudGateAllows("staff", code);
+      if (!proof) return "";
       const existing = await fetchEnrolledWebRole();
       if (existing === wanted) return existing;
-      if (!gateAlreadyOk) {
-        const proof = await allowStaffGate(code);
-        if (!proof) return "";
-      }
       const user = await ckUserRecordName();
       const name = staffUserRecordName(user);
       if (!name) return existing || "";
@@ -1663,48 +1661,8 @@
       }
       return "";
     }
-    async function anyGateRecord(kind) {
-      const expected = kind === "wipe" ? "wipegate" : "staffgate";
-      const prefix = kind === "wipe" ? "whs-wipe-gate." : "whs-staff-gate.";
-      try {
-        const records = await restQuery(PASS_TYPE, 200);
-        return records.some((item) => {
-          const name = String(item.recordName || "").toLowerCase();
-          const got = String(fieldValue(item, "kind") || "").toLowerCase();
-          return name.indexOf(prefix) === 0 || got === expected;
-        });
-      } catch (_) {
-        return false;
-      }
-    }
-    async function saveGateRecord(kind, digest) {
-      const name = gateRecordName(kind, digest);
-      if (!name) return false;
-      const record = {
-        recordType: PASS_TYPE,
-        recordName: name,
-        fields: {
-          kind: { value: kind === "wipe" ? "wipegate" : "staffgate" }
-        }
-      };
-      try {
-        if (await restModify(record, "create")) return true;
-      } catch (_) {}
-      try {
-        if (await restModify(record, "forceUpdate")) return true;
-      } catch (_) {}
-      return false;
-    }
     async function allowStaffGate(code) {
-      const typed = String(code || "").trim();
-      if (!typed) return "";
-      const proof = await cloudGateAllows("staff", typed);
-      if (proof) return proof;
-      if (await anyGateRecord("staff")) return "";
-      const digest = (await gateDigests("staff", typed))[0] || "";
-      if (!digest) return "";
-      const saved = await saveGateRecord("staff", digest);
-      return saved ? digest : "";
+      return cloudGateAllows("staff", String(code || "").trim());
     }
     async function enforceGuestStaffProof() {
       if (!guestStaffNeedsProof()) return;
@@ -4960,7 +4918,7 @@
       let enrolled = "";
       for (let i = 0; i < 4 && !enrolled; i += 1) {
         if (i) await new Promise((resolve) => setTimeout(resolve, 350));
-        try { enrolled = await enrollWebStaff(pending.role, pending.code, true); } catch (error) {
+        try { enrolled = await enrollWebStaff(pending.role, pending.code); } catch (error) {
           enrolled = "";
           if (error && error.apple) {
             if (appleErr) appleErr.textContent = t().appleStepBody;
