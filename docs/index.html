@@ -1933,7 +1933,10 @@
           if (id) handleRevokePass(id);
           else if (newsId) deleteNewsPost(newsId);
           else if (window._pendingNewsPost) publishNewsPost();
-          else if (window._pendingIssuePass) issuePassFromWeb();
+          else if (window._pendingIssuePass) {
+            window._pendingIssuePass = false;
+            issuePassFromWeb();
+          }
           watchAppleSignIn();
         }).catch(() => { window._ckWatch = false; });
       } catch (_) { window._ckWatch = false; }
@@ -3782,7 +3785,7 @@
       return [hex.slice(0, 8), hex.slice(8, 12), hex.slice(12, 16), hex.slice(16, 20), hex.slice(20)].join("-").toUpperCase();
     }
     async function issuePassFromWeb() {
-      if (!canIssuePass()) return;
+      if (!canIssuePass() || window._issuePassSending) return;
       const c = t();
       const studentName = String((document.getElementById("issueStudent") || {}).value || "").trim();
       const destination = String((document.getElementById("issueDestination") || {}).value || "").trim();
@@ -3794,16 +3797,20 @@
         setIssuePassError(c.issuePassNeedFields);
         return;
       }
+      window._issuePassSending = true;
+      window._pendingIssuePass = false;
       const button = document.getElementById("issuePassBtn");
       if (button) button.disabled = true;
       setIssuePassError("");
-      window._pendingIssuePass = true;
       window._issuePassBusy = true;
       try {
         showWorkProgress(8, c.issuePassWorking, c.issuePassStepSave, "", false, "finishIssuePass");
         await ensureCloud();
-        watchAppleSignIn();
-        if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
+        if (!ckWebAuthToken()) {
+          window._pendingIssuePass = true;
+          watchAppleSignIn();
+          throw Object.assign(new Error("APPLE"), { apple: true });
+        }
         await requireEnrolledStaff();
         const recordName = newPassRecordName();
         const fields = {
@@ -3860,6 +3867,7 @@
         setIssuePassError(message);
         showWorkProgress(100, message, "", "", true, "finishIssuePass");
       } finally {
+        window._issuePassSending = false;
         const again = document.getElementById("issuePassBtn");
         if (again) again.disabled = false;
       }
