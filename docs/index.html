@@ -377,23 +377,44 @@
       padding: 14px 16px; font-size: 16px; width: 100%;
     }
     .gate-row select { appearance: none; background-image: none; }
+    #gateApple.is-off {
+      display: block !important;
+      visibility: hidden;
+      position: absolute;
+      width: 320px;
+      height: 72px;
+      overflow: visible;
+      pointer-events: none;
+    }
     .gate-apple-step {
-      display: flex;
-      align-items: center;
+      display: block;
       min-height: 56px;
       margin: 8px 0 12px;
       overflow: visible;
     }
     .gate-apple-step #ck-auth,
-    #ck-auth-more #ck-auth {
-      display: flex;
-      align-items: center;
-      min-height: 44px;
-      overflow: visible;
-    }
-    #apple-sign-in-placeholder {
+    #ck-auth-more #ck-auth,
+    #apple-sign-in-placeholder,
+    #apple-sign-out-placeholder {
+      display: block;
+      width: 240px;
       min-width: 210px;
       min-height: 44px;
+      height: 44px;
+      overflow: visible;
+    }
+    #apple-sign-in-placeholder iframe,
+    #apple-sign-out-placeholder iframe,
+    .apple-auth-button,
+    .apple-auth-button iframe {
+      display: block !important;
+      width: 210px !important;
+      height: 40px !important;
+      min-width: 210px !important;
+      min-height: 40px !important;
+      opacity: 1 !important;
+      visibility: visible !important;
+      border: 0;
     }
     .gate-actions {
       display: flex; justify-content: flex-end;
@@ -593,7 +614,7 @@
           </div>
           <p class="error" id="setupError"></p>
         </div>
-        <div id="gateApple" class="hidden">
+        <div id="gateApple" class="is-off">
           <div class="gate-apple-step" id="ck-auth-gate">
             <div id="ck-auth">
               <div id="apple-sign-in-placeholder"></div>
@@ -1777,13 +1798,16 @@
       document.getElementById("gatePair").classList.add("hidden");
       document.getElementById("gateSetup").classList.add("hidden");
       const apple = document.getElementById("gateApple");
-      if (apple) apple.classList.remove("hidden");
+      if (apple) apple.classList.remove("is-off", "hidden");
       applyChrome();
       const slot = document.getElementById("ck-auth-gate");
       mountCkAuth(slot);
       await waitForVisibleSlot(slot);
       try { await setupCloudAuth(); } catch (_) {}
       watchAppleSignIn();
+      if (ckWebAuthToken() && window._pendingGuestStaff) {
+        await finishPendingGuestStaff();
+      }
     }
     function showRevokePassError(kind) {
       const c = t();
@@ -4860,7 +4884,10 @@
       document.getElementById("gatePair").classList.remove("hidden");
       document.getElementById("gateSetup").classList.add("hidden");
       const apple = document.getElementById("gateApple");
-      if (apple) apple.classList.add("hidden");
+      if (apple) {
+        apple.classList.add("is-off");
+        apple.classList.remove("hidden");
+      }
       parkCkAuth();
       const err = document.getElementById("setupError");
       if (err) err.textContent = "";
@@ -4872,7 +4899,10 @@
       document.getElementById("gatePair").classList.add("hidden");
       document.getElementById("gateSetup").classList.remove("hidden");
       const apple = document.getElementById("gateApple");
-      if (apple) apple.classList.add("hidden");
+      if (apple) {
+        apple.classList.add("is-off");
+        apple.classList.remove("hidden");
+      }
       const access = document.getElementById("guestAccess");
       if (access) access.value = "";
       applyChrome();
