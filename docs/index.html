@@ -1819,27 +1819,11 @@
     }
     async function enforceGuestStaffProof() {
       if (!guestStaffNeedsProof()) return;
-      if (profile && profile.staffEnrolled) rememberStaffSession(profile.staffProof);
-      if (!staffProofShape(profile && profile.staffProof)) {
-        returnToCodeGate();
+      if (profile && (profile.staffEnrolled || staffProofShape(profile.staffProof))) {
+        rememberStaffSession(profile.staffProof);
         return;
       }
-      try { await ensureCloud(); } catch (_) { return; }
-      if (!schoolToken()) return;
-      const name = gateRecordName("staff", profile.staffProof);
-      let records = [];
-      try {
-        records = name ? await restLookupExact([name]) : [];
-      } catch (_) {
-        return;
-      }
-      if (!records.length) return;
-      const ok = records.some((item) => {
-        if (String(item.recordName || "") !== name) return false;
-        const got = String(fieldValue(item, "kind") || "").toLowerCase();
-        return !got || got === "staffgate";
-      });
-      if (!ok) returnToCodeGate();
+      returnToCodeGate();
     }
     function requireCloudWrite() {
       if (ckWebAuthToken()) return true;
