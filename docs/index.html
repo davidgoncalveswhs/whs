@@ -335,6 +335,11 @@
     nav.tabs .ico { display: grid; place-items: center; margin: 0 auto 4px; }
     nav.tabs .ico .icon { width: 22px; height: 22px; }
     nav.tabs .tab-glyph { width: 22px; height: 22px; object-fit: contain; display: block; }
+    nav.tabs .tab-glyph.tone {
+      background-color: currentColor;
+      -webkit-mask: var(--glyph) center / contain no-repeat;
+      mask: var(--glyph) center / contain no-repeat;
+    }
     nav.tabs.with-classes { grid-template-columns: repeat(4, 1fr); }
     .hidden { display: none !important; }
     #gate.whs-auth-park {
@@ -2510,7 +2515,7 @@
       if (guestBody) guestBody.textContent = c.guestBody;
       document.getElementById("bell").innerHTML = icons.bell;
       const booksIco = '<img class="tab-glyph" src="./books-vertical.png" alt="">';
-      const contactsIco = '<img class="tab-glyph" src="./person-crop-rectangle-stack.png" alt="">';
+      const contactsIco = '<span class="tab-glyph tone" style="--glyph:url(./person-crop-rectangle-stack.png)"></span>';
       const tabItems = [["home", icons.house, c.home]];
       if (isPairedStudent() || isGuestStudent()) tabItems.push(["classes", booksIco, c.classes]);
       if (canPostNews()) tabItems.push(["posts", icons.mega, c.postsNav]);
