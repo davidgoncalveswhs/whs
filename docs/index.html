@@ -1854,20 +1854,29 @@
     }
     async function requireEnrolledStaff() {
       if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
-      let role = "";
+      let cloudRole = "";
       try {
-        role = await fetchEnrolledWebRole();
+        cloudRole = await fetchEnrolledWebRole();
       } catch (error) {
         if (error && (error.apple || error.message === "APPLE")) throw error;
-        role = "";
       }
-      if (role === "teacher" || role === "administrator") return role;
       const local = localStaffRole();
-      if (local) {
-        const repaired = await repairEnrolledStaff(local);
+      let role = cloudRole;
+      if (local === "administrator" || cloudRole === "administrator") role = "administrator";
+      else if (!role) role = local;
+      if (role !== "teacher" && role !== "administrator") {
+        const repaired = local ? await repairEnrolledStaff(local) : "";
         if (repaired) return repaired;
+        throw Object.assign(new Error("STAFF"), { staff: true });
       }
-      throw Object.assign(new Error("STAFF"), { staff: true });
+      if (cloudRole !== role) {
+        const user = await ckUserRecordName();
+        const name = staffUserRecordName(user);
+        if (name) {
+          try { await saveStaffUserRecord(name, role); } catch (_) {}
+        }
+      }
+      return role;
     }
     async function createPassRecord(record, operation) {
       const op = operation || "create";
@@ -4708,7 +4717,9 @@
         }
       } catch (_) {}
       for (const record of records) {
-        try { await restModify(record, "forceUpdate"); } catch (_) {}
+        try { await createPassRecord(record, "create"); } catch (_) {
+          try { await restModifySchool(record, "create"); } catch (_) {}
+        }
       }
     }
     function newsItemFromPass(record) {
@@ -4734,7 +4745,9 @@
       };
       try {
         const manifest = (await fetchByNames(cloudDb(), [NEWS_MANIFEST]))[0];
-        const ids = parsePassIDs(fieldValue(manifest, "passIDs"));
+        let extra = [];
+        try { extra = JSON.parse(localStorage.getItem("whsNewsIds") || "[]"); } catch (_) {}
+        const ids = parsePassIDs(fieldValue(manifest, "passIDs")).concat(Array.isArray(extra) ? extra : []);
         (await fetchByNames(cloudDb(), ids)).forEach(remember);
         const iconNames = found.flatMap((record) => newsIconChunkNames(record.recordName));
         applyNewsIcons(found, await fetchByNames(cloudDb(), iconNames));
@@ -4906,22 +4919,25 @@
           passIDs: { value: (ids || []).join(",") }
         }
       };
-      if (existing && existing.recordChangeTag) {
-        record.recordChangeTag = existing.recordChangeTag;
+      if (existing && existing.recordChangeTag) record.recordChangeTag = existing.recordChangeTag;
+      const ops = existing ? ["forceUpdate", "update", "create"] : ["create", "forceUpdate"];
+      for (const op of ops) {
         try {
-          await ckCreateRecords([record]);
-          return;
+          if (await createPassRecord(record, op)) return;
         } catch (_) {}
         try {
-          await restModify(record, "update");
-          return;
+          if (await restModifySchool(record, op)) return;
         } catch (_) {}
       }
+    }
+    function rememberNewsId(id) {
+      const unique = String(id || "").trim();
+      if (!unique) return;
       try {
-        await ckCreateNews(record);
-      } catch (_) {
-        await restModify(record, existing ? "forceUpdate" : "create");
-      }
+        const saved = JSON.parse(localStorage.getItem("whsNewsIds") || "[]");
+        const next = [unique].concat((Array.isArray(saved) ? saved : []).filter((item) => item !== unique)).slice(0, 100);
+        localStorage.setItem("whsNewsIds", JSON.stringify(next));
+      } catch (_) {}
     }
     async function addNewsToManifest(id) {
       const unique = String(id || "").trim();
@@ -4953,7 +4969,7 @@
       const button = document.getElementById("newsPublishBtn");
       if (button) button.disabled = true;
       setNewsComposeError("");
-      const renewWindow = window._appleNeedsRenew ? window.open("", "whsAppleRenew", "width=640,height=720") : null;
+      const renewWindow = (window._appleReady && ckWebAuthToken() && !window._appleNeedsRenew) ? null : window.open("", "whsAppleRenew", "width=640,height=720");
       window._pendingNewsPost = false;
       try {
         await ensureCloud();
@@ -4964,38 +4980,21 @@
         }
         const role = await requireEnrolledStaff();
         if (role !== "administrator") throw Object.assign(new Error("FAIL"), { reason: "staff" });
-        let jpeg = rawFile;
-        try { jpeg = dataUrlToFile(await compressSwipePhoto(rawFile), "news.jpg"); } catch (_) {}
         const recordName = "news." + ((crypto.randomUUID && crypto.randomUUID()) || String(Date.now()));
+        const draft = { recordType: PASS_TYPE, recordName, fields: newsPassFields(title, story) };
         let saved = null;
         try {
-          saved = await ckCreateNews({
-            recordType: PASS_TYPE,
-            recordName,
-            fields: newsPassFields(title, story, jpeg)
-          });
+          saved = await createPassRecord(draft, "create");
         } catch (error) {
-          if (error && error.apple) throw error;
-        }
-        if (!saved) {
-          try {
-            const uploaded = await restUploadAsset(PASS_TYPE, "signature", jpeg, recordName);
-            saved = await ckCreateNews({
-              recordType: PASS_TYPE,
-              recordName: uploaded.recordName || recordName,
-              fields: newsPassFields(title, story, uploaded.value)
-            });
-          } catch (error) {
-            if (error && error.apple) throw error;
-          }
-        }
-        if (!saved) {
-          const fields = newsPassFields(title, story);
-          try {
-            saved = await ckCreateNews({ recordType: PASS_TYPE, recordName, fields });
-          } catch (error) {
-            if (error && error.apple) throw error;
-            saved = await restModify({ recordType: PASS_TYPE, recordName, fields }, "create");
+          const auth = error && (error.apple || isAuthError(error));
+          if (auth) {
+            window._appleReady = false;
+            window._appleNeedsRenew = true;
+            const again = renewWindow && !renewWindow.closed ? renewWindow : window.open("", "whsAppleRenew", "width=640,height=720");
+            if (!(await renewAppleForSend(again))) throw error;
+            saved = await createPassRecord(draft, "create");
+          } else {
+            try { saved = await restModifySchool(draft, "create"); } catch (_) { throw error; }
           }
         }
         if (!saved) {
@@ -5004,6 +5003,7 @@
           } catch (_) {}
         }
         if (!saved) throw Object.assign(new Error("FAIL"), { reason: "create" });
+        rememberNewsId(recordName);
         await addNewsToManifest(recordName);
         try {
           await attachNewsIcon(recordName, chunkNewsImage(await compressNewsIcon(rawFile)));
