@@ -1693,13 +1693,58 @@
       if (saved) return wanted;
       return existing || "";
     }
+    function localStaffRole() {
+      const role = currentRole();
+      if (role !== "teacher" && role !== "administrator") return "";
+      if (profile && (profile.staffEnrolled || staffProofShape(profile.staffProof))) return role;
+      return "";
+    }
     async function requireEnrolledStaff() {
-      requireCloudWrite();
+      const saved = localStaffRole();
+      if (saved) return saved;
+      if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
       const role = await fetchEnrolledWebRole();
       if (role !== "teacher" && role !== "administrator") {
         throw Object.assign(new Error("STAFF"), { staff: true });
       }
       return role;
+    }
+    async function createPassRecord(record, operation) {
+      const op = operation || "create";
+      if (ckWebAuthToken()) {
+        try {
+          if (op === "create") {
+            const saved = await ckCreateNews(record);
+            if (saved) return saved;
+          }
+        } catch (error) {
+          if (!(error && (error.apple || isAuthError(error)))) throw error;
+        }
+        try {
+          const saved = await restModify(record, op);
+          if (saved) return saved;
+        } catch (error) {
+          if (!(error && (error.apple || isAuthError(error)))) throw error;
+        }
+      }
+      return restModifySchool(record, op);
+    }
+    function keepAppleSessionFresh() {
+      if (window._appleKeepalive) return;
+      const renew = () => {
+        if (!localStaffRole() || !configured || !ckWebAuthToken()) return;
+        try {
+          const container = CloudKit.getDefaultContainer();
+          if (container && typeof container.fetchCurrentUserIdentity === "function") {
+            container.fetchCurrentUserIdentity().then((identity) => {
+              const name = userNameFromInfo(identity) || userNameFromInfo(identity && identity.userInfo);
+              if (name) rememberAppleUser(name);
+            }).catch(() => {});
+          }
+        } catch (_) {}
+      };
+      renew();
+      window._appleKeepalive = setInterval(renew, 4 * 60 * 1000);
     }
     function restUrl(action) {
       return restPublicUrl("records/" + action, true);
@@ -2074,6 +2119,7 @@
         payload && payload.serverErrorCode,
         payload && payload.reason
       ].filter(Boolean).join(" ");
+      if (/ACCESS_DENIED|PERMISSION_FAILURE/i.test(text)) return false;
       return /AUTH|421|authorization|sign in/i.test(text);
     }
     function cloudRecordError(payload, record) {
@@ -3792,7 +3838,7 @@
       for (const name of names) {
         if (taken.has(name.toLowerCase())) continue;
         try {
-          await restModify({
+          await createPassRecord({
             recordType: PASS_TYPE,
             recordName: name,
             fields: {
@@ -3892,7 +3938,9 @@
         }
         for (let i = 0; i < records.length; i += 1) {
           try { await ckCreateNews(records[i]); } catch (_) {
-            try { await restModify(records[i], "forceUpdate"); } catch (_) {}
+            try { await restModify(records[i], "forceUpdate"); } catch (_) {
+              try { await restModifySchool(records[i], "create"); } catch (_) {}
+            }
           }
           note(0.35 + ((i + 1) / Math.max(records.length, 1)) * 0.65);
         }
@@ -3931,8 +3979,9 @@
       try {
         showWorkProgress(8, c.issuePassWorking, c.issuePassStepSave, "", false, "finishIssuePass");
         await ensureCloud();
-        const signed = await restoreStaffCloudSession();
-        if (!signed) {
+        const savedStaff = localStaffRole();
+        try { await restoreStaffCloudSession(); } catch (_) {}
+        if (!savedStaff && !ckWebAuthToken()) {
           window._issuePassBusy = false;
           if (window._issuePassSending === sendTicket) window._issuePassSending = null;
           closeSheet();
@@ -3945,6 +3994,7 @@
         }
         window._issuePassAwaitingApple = false;
         window._pendingIssuePass = false;
+        keepAppleSessionFresh();
         await requireEnrolledStaff();
         const recordName = newPassRecordName();
         const fields = {
@@ -3957,10 +4007,9 @@
         showWorkProgress(22, c.issuePassWorking, c.issuePassStepSave, "", false, "finishIssuePass");
         let saved = null;
         try {
-          saved = await ckCreateNews({ recordType: PASS_TYPE, recordName, fields });
+          saved = await createPassRecord({ recordType: PASS_TYPE, recordName, fields }, "create");
         } catch (error) {
-          if (error && error.apple) throw error;
-          saved = await restModify({ recordType: PASS_TYPE, recordName, fields }, "create");
+          if (error && error.apple && !savedStaff) throw error;
         }
         if (!saved) {
           try { saved = (await fetchByNames(cloudDb(), [recordName]))[0] || null; } catch (_) {}
@@ -5366,7 +5415,9 @@
         if (!signedIn()) return;
         show("home");
         const role = currentRole();
-        if (role === "teacher" || role === "administrator") restoreStaffCloudSession().catch(() => {});
+        if (role === "teacher" || role === "administrator") {
+          restoreStaffCloudSession().then(() => keepAppleSessionFresh()).catch(() => keepAppleSessionFresh());
+        }
       });
     }
   </script>
