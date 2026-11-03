@@ -688,7 +688,7 @@
         appleSignedIn: "Signed in with Apple",
         staffAppleFail: "Signed in, but WHS could not save staff access. Tap Sign in with Apple again.",
         staffCodeWrong: "That access code is not correct.",
-        issuePassNeedStaff: "This Apple ID is not enrolled as staff. Enter the school code once, then try again.",
+        issuePassNeedStaff: "This Apple ID is not enrolled as staff.",
         staffCodeLabel: "Staff access code",
         roleStudent: "Student",
         roleTeacher: "Teacher",
@@ -933,7 +933,7 @@
         appleSignedIn: "Sesion iniciada con Apple",
         staffAppleFail: "Entraste, pero WHS no pudo guardar el acceso de personal. Toca Sign in with Apple otra vez.",
         staffCodeWrong: "Ese código de acceso no es correcto.",
-        issuePassNeedStaff: "Este Apple ID no esta inscrito como personal. Escribe el codigo de la escuela una vez e intentalo de nuevo.",
+        issuePassNeedStaff: "Este Apple ID no esta inscrito como personal.",
         staffCodeLabel: "Código de acceso del personal",
         roleStudent: "Estudiante",
         roleTeacher: "Maestro",
@@ -1774,12 +1774,36 @@
       }
       const rows = (payload && payload.records) || [];
       const denied = rows.some((row) => /ACCESS_DENIED|PERMISSION_FAILURE/i.test(String((row && row.serverErrorCode) || "")));
-      const record = recordsFrom(payload).filter(usableRecord).find((item) => String(item.recordName || "") === name);
+      const record = recordsFrom(payload).filter(usableRecord).find((item) => String(item.recordName || "").toLowerCase() === name.toLowerCase());
       if (!record && denied) throw Object.assign(new Error("FAIL"), { reason: "staff" });
       if (!record) return "";
       const role = normalizeRole(fieldValue(record, "role"));
       if (role === "teacher" || role === "administrator") return role;
       return "";
+    }
+    async function repairEnrolledStaff(role) {
+      const proof = String((profile && profile.staffProof) || "").trim().toLowerCase();
+      if (!staffProofShape(proof)) return "";
+      const gate = gateRecordName("staff", proof);
+      if (!gate) return "";
+      let confirmed = false;
+      try {
+        const records = await restLookupExact([gate]);
+        confirmed = records.some((record) => String(record.recordName || "").toLowerCase() === gate);
+      } catch (_) {
+        confirmed = false;
+      }
+      if (!confirmed) return "";
+      const user = await ckUserRecordName();
+      const name = staffUserRecordName(user);
+      if (name) {
+        try { await saveStaffUserRecord(name, role); } catch (_) {}
+      }
+      if (user && profile && profile.appleUser !== user) {
+        profile.appleUser = user;
+        try { localStorage.setItem("whsWebProfile", JSON.stringify(profile)); } catch (_) {}
+      }
+      return role;
     }
     async function saveStaffUserRecord(name, role) {
       const record = {
@@ -1830,11 +1854,20 @@
     }
     async function requireEnrolledStaff() {
       if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
-      const role = await fetchEnrolledWebRole();
-      if (role !== "teacher" && role !== "administrator") {
-        throw Object.assign(new Error("STAFF"), { staff: true });
+      let role = "";
+      try {
+        role = await fetchEnrolledWebRole();
+      } catch (error) {
+        if (error && (error.apple || error.message === "APPLE")) throw error;
+        role = "";
       }
-      return role;
+      if (role === "teacher" || role === "administrator") return role;
+      const local = localStaffRole();
+      if (local) {
+        const repaired = await repairEnrolledStaff(local);
+        if (repaired) return repaired;
+      }
+      throw Object.assign(new Error("STAFF"), { staff: true });
     }
     async function createPassRecord(record, operation) {
       const op = operation || "create";
