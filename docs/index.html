@@ -852,7 +852,7 @@
         revokePassTitle: "Revoke this pass?",
         revokePassBody: "It will leave the student's iPhone and website. It stays in this log as revoked.",
         revokePassFail: "Could not revoke that pass.",
-        revokePassNeedApple: "Sign in with Apple in More first. The school token can read the log. Revoking a pass needs the same iCloud sign-in teachers use on iPhone.",
+        revokePassNeedApple: "Sign in with Apple to revoke this pass.",
         revokePassDone: "This pass is revoked. The student cannot use it.",
         adminPassWipeTitle: "Clear pass log",
         adminPassWipe: "Revoke all passes and clear the log",
@@ -861,7 +861,7 @@
         adminPassWipeConfirmTitle: "Clear the pass log?",
         adminPassWipeConfirmBody: "Every student pass will be revoked. The campus log will be empty. This cannot be undone.",
         adminPassWipeBadCode: "That access code is not correct.",
-        adminPassWipeNeedApple: "Sign in with Apple in More first. Clearing the log needs the same iCloud sign-in teachers use on iPhone.",
+        adminPassWipeNeedApple: "Sign in with Apple to clear the pass log.",
         adminPassWipeDone: "All passes are revoked. The campus log is empty.",
         adminPassWipeFail: "Could not clear the pass log.",
         adminPassWipeCancel: "Cancel",
@@ -885,7 +885,7 @@
         newsPublish: "Publish",
         newsNeedFields: "Add an image, a title, and a description.",
         newsPublishFail: "Could not publish that post.",
-        newsPublishNeedApple: "Sign in with Apple in More first. Publishing a notification needs the same iCloud sign-in teachers use on iPhone.",
+        newsPublishNeedApple: "Sign in with Apple to publish this post.",
         newsPublished: "Posted. Students will see it in Notifications.",
         postsNav: "Posts",
         postsList: "Current posts",
@@ -894,7 +894,7 @@
         deletePostTitle: "Delete this post?",
         deletePostBody: "Students will no longer see it in Notifications on the website or iPhone.",
         deletePostFail: "Could not delete that post.",
-        deletePostNeedApple: "Sign in with Apple in More first. Deleting a post needs the same iCloud sign-in teachers use on iPhone.",
+        deletePostNeedApple: "Sign in with Apple to delete this post.",
         language: "Language",
         email: "Email",
         idTitle: "Swipe Card",
@@ -1097,7 +1097,7 @@
         revokePassTitle: "¿Revocar este pase?",
         revokePassBody: "Saldrá del iPhone y del sitio del estudiante. Se queda en este registro como revocado.",
         revokePassFail: "No se pudo revocar ese pase.",
-        revokePassNeedApple: "Entra con Apple en Más primero. El token de la escuela puede leer el registro. Revocar un pase necesita la misma sesión de iCloud que usan los maestros en iPhone.",
+        revokePassNeedApple: "Entra con Apple para revocar este pase.",
         revokePassDone: "Este pase está revocado. El estudiante no puede usarlo.",
         adminPassWipeTitle: "Vaciar registro de pases",
         adminPassWipe: "Revocar todos los pases y vaciar el registro",
@@ -1106,7 +1106,7 @@
         adminPassWipeConfirmTitle: "Vaciar el registro de pases?",
         adminPassWipeConfirmBody: "Se revocara cada pase de estudiante. El registro del campus quedara vacio. No se puede deshacer.",
         adminPassWipeBadCode: "Ese codigo de acceso no es correcto.",
-        adminPassWipeNeedApple: "Entra con Apple en Mas primero. Vaciar el registro necesita la misma sesion de iCloud que usan los maestros en iPhone.",
+        adminPassWipeNeedApple: "Entra con Apple para vaciar el registro.",
         adminPassWipeDone: "Todos los pases estan revocados. El registro del campus esta vacio.",
         adminPassWipeFail: "No se pudo vaciar el registro.",
         adminPassWipeCancel: "Cancelar",
@@ -1130,7 +1130,7 @@
         newsPublish: "Publicar",
         newsNeedFields: "Agrega una imagen, un título y una descripción.",
         newsPublishFail: "No se pudo publicar ese aviso.",
-        newsPublishNeedApple: "Entra con Apple en Más primero. Publicar un aviso necesita la misma sesión de iCloud que usan los maestros en iPhone.",
+        newsPublishNeedApple: "Entra con Apple para publicar este aviso.",
         newsPublished: "Publicado. Los estudiantes lo verán en Notificaciones.",
         postsNav: "Avisos",
         postsList: "Avisos actuales",
@@ -1139,7 +1139,7 @@
         deletePostTitle: "¿Eliminar este aviso?",
         deletePostBody: "Los estudiantes ya no lo verán en Notificaciones en el sitio ni en iPhone.",
         deletePostFail: "No se pudo eliminar ese aviso.",
-        deletePostNeedApple: "Entra con Apple en Más primero. Eliminar un aviso necesita la misma sesión de iCloud que usan los maestros en iPhone.",
+        deletePostNeedApple: "Entra con Apple para eliminar este aviso.",
         language: "Idioma",
         email: "Correo",
         idTitle: "Tarjeta Swipe",
@@ -1912,6 +1912,19 @@
       renew();
       window._appleKeepalive = setInterval(renew, 4 * 60 * 1000);
     }
+    async function ensureSavedStaffSession(renewWindow) {
+      try { await restoreStaffCloudSession(); } catch (_) {}
+      if (!ckWebAuthToken()) {
+        const renewed = await renewAppleForSend(renewWindow);
+        if (!renewed && !ckWebAuthToken()) return false;
+      } else if (renewWindow && !renewWindow.closed) {
+        try { renewWindow.close(); } catch (_) {}
+      }
+      window._appleReady = true;
+      window._appleNeedsRenew = false;
+      keepAppleSessionFresh();
+      return !!ckWebAuthToken();
+    }
     function restUrl(action) {
       return restPublicUrl("records/" + action, true);
     }
@@ -2435,6 +2448,7 @@
       try {
         await ensureCloud();
         watchAppleSignIn();
+        if (!(await ensureSavedStaffSession())) throw Object.assign(new Error("APPLE"), { apple: true });
         await requireEnrolledStaff();
         await revokePassRecord(id);
         closeSheet();
@@ -2585,7 +2599,7 @@
         showPassWipeProgress(4, c.adminPassWipeStepCollect, "", false, false);
         await ensureCloud();
         watchAppleSignIn();
-        if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
+        if (!(await ensureSavedStaffSession())) throw Object.assign(new Error("APPLE"), { apple: true });
         const role = await requireEnrolledStaff();
         if (role !== "administrator") throw Object.assign(new Error("FAIL"), { reason: "staff" });
         showPassWipeProgress(10, c.adminPassWipeStepCollect, "", false, false);
@@ -4496,7 +4510,9 @@
       try {
         await ensureCloud();
         watchAppleSignIn();
-        if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
+        if (!(await ensureSavedStaffSession())) throw Object.assign(new Error("APPLE"), { apple: true });
+        const role = await requireEnrolledStaff();
+        if (role !== "administrator") throw Object.assign(new Error("FAIL"), { reason: "staff" });
         let gone = false;
         const names = [id].concat(newsIconChunkNames(id));
         try { gone = await ckDeleteNames(names); } catch (error) {
@@ -4937,11 +4953,15 @@
       const button = document.getElementById("newsPublishBtn");
       if (button) button.disabled = true;
       setNewsComposeError("");
-      window._pendingNewsPost = true;
+      const renewWindow = window._appleNeedsRenew ? window.open("", "whsAppleRenew", "width=640,height=720") : null;
+      window._pendingNewsPost = false;
       try {
         await ensureCloud();
         watchAppleSignIn();
-        if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
+        if (!(await ensureSavedStaffSession(renewWindow))) {
+          window._pendingNewsPost = true;
+          throw Object.assign(new Error("APPLE"), { apple: true });
+        }
         const role = await requireEnrolledStaff();
         if (role !== "administrator") throw Object.assign(new Error("FAIL"), { reason: "staff" });
         let jpeg = rawFile;
