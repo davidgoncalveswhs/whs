@@ -1756,12 +1756,26 @@
     }
     async function fetchEnrolledWebRole() {
       if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
-      const user = await ckUserRecordName() || (profile && profile.appleUser) || "";
+      const user = await ckUserRecordName();
       const name = staffUserRecordName(user);
       if (!name) throw Object.assign(new Error("APPLE"), { apple: true });
       try { await ensureCloud(); } catch (_) {}
-      const records = await restLookupExact([name]);
-      const record = records.find((item) => String(item.recordName || "") === name);
+      const response = await fetch(restPublicUrl("records/lookup", false), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ records: [{ recordName: name }] })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (isAuthError(null, payload) || response.status === 421) {
+        throw Object.assign(new Error("APPLE"), { apple: true });
+      }
+      if (!response.ok && !(payload && payload.records)) {
+        throw Object.assign(new Error("FAIL"), { reason: "staff" });
+      }
+      const rows = (payload && payload.records) || [];
+      const denied = rows.some((row) => /ACCESS_DENIED|PERMISSION_FAILURE/i.test(String((row && row.serverErrorCode) || "")));
+      const record = recordsFrom(payload).filter(usableRecord).find((item) => String(item.recordName || "") === name);
+      if (!record && denied) throw Object.assign(new Error("FAIL"), { reason: "staff" });
       if (!record) return "";
       const role = normalizeRole(fieldValue(record, "role"));
       if (role === "teacher" || role === "administrator") return role;
@@ -1797,7 +1811,6 @@
       requireCloudWrite();
       const wanted = normalizeRole(role);
       if (wanted !== "teacher" && wanted !== "administrator") return "";
-      if (!(await staffPinOK(code))) return "";
       const proof = await allowStaffGate(code);
       if (!proof) return "";
       const existing = await fetchEnrolledWebRole();
@@ -1816,8 +1829,6 @@
       return "";
     }
     async function requireEnrolledStaff() {
-      const saved = localStaffRole();
-      if (saved) return saved;
       if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
       const role = await fetchEnrolledWebRole();
       if (role !== "teacher" && role !== "administrator") {
@@ -1917,18 +1928,23 @@
       const slices = [];
       for (let start = 0; start < unique.length; start += 150) slices.push(unique.slice(start, start + 150));
       const results = await Promise.all(slices.map(async (slice) => {
-        try {
-          const response = await fetch(restUrl("lookup"), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ records: slice.map((recordName) => ({ recordName })) })
-          });
-          const payload = await response.json();
-          const ok = response.ok || !!(payload && payload.records);
-          return { records: recordsFrom(payload).filter(usableRecord), ok, failed: ok ? [] : slice };
-        } catch (_) {
-          return { records: [], ok: false, failed: slice };
-        }
+        const once = async () => {
+          try {
+            const response = await fetch(restUrl("lookup"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ records: slice.map((recordName) => ({ recordName })) })
+            });
+            const payload = await response.json();
+            const ok = response.ok || !!(payload && payload.records);
+            return { records: recordsFrom(payload).filter(usableRecord), ok, failed: ok ? [] : slice };
+          } catch (_) {
+            return { records: [], ok: false, failed: slice };
+          }
+        };
+        const first = await once();
+        if (first.ok) return first;
+        return once();
       }));
       const records = [];
       const failed = [];
@@ -1959,10 +1975,8 @@
       const hash = await crypto.subtle.digest("SHA-256", bytes);
       return Array.from(new Uint8Array(hash)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
     }
-    const STAFF_GATE_DIGEST = "7efa422c852eda8d02f61a4222580dc3177a40844b232cbf0ce787140799b597";
     async function staffPinOK(code) {
-      const digests = await gateDigests("staff", String(code || "").trim());
-      return digests.indexOf(STAFF_GATE_DIGEST) >= 0;
+      return !!(await cloudGateAllows("staff", String(code || "").trim()));
     }
     function gateRecordName(kind, digest) {
       const hex = String(digest || "").trim().toLowerCase();
@@ -1987,62 +2001,33 @@
       return [...new Set(digests)];
     }
     async function cloudGateAllows(kind, code) {
-      let digests = await gateDigests(kind, code);
-      if (kind === "staff") {
-        digests = digests.filter((digest) => digest === STAFF_GATE_DIGEST);
-      }
+      const digests = await gateDigests(kind, code);
       if (!digests.length) return "";
       try { await ensureCloud(); } catch (_) {}
       const expected = kind === "wipe" ? "wipegate" : "staffgate";
       const names = digests.map((digest) => gateRecordName(kind, digest)).filter(Boolean);
-      const records = names.length ? await restLookupExact(names) : [];
+      const looked = names.length ? await restLookupDetailed(names, true) : { records: [], complete: true };
+      if (!looked.complete && !(looked.records || []).length) {
+        throw Object.assign(new Error("FAIL"), { reason: "gate" });
+      }
+      const records = looked.records || [];
       for (let i = 0; i < names.length; i += 1) {
         const name = names[i];
-        const record = records.find((item) => String(item.recordName || "") === name);
+        const record = records.find((item) => String(item.recordName || "").toLowerCase() === name.toLowerCase());
         if (!record) continue;
         const got = String(fieldValue(record, "kind") || "").toLowerCase();
-        if (got !== expected) continue;
+        if (got && got !== expected) continue;
         return digests[i];
       }
       return "";
     }
-    async function saveStaffGateRecord() {
-      const name = gateRecordName("staff", STAFF_GATE_DIGEST);
-      if (!name) return false;
-      const record = {
-        recordType: PASS_TYPE,
-        recordName: name,
-        fields: {
-          kind: { value: "staffgate" }
-        }
-      };
-      try {
-        if (await restModifySchool(record, "create")) return true;
-      } catch (_) {}
-      try {
-        if (await restModifySchool(record, "forceUpdate")) return true;
-      } catch (_) {}
-      try {
-        if (await restModify(record, "create")) return true;
-      } catch (_) {}
-      try {
-        if (await restModify(record, "forceUpdate")) return true;
-      } catch (_) {}
-      return false;
-    }
     async function allowStaffGate(code) {
-      const typed = String(code || "").trim();
-      if (!(await staffPinOK(typed))) return "";
-      const proof = await cloudGateAllows("staff", typed);
-      if (proof) return proof;
-      const saved = await saveStaffGateRecord();
-      return saved ? STAFF_GATE_DIGEST : "";
+      return cloudGateAllows("staff", String(code || "").trim());
     }
     function rememberStaffSession(proof) {
       if (!profile) return;
       profile.staffEnrolled = true;
       if (staffProofShape(proof)) profile.staffProof = proof;
-      else if (!staffProofShape(profile.staffProof)) profile.staffProof = STAFF_GATE_DIGEST;
       localStorage.setItem("whsWebProfile", JSON.stringify(profile));
     }
     async function enforceGuestStaffProof() {
@@ -2326,6 +2311,17 @@
     function parsePassIDs(raw) {
       return String(raw || "").split(",").map((part) => part.trim()).filter(Boolean);
     }
+    function capNewestIDs(existing, id, limit) {
+      const ids = (existing || []).slice();
+      const token = String(id || "").trim();
+      if (token && !ids.some((item) => item.toLowerCase() === token.toLowerCase())) ids.unshift(token);
+      const cap = Math.max(1, limit || 400);
+      return ids.slice(0, cap);
+    }
+    function isConflictError(error) {
+      const text = [error && error.code, error && error.message, error && error.reason, error && error.serverErrorCode].filter(Boolean).join(" ");
+      return /CONFLICT|serverRecordChanged|ATOMIC_ERROR/i.test(text);
+    }
     async function loadClearedIDs(passIDs) {
       const names = [CLEARED]
         .concat((passIDs || []).map(tombstoneName))
@@ -2406,6 +2402,7 @@
       try {
         await ensureCloud();
         watchAppleSignIn();
+        await requireEnrolledStaff();
         await revokePassRecord(id);
         closeSheet();
         if (view === "passes") await loadPasses();
@@ -2430,7 +2427,10 @@
         return;
       }
       let proof = "";
-      try { proof = await cloudGateAllows("wipe", typed); } catch (_) {}
+      try { proof = await cloudGateAllows("wipe", typed); } catch (_) {
+        setPassWipeError(c.appleNoSchool);
+        return;
+      }
       if (!proof) {
         setPassWipeError(c.adminPassWipeBadCode);
         return;
@@ -2532,7 +2532,12 @@
       const typed = String((document.getElementById("passWipeCode") || {}).value || "").trim();
       let proof = String(window._passWipeProof || "").trim();
       if (!staffProofShape(proof) && typed) {
-        try { proof = await cloudGateAllows("wipe", typed); } catch (_) { proof = ""; }
+        try { proof = await cloudGateAllows("wipe", typed); } catch (_) {
+          window._passWipeBusy = false;
+          setPassWipeError(c.appleNoSchool);
+          closeSheet();
+          return;
+        }
       }
       if (!staffProofShape(proof)) {
         window._passWipeBusy = false;
@@ -2548,15 +2553,30 @@
         await ensureCloud();
         watchAppleSignIn();
         if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
+        const role = await requireEnrolledStaff();
+        if (role !== "administrator") throw Object.assign(new Error("FAIL"), { reason: "staff" });
         showPassWipeProgress(10, c.adminPassWipeStepCollect, "", false, false);
         ids = await collectCampusPassIDs();
         if (ids.length) {
           showPassWipeProgress(18, c.adminPassWipeStepRevoke, `${c.adminPassWipeCount} 0 / ${ids.length}`, false, false);
           await markPassesRevoked(ids);
-          for (let i = 0; i < ids.length; i += 1) {
-            try { await revokePassRecord(ids[i]); } catch (_) {}
-            const pct = 18 + Math.round(((i + 1) / ids.length) * 62);
-            showPassWipeProgress(pct, c.adminPassWipeStepRevoke, `${c.adminPassWipeCount} ${i + 1} / ${ids.length}`, false, false);
+          const patches = ids.map((id) => ({
+            recordType: PASS_TYPE,
+            recordName: id,
+            fields: { revoked: { value: 1 } }
+          }));
+          for (let i = 0; i < patches.length; i += 40) {
+            const slice = patches.slice(i, i + 40);
+            try {
+              await restModifyOps(slice.map((record) => ({ operationType: "forceUpdate", record })));
+            } catch (_) {
+              for (const record of slice) {
+                try { await revokePassRecord(record.recordName); } catch (_) {}
+              }
+            }
+            const done = Math.min(ids.length, i + slice.length);
+            const pct = 18 + Math.round((done / ids.length) * 62);
+            showPassWipeProgress(pct, c.adminPassWipeStepRevoke, `${c.adminPassWipeCount} ${done} / ${ids.length}`, false, false);
           }
           showPassWipeProgress(84, c.adminPassWipeStepClear, `${c.adminPassWipeCount} ${ids.length} / ${ids.length}`, false, false);
           await saveClearedPassIDs(ids);
@@ -3916,27 +3936,49 @@
     async function addPassToManifest(id) {
       const unique = String(id || "").trim();
       if (!unique) return;
-      let existing = null;
-      try { existing = (await fetchByNames(cloudDb(), [MANIFEST]))[0] || null; } catch (_) {}
-      const ids = parsePassIDs(existing && fieldValue(existing, "passIDs"));
-      if (ids.indexOf(unique) === -1) ids.unshift(unique);
-      const record = {
-        recordType: PASS_TYPE,
-        recordName: MANIFEST,
-        fields: {
-          kind: { value: "manifest" },
-          passIDs: { value: ids.join(",") }
-        }
-      };
-      if (existing && existing.recordChangeTag) {
-        record.recordChangeTag = existing.recordChangeTag;
-        try { await restModifySchool(record, "forceUpdate"); return; } catch (_) {}
-        try { await ckCreateRecords([record]); return; } catch (_) {}
-        try { await restModify(record, "update"); return; } catch (_) {}
-      }
-      try { await restModifySchool(record, existing ? "forceUpdate" : "create"); } catch (_) {
-        try { await ckCreateNews(record); } catch (_) {
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        let existing = null;
+        try { existing = (await fetchByNames(cloudDb(), [MANIFEST]))[0] || null; } catch (_) {}
+        const ids = parsePassIDs(existing && fieldValue(existing, "passIDs"));
+        const already = ids.some((item) => item.toLowerCase() === unique.toLowerCase());
+        if (!already) ids.unshift(unique);
+        const capped = ids.slice(0, 500);
+        if (already && capped.length === ids.length) return;
+        const record = {
+          recordType: PASS_TYPE,
+          recordName: MANIFEST,
+          fields: {
+            kind: { value: "manifest" },
+            passIDs: { value: capped.join(",") }
+          }
+        };
+        if (existing && existing.recordChangeTag) record.recordChangeTag = existing.recordChangeTag;
+        try {
+          if (existing && existing.recordChangeTag) {
+            try {
+              await restModify(record, "update");
+              return;
+            } catch (error) {
+              if (isConflictError(error)) continue;
+            }
+          }
+          try {
+            await restModifySchool(record, existing ? "forceUpdate" : "create");
+            return;
+          } catch (error) {
+            if (isConflictError(error)) continue;
+          }
+          try {
+            await ckCreateNews(record);
+            return;
+          } catch (error) {
+            if (isConflictError(error)) continue;
+          }
           await restModify(record, existing ? "forceUpdate" : "create");
+          return;
+        } catch (error) {
+          if (isConflictError(error) && attempt < 5) continue;
+          return;
         }
       }
     }
@@ -3976,6 +4018,23 @@
           if (isAuthError(error)) throw error;
         }
       }
+      const reuse = names.find((name) => taken.has(name.toLowerCase())) || names[0];
+      if (!reuse) return false;
+      try {
+        await createPassRecord({
+          recordType: PASS_TYPE,
+          recordName: reuse,
+          fields: {
+            kind: { value: "inbox" },
+            passIDs: { value: id },
+            destination: { value: key },
+            studentName: { value: studentName || "" }
+          }
+        }, "forceUpdate");
+        return true;
+      } catch (error) {
+        if (isAuthError(error)) throw error;
+      }
       return false;
     }
     async function attachPassToStudent(passId, webCode, studentName) {
@@ -3990,8 +4049,7 @@
       }
       const name = studentName || fieldValue(profileRec, "displayName") || fieldValue(profileRec, "firstName") || "";
       if (profileRec) {
-        const ids = parsePassIDs(fieldValue(profileRec, "passIDs"));
-        if (ids.indexOf(passId) === -1) ids.unshift(passId);
+        const ids = capNewestIDs(parsePassIDs(fieldValue(profileRec, "passIDs")), passId, 400);
         const rec = {
           recordType: "WHSWebProfile",
           recordName: profileRec.recordName || key,
@@ -4007,8 +4065,7 @@
       const linkName = "webpass." + key;
       let link = null;
       try { link = (await fetchByNames(cloudDb(), [linkName]))[0] || null; } catch (_) {}
-      const ids = parsePassIDs(fieldValue(link, "passIDs"));
-      if (ids.indexOf(passId) === -1) ids.unshift(passId);
+      const ids = capNewestIDs(parsePassIDs(fieldValue(link, "passIDs")), passId, 400);
       const record = {
         recordType: PASS_TYPE,
         recordName: linkName,
@@ -4480,6 +4537,24 @@
       if (!grouped[parent]) grouped[parent] = [];
       grouped[parent][idx] = fieldValue(record, "destination");
     }
+    async function probePassIconCount(recordName) {
+      let count = 1;
+      for (let start = 1; start < 200; start += 20) {
+        const names = [];
+        for (let i = start; i < Math.min(start + 20, 200); i += 1) names.push("passimg." + recordName + "." + i);
+        let found = [];
+        try { found = await restLookupExact(names); } catch (_) { return count; }
+        const have = new Set(found.map((record) => Number(String(record.recordName || "").split(".").pop())));
+        let advanced = false;
+        for (let i = start; i < start + names.length; i += 1) {
+          if (!have.has(i)) return count;
+          count = i + 1;
+          advanced = true;
+        }
+        if (!advanced) return count;
+      }
+      return count;
+    }
     async function applyPassIcons(records) {
       const missing = (records || []).filter((record) => record && record.recordName && !record._passIcon && String(passSignatureSrc(record) || "").indexOf("data:") !== 0);
       if (!missing.length) return;
@@ -4491,8 +4566,12 @@
         rememberPassIconChunk(grouped, record);
         const parent = fieldValue(record, "studentName");
         const parsed = parseInt(fieldValue(record, "dates"), 10);
-        if (parent) counts[parent] = Number.isFinite(parsed) && parsed > 0 ? Math.min(200, parsed) : 200;
+        if (parent) counts[parent] = Number.isFinite(parsed) && parsed > 0 ? Math.min(200, parsed) : 0;
       });
+      const unknown = missing.filter((record) => counts[record.recordName] === 0);
+      for (const record of unknown) {
+        counts[record.recordName] = await probePassIconCount(record.recordName);
+      }
       const rest = [];
       missing.forEach((record) => {
         const count = counts[record.recordName];
@@ -4830,6 +4909,8 @@
         await ensureCloud();
         watchAppleSignIn();
         if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
+        const role = await requireEnrolledStaff();
+        if (role !== "administrator") throw Object.assign(new Error("FAIL"), { reason: "staff" });
         let jpeg = rawFile;
         try { jpeg = dataUrlToFile(await compressSwipePhoto(rawFile), "news.jpg"); } catch (_) {}
         const recordName = "news." + ((crypto.randomUUID && crypto.randomUUID()) || String(Date.now()));
@@ -5439,7 +5520,12 @@
       if (err) err.textContent = "";
       const finish = document.getElementById("guestFinish");
       if (staff) {
-        if (!(await staffPinOK(code))) {
+        let proof = "";
+        try { proof = await cloudGateAllows("staff", code); } catch (_) {
+          if (err) err.textContent = t().appleNoSchool;
+          return;
+        }
+        if (!proof) {
           if (err) err.textContent = t().staffCodeWrong;
           return;
         }
@@ -5462,10 +5548,6 @@
       const pending = window._pendingGuestStaff;
       const err = document.getElementById("appleError") || document.getElementById("setupError");
       if (!pending) return;
-      if (!(await staffPinOK(pending.code))) {
-        if (err) err.textContent = t().staffCodeWrong;
-        return;
-      }
       if (!ckWebAuthToken()) {
         if (err) err.textContent = t().appleStepBody;
         return;
@@ -5473,10 +5555,8 @@
       if (err) err.textContent = "";
       let proof = "";
       try { proof = await allowStaffGate(pending.code); } catch (error) {
-        if (error && error.apple) {
-          if (err) err.textContent = t().appleStepBody;
-          return;
-        }
+        if (err) err.textContent = (error && error.apple) ? t().appleStepBody : t().appleNoSchool;
+        return;
       }
       if (!proof) {
         if (err) err.textContent = t().staffCodeWrong;
@@ -5512,7 +5592,7 @@
         key: "",
         guest: true,
         staffEnrolled: true,
-        staffProof: proof || STAFF_GATE_DIGEST,
+        staffProof: proof,
         appleUser
       };
       localStorage.setItem("whsWebProfile", JSON.stringify(profile));
