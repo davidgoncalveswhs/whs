@@ -1482,30 +1482,86 @@
         node.classList.toggle("hidden", !!wasHidden);
       });
     }
+    function rememberAppleUser(name) {
+      const id = String(name || "").trim();
+      if (!id) return;
+      window._ckUserRecordName = id;
+      if (!profile || profile.appleUser === id) return;
+      profile.appleUser = id;
+      try { localStorage.setItem("whsWebProfile", JSON.stringify(profile)); } catch (_) {}
+    }
+    function dropStaleCloudSession() {
+      window._ckUserRecordName = "";
+      try {
+        const auth = CloudKit.getDefaultContainer()._auth;
+        if (auth) auth._ckSession = "";
+      } catch (_) {}
+    }
+    async function appleSessionAlive() {
+      try {
+        const container = CloudKit.getDefaultContainer();
+        if (!container) return false;
+        const info = await container.setUpAuth();
+        const fromAuth = userNameFromInfo(info);
+        if (fromAuth) {
+          rememberAppleUser(fromAuth);
+          return !!ckWebAuthToken();
+        }
+        if (typeof container.fetchCurrentUserIdentity === "function") {
+          const identity = await container.fetchCurrentUserIdentity();
+          const fromId = userNameFromInfo(identity) || userNameFromInfo(identity && identity.userInfo);
+          if (fromId) {
+            rememberAppleUser(fromId);
+            return !!ckWebAuthToken();
+          }
+        }
+        if (typeof container.fetchUserRecordName === "function") {
+          const fromFetch = await new Promise((resolve) => {
+            let settled = false;
+            const done = (value) => { if (!settled) { settled = true; resolve(value); } };
+            try {
+              const pending = container.fetchUserRecordName({
+                success: (name) => done(name),
+                failure: () => done("")
+              });
+              if (pending && typeof pending.then === "function") {
+                pending.then((name) => done(name)).catch(() => done(""));
+              }
+            } catch (_) {
+              done("");
+            }
+            setTimeout(() => done(""), 4000);
+          });
+          const fetched = userNameFromInfo(fromFetch);
+          if (fetched) {
+            rememberAppleUser(fetched);
+            return !!ckWebAuthToken();
+          }
+        }
+      } catch (error) {
+        if (isAuthError(error)) return false;
+      }
+      return false;
+    }
     async function restoreStaffCloudSession() {
       if (window._staffAuthRestore) return window._staffAuthRestore;
       window._staffAuthRestore = (async () => {
         const needsSetup = !configured;
         const parked = needsSetup ? parkAuthForRestore() : [];
+        let alive = false;
         try {
           if (needsSetup) {
             const slot = document.getElementById("apple-sign-in-placeholder");
             if (slot) await waitForVisibleSlot(slot);
           }
           try { await setupCloudAuth(); } catch (_) {}
-          try {
-            const info = await CloudKit.getDefaultContainer().setUpAuth();
-            const name = userNameFromInfo(info);
-            if (name) window._ckUserRecordName = name;
-          } catch (_) {}
-          if (!window._ckUserRecordName) {
-            try { await ckUserRecordName(); } catch (_) {}
-          }
+          alive = await appleSessionAlive();
+          if (!alive) dropStaleCloudSession();
         } finally {
           unparkAuth(parked);
           window._staffAuthRestore = null;
         }
-        return !!ckWebAuthToken();
+        return alive;
       })();
       return window._staffAuthRestore;
     }
@@ -1583,10 +1639,10 @@
       return id ? "whs-staff-user." + id : "";
     }
     async function fetchEnrolledWebRole() {
-      if (!ckWebAuthToken()) return "";
+      if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
       const user = await ckUserRecordName() || (profile && profile.appleUser) || "";
       const name = staffUserRecordName(user);
-      if (!name) return "";
+      if (!name) throw Object.assign(new Error("APPLE"), { apple: true });
       try { await ensureCloud(); } catch (_) {}
       const records = await restLookupExact([name]);
       const record = records.find((item) => String(item.recordName || "") === name);
