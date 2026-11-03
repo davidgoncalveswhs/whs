@@ -1492,10 +1492,117 @@
     }
     function dropStaleCloudSession() {
       window._ckUserRecordName = "";
+      window._appleReady = false;
+      window._appleNeedsRenew = true;
       try {
         const auth = CloudKit.getDefaultContainer()._auth;
+        if (auth && auth._signInURL) window._appleSignInURL = auth._signInURL;
         if (auth) auth._ckSession = "";
       } catch (_) {}
+    }
+    function appleSignInURL() {
+      try {
+        const auth = CloudKit.getDefaultContainer()._auth;
+        const url = String((auth && auth._signInURL) || window._appleSignInURL || "");
+        if (url) window._appleSignInURL = url;
+        return url;
+      } catch (_) {
+        return String(window._appleSignInURL || "");
+      }
+    }
+    function storeAppleSession(session) {
+      const value = String(session || "").trim();
+      if (!value) return false;
+      try {
+        const auth = CloudKit.getDefaultContainer()._auth;
+        if (auth && typeof auth._setSession === "function") auth._setSession(value);
+        else if (auth) auth._ckSession = value;
+      } catch (_) {
+        return false;
+      }
+      window._appleNeedsRenew = false;
+      window._appleReady = !!ckWebAuthToken();
+      return window._appleReady;
+    }
+    function appleMessageOrigin(origin) {
+      try {
+        const host = new URL(origin).hostname;
+        return host === "apple.com" || host.endsWith(".apple.com") || host === "icloud.com" || host.endsWith(".icloud.com") || host === "apple-cloudkit.com" || host.endsWith(".apple-cloudkit.com");
+      } catch (_) {
+        return false;
+      }
+    }
+    function waitForCkSession(popup) {
+      return new Promise((resolve) => {
+        let done = false;
+        const finish = (value) => {
+          if (done) return;
+          done = true;
+          window.removeEventListener("message", onMessage);
+          clearInterval(watch);
+          clearTimeout(timer);
+          resolve(value || "");
+        };
+        const onMessage = (event) => {
+          const fromPopup = popup && event.source === popup;
+          if (!fromPopup && !appleMessageOrigin(event.origin)) return;
+          const data = event.data;
+          if (!data || typeof data !== "object" || !data.ckSession) return;
+          finish(String(data.ckSession));
+        };
+        window.addEventListener("message", onMessage);
+        const watch = setInterval(() => {
+          if (popup && popup.closed) finish("");
+        }, 400);
+        const timer = setTimeout(() => finish(""), 120000);
+      });
+    }
+    async function fetchAppleSignInURL() {
+      const existing = appleSignInURL();
+      if (existing) return existing;
+      if (!schoolToken()) return "";
+      try {
+        const response = await fetch(restPublicUrl("users/caller", true), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: "{}"
+        });
+        const payload = await response.json();
+        const url = String((payload && payload.redirectURL) || "");
+        if (url) window._appleSignInURL = url;
+        return url;
+      } catch (_) {
+        return "";
+      }
+    }
+    async function renewAppleForSend(popup) {
+      if (window._appleReady && ckWebAuthToken() && !window._appleNeedsRenew) {
+        try { if (popup && !popup.closed) popup.close(); } catch (_) {}
+        return true;
+      }
+      const url = await fetchAppleSignInURL();
+      let win = popup && !popup.closed ? popup : null;
+      if (win && url) {
+        try { win.location.href = url; } catch (_) { win = null; }
+      }
+      if ((!win || win.closed) && url) win = window.open(url, "whsAppleRenew", "width=640,height=720");
+      if (!win || win.closed || !url) {
+        window._applePopupBlocked = !win;
+        try { if (win && !win.closed) win.close(); } catch (_) {}
+        return false;
+      }
+      window._applePopupBlocked = false;
+      const session = await waitForCkSession(win);
+      try { if (win && !win.closed) win.close(); } catch (_) {}
+      if (!session || !storeAppleSession(session)) return false;
+      try {
+        const identity = await CloudKit.getDefaultContainer().fetchCurrentUserIdentity();
+        const name = userNameFromInfo(identity) || userNameFromInfo(identity && identity.userInfo);
+        if (name) rememberAppleUser(name);
+      } catch (_) {}
+      window._appleReady = !!ckWebAuthToken();
+      window._appleNeedsRenew = !window._appleReady;
+      return window._appleReady;
     }
     async function appleSessionAlive() {
       try {
@@ -1503,16 +1610,20 @@
         if (!container) return false;
         const info = await container.setUpAuth();
         const fromAuth = userNameFromInfo(info);
-        if (fromAuth) {
+        if (fromAuth && ckWebAuthToken()) {
           rememberAppleUser(fromAuth);
-          return !!ckWebAuthToken();
+          window._appleReady = true;
+          window._appleNeedsRenew = false;
+          return true;
         }
         if (typeof container.fetchCurrentUserIdentity === "function") {
           const identity = await container.fetchCurrentUserIdentity();
           const fromId = userNameFromInfo(identity) || userNameFromInfo(identity && identity.userInfo);
-          if (fromId) {
+          if (fromId && ckWebAuthToken()) {
             rememberAppleUser(fromId);
-            return !!ckWebAuthToken();
+            window._appleReady = true;
+            window._appleNeedsRenew = false;
+            return true;
           }
         }
         if (typeof container.fetchUserRecordName === "function") {
@@ -1533,14 +1644,20 @@
             setTimeout(() => done(""), 4000);
           });
           const fetched = userNameFromInfo(fromFetch);
-          if (fetched) {
+          if (fetched && ckWebAuthToken()) {
             rememberAppleUser(fetched);
-            return !!ckWebAuthToken();
+            window._appleReady = true;
+            window._appleNeedsRenew = false;
+            return true;
           }
         }
       } catch (error) {
-        if (isAuthError(error)) return false;
+        if (isAuthError(error)) {
+          dropStaleCloudSession();
+          return false;
+        }
       }
+      if (appleSignInURL() || !ckWebAuthToken()) dropStaleCloudSession();
       return false;
     }
     async function restoreStaffCloudSession() {
@@ -1556,7 +1673,6 @@
           }
           try { await setupCloudAuth(); } catch (_) {}
           alive = await appleSessionAlive();
-          if (!alive) dropStaleCloudSession();
         } finally {
           unparkAuth(parked);
           window._staffAuthRestore = null;
@@ -1739,7 +1855,13 @@
             container.fetchCurrentUserIdentity().then((identity) => {
               const name = userNameFromInfo(identity) || userNameFromInfo(identity && identity.userInfo);
               if (name) rememberAppleUser(name);
-            }).catch(() => {});
+              if (name && ckWebAuthToken()) {
+                window._appleReady = true;
+                window._appleNeedsRenew = false;
+              }
+            }).catch((error) => {
+              if (isAuthError(error)) dropStaleCloudSession();
+            });
           }
         } catch (_) {}
       };
@@ -3969,6 +4091,7 @@
         setIssuePassError(c.issuePassNeedFields);
         return;
       }
+      const renewWindow = window._appleReady && !window._appleNeedsRenew ? null : window.open("", "whsAppleRenew", "width=640,height=720");
       const sendTicket = {};
       window._issuePassSending = sendTicket;
       window._pendingIssuePass = false;
@@ -3981,17 +4104,14 @@
         await ensureCloud();
         const savedStaff = localStaffRole();
         try { await restoreStaffCloudSession(); } catch (_) {}
-        if (!savedStaff && !ckWebAuthToken()) {
-          window._issuePassBusy = false;
-          if (window._issuePassSending === sendTicket) window._issuePassSending = null;
-          closeSheet();
-          if (!window._issuePassAwaitingApple) {
-            window._issuePassAwaitingApple = true;
-            window._pendingIssuePass = true;
-            await showAppleStep();
-          }
-          return;
+        if (window._appleNeedsRenew || !ckWebAuthToken()) {
+          showWorkProgress(12, c.issuePassWorking, c.issuePassNeedApple, "", false, "finishIssuePass");
+          const renewed = await renewAppleForSend(renewWindow);
+          if (!renewed) throw Object.assign(new Error("APPLE"), { apple: true });
+        } else if (renewWindow && !renewWindow.closed) {
+          renewWindow.close();
         }
+        if (!savedStaff && !ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
         window._issuePassAwaitingApple = false;
         window._pendingIssuePass = false;
         keepAppleSessionFresh();
@@ -4005,12 +4125,7 @@
           teacherName: { value: (profile && (profile.displayName || profile.firstName)) || "WHS" }
         };
         showWorkProgress(22, c.issuePassWorking, c.issuePassStepSave, "", false, "finishIssuePass");
-        let saved = null;
-        try {
-          saved = await createPassRecord({ recordType: PASS_TYPE, recordName, fields }, "create");
-        } catch (error) {
-          if (error && error.apple && !savedStaff) throw error;
-        }
+        let saved = await createPassRecord({ recordType: PASS_TYPE, recordName, fields }, "create");
         if (!saved) {
           try { saved = (await fetchByNames(cloudDb(), [recordName]))[0] || null; } catch (_) {}
         }
@@ -4026,6 +4141,8 @@
           });
         } catch (_) {}
         window._pendingIssuePass = false;
+        window._appleReady = true;
+        window._appleNeedsRenew = false;
         const ok = document.getElementById("issuePassOk");
         if (ok) {
           ok.textContent = c.issuePassDone;
@@ -4041,9 +4158,10 @@
         window._issuePassBusy = false;
         showWorkProgress(100, c.issuePassDone, "", "", true, "finishIssuePass");
       } catch (error) {
-        window._pendingIssuePass = false;
         window._issuePassBusy = false;
         const apple = (error && error.apple) || error.message === "APPLE" || isAuthError(error);
+        window._pendingIssuePass = !!apple;
+        if (apple && window._applePopupBlocked) showAppleStep();
         const staff = error && (error.staff || error.message === "STAFF");
         const badCode = error && (error.code === "CODE" || error.message === "CODE");
         const message = apple ? c.issuePassNeedApple : (staff ? c.issuePassNeedStaff : (badCode ? c.issuePassBadCode : c.issuePassFail));
