@@ -1887,17 +1887,19 @@
       try {
         const looked = await fetchStaffRole();
         if (looked.state === "staff") {
+          const changed = window._verifiedStaffRole !== looked.role || profile.role !== looked.role;
           window._verifiedStaffRole = looked.role;
           if (profile.role !== looked.role) {
             profile.role = looked.role;
             try { localStorage.setItem("whsWebProfile", JSON.stringify(profile)); } catch (_) {}
           }
-          if (view) show(view);
+          if (changed && view) show(view);
           return;
         }
+        const hadStaff = verifiedStaffRole();
         window._verifiedStaffRole = "";
         if (looked.state === "none") dropRemovedStaff();
-        else if (view) show(view);
+        else if (hadStaff && view) show(view);
       } finally {
         staffSyncing = false;
       }
@@ -4831,7 +4833,8 @@
     }
     async function loadNewsFeed() {
       const bundled = bundledNewsItems();
-      paintNews(bundled);
+      const alreadyShown = window._newsItems && Object.keys(window._newsItems).length;
+      if (!alreadyShown) paintNews(bundled);
       let remote = [];
       try { await ensureCloud(); } catch (_) {}
       try {
