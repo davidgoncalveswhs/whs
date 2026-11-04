@@ -687,6 +687,9 @@
         appleSignLabel: "Apple ID",
         appleSignedIn: "Signed in with Apple",
         staffAppleFail: "Signed in, but WHS could not save staff access. Tap Sign in with Apple again.",
+        staffNotListed: "This Apple ID is not on the staff list yet. Send this ID to your WHS admin:",
+        staffCopyId: "Copy ID",
+        staffRoleRetry: "Couldn't confirm your staff role. Try again.",
         staffCodeWrong: "That access code is not correct.",
         issuePassNeedStaff: "This Apple ID is not enrolled as staff.",
         staffCodeLabel: "Staff access code",
@@ -856,11 +859,11 @@
         revokePassDone: "This pass is revoked. The student cannot use it.",
         adminPassWipeTitle: "Clear pass log",
         adminPassWipe: "Revoke all passes and clear the log",
-        adminPassWipeBody: "This override revokes every hallway and Flex pass for students, then empties the campus log. It needs the administrator access code.",
-        adminPassWipeCode: "Access code",
+        adminPassWipeBody: "This override revokes every hallway and Flex pass for students, then empties the campus log. Type CLEAR to confirm.",
+        adminPassWipeCode: "Type CLEAR",
         adminPassWipeConfirmTitle: "Clear the pass log?",
         adminPassWipeConfirmBody: "Every student pass will be revoked. The campus log will be empty. This cannot be undone.",
-        adminPassWipeBadCode: "That access code is not correct.",
+        adminPassWipeBadCode: "Type CLEAR to confirm.",
         adminPassWipeNeedApple: "Sign in with Apple to clear the pass log.",
         adminPassWipeDone: "All passes are revoked. The campus log is empty.",
         adminPassWipeFail: "Could not clear the pass log.",
@@ -932,6 +935,9 @@
         appleSignLabel: "Apple ID",
         appleSignedIn: "Sesion iniciada con Apple",
         staffAppleFail: "Entraste, pero WHS no pudo guardar el acceso de personal. Toca Sign in with Apple otra vez.",
+        staffNotListed: "Este Apple ID aún no está en la lista del personal. Envía este ID al administrador de WHS:",
+        staffCopyId: "Copiar ID",
+        staffRoleRetry: "No se pudo confirmar tu rol de personal. Inténtalo de nuevo.",
         staffCodeWrong: "Ese código de acceso no es correcto.",
         issuePassNeedStaff: "Este Apple ID no esta inscrito como personal.",
         staffCodeLabel: "Código de acceso del personal",
@@ -1102,10 +1108,10 @@
         adminPassWipeTitle: "Vaciar registro de pases",
         adminPassWipe: "Revocar todos los pases y vaciar el registro",
         adminPassWipeBody: "Esta anulacion revoca cada pase de pasillo y Flex para los estudiantes y luego vacia el registro del campus. Necesita el codigo de acceso de administrador.",
-        adminPassWipeCode: "Codigo de acceso",
+        adminPassWipeCode: "Escribe CLEAR",
         adminPassWipeConfirmTitle: "Vaciar el registro de pases?",
         adminPassWipeConfirmBody: "Se revocara cada pase de estudiante. El registro del campus quedara vacio. No se puede deshacer.",
-        adminPassWipeBadCode: "Ese codigo de acceso no es correcto.",
+        adminPassWipeBadCode: "Escribe CLEAR para confirmar.",
         adminPassWipeNeedApple: "Entra con Apple para vaciar el registro.",
         adminPassWipeDone: "Todos los pases estan revocados. El registro del campus esta vacio.",
         adminPassWipeFail: "No se pudo vaciar el registro.",
@@ -1163,6 +1169,10 @@
     let configured = false;
     let staff = [];
     let profile = JSON.parse(localStorage.getItem("whsWebProfile") || "null");
+    if (profile && typeof profile === "object") {
+      delete profile.staffProof;
+      delete profile.staffEnrolled;
+    }
     let lunchReady = false;
     let deferredInstall = null;
     function normalizeRole(value) {
@@ -1254,23 +1264,17 @@
       closeSheet();
       if (view === "more") renderMore();
     }
-    function staffProofShape(value) {
-      return /^[a-f0-9]{64}$/.test(String(value || "").trim());
-    }
-    function guestStaffNeedsProof() {
-      const role = currentRole();
-      return isGuest() && (role === "teacher" || role === "administrator");
+    function verifiedStaffRole() {
+      return window._verifiedStaffRole === "teacher" || window._verifiedStaffRole === "administrator"
+        ? window._verifiedStaffRole
+        : "";
     }
     function canSeePassLog() {
-      const role = currentRole();
-      if (role !== "administrator" && role !== "teacher") return false;
-      if (!isGuest()) return true;
-      if (profile && profile.staffEnrolled) return true;
-      if (staffProofShape(profile && profile.staffProof)) return true;
-      return false;
+      const role = verifiedStaffRole();
+      return role === "teacher" || role === "administrator";
     }
     function canClearPassLog() {
-      return currentRole() === "administrator" && canSeePassLog();
+      return verifiedStaffRole() === "administrator";
     }
     function canRevokePass() {
       return canSeePassLog();
@@ -1279,7 +1283,7 @@
       return canSeePassLog();
     }
     function canPostNews() {
-      return currentRole() === "administrator" && canSeePassLog();
+      return verifiedStaffRole() === "administrator";
     }
     function signedIn() {
       if (isGuest()) return true;
@@ -1486,6 +1490,7 @@
       window._appleReady = false;
       window._appleNeedsRenew = true;
       window._pendingGuestStaff = null;
+      window._verifiedStaffRole = "";
       window._pendingNewsPost = false;
       window._pendingIssuePass = false;
       window._newsDraftFile = null;
@@ -1817,10 +1822,48 @@
       } catch (_) {}
       return "";
     }
-    const STAFF_GRANT_CUTOFF = Date.parse("2026-11-04T02:00:00Z");
+    function staffProofShape() { return false; }
+    const STAFF_ROLE_TYPE = "WHSStaffRole";
+    function staffRoleRecordName(user) {
+      const id = String(user || "").trim();
+      return id ? "staff." + id : "";
+    }
     function staffUserRecordName(user) {
       const id = String(user || "").trim();
       return id ? "whs-staff-user." + id : "";
+    }
+    async function fetchStaffRole() {
+      if (!ckWebAuthToken()) return { state: "error" };
+      let user = "";
+      try { user = await ckUserRecordName(); } catch (_) { return { state: "error" }; }
+      const name = staffRoleRecordName(user);
+      if (!name) return { state: "error" };
+      try { await ensureCloud(); } catch (_) {}
+      let response;
+      let payload = {};
+      try {
+        response = await fetch(restPublicUrl("records/lookup", false), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ records: [{ recordName: name }] })
+        });
+        payload = await response.json().catch(() => ({}));
+      } catch (_) {
+        return { state: "error" };
+      }
+      if (isAuthError(null, payload) || response.status === 421) return { state: "error" };
+      const record = recordsFrom(payload).filter(usableRecord).find((item) => String(item.recordName || "") === name);
+      if (record) {
+        if (String(record.recordType || "") !== STAFF_ROLE_TYPE) return { state: "none" };
+        const role = normalizeRole(fieldValue(record, "role"));
+        if (role === "teacher" || role === "administrator") return { state: "staff", role };
+        return { state: "none" };
+      }
+      const rows = (payload && payload.records) || [];
+      const missing = rows.some((row) => /NOT_FOUND|UNKNOWN_ITEM|RESOURCE_NOT_FOUND/i.test(String((row && row.serverErrorCode) || "")));
+      if (missing) return { state: "none" };
+      if (!response.ok) return { state: "error" };
+      return { state: "none" };
     }
     function recordCreatedMs(record) {
       const created = record && (record.created || record.creationDate);
@@ -1900,33 +1943,7 @@
       }
       return role;
     }
-    async function saveStaffUserRecord(name, role, proof) {
-      const fields = {
-        kind: { value: "staffuser" },
-        role: { value: role }
-      };
-      const grant = String(proof || "").trim().toLowerCase();
-      if (staffProofShape(grant)) fields.staffProof = { value: grant };
-      const record = {
-        recordType: PASS_TYPE,
-        recordName: name,
-        fields
-      };
-      try {
-        if (await restModifySchool(record, "create")) return true;
-      } catch (_) {}
-      try {
-        if (await restModifySchool(record, "forceUpdate")) return true;
-      } catch (_) {}
-      try {
-        if (await restModify(record, "create")) return true;
-      } catch (_) {}
-      try {
-        if (await restModify(record, "forceUpdate")) return true;
-      } catch (_) {}
-      try {
-        if (await ckCreateRecords([record])) return true;
-      } catch (_) {}
+    async function saveStaffUserRecord() {
       return false;
     }
     async function enrollWebStaff(role, code) {
@@ -1971,43 +1988,27 @@
       if (refresh) show(view || "home");
     }
     async function syncStaffRoleFromCloud() {
-      if (!localStaffRole() || !ckWebAuthToken()) return;
-      let user = "";
-      try { user = await ckUserRecordName(); } catch (_) { user = ""; }
-      if (!user) return;
-      if (profile && profile.appleUser && profile.appleUser !== user) return;
-      let cloudRole = "";
-      try {
-        cloudRole = await fetchEnrolledWebRole();
-      } catch (error) {
-        if (error && (error.apple || error.message === "APPLE")) return;
+      if (!ckWebAuthToken()) {
+        window._verifiedStaffRole = "";
         return;
       }
-      if (cloudRole === "teacher" || cloudRole === "administrator") {
-        alignLocalStaffRole(cloudRole, true);
-        return;
+      const looked = await fetchStaffRole();
+      window._verifiedStaffRole = looked.state === "staff" ? looked.role : "";
+      if (looked.state === "staff" && profile && (profile.role === "teacher" || profile.role === "administrator") && profile.role !== looked.role) {
+        profile.role = looked.role;
+        try { localStorage.setItem("whsWebProfile", JSON.stringify(profile)); } catch (_) {}
       }
-      clearUnenrolledStaffRole(true);
+      if (view) show(view);
     }
     async function requireEnrolledStaff() {
       if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
-      let cloudRole = "";
-      let lookupFailed = false;
-      try {
-        cloudRole = await fetchEnrolledWebRole();
-      } catch (error) {
-        if (error && (error.apple || error.message === "APPLE")) throw error;
-        lookupFailed = true;
+      const looked = await fetchStaffRole();
+      if (looked.state === "staff") {
+        window._verifiedStaffRole = looked.role;
+        return looked.role;
       }
-      if (cloudRole === "teacher" || cloudRole === "administrator") {
-        alignLocalStaffRole(cloudRole, false);
-        return cloudRole;
-      }
-      if (lookupFailed) {
-        const local = localStaffRole();
-        if (local === "teacher" || local === "administrator") return local;
-      }
-      clearUnenrolledStaffRole(false);
+      window._verifiedStaffRole = "";
+      if (looked.state === "error") throw Object.assign(new Error("FAIL"), { reason: "staff-unknown" });
       throw Object.assign(new Error("STAFF"), { staff: true });
     }
     async function createPassRecord(record, operation) {
@@ -2033,7 +2034,7 @@
     function keepAppleSessionFresh() {
       if (window._appleKeepalive) return;
       const renew = () => {
-        if (!localStaffRole() || !configured || !ckWebAuthToken()) return;
+        if (!verifiedStaffRole() || !configured || !ckWebAuthToken()) return;
         try {
           const container = CloudKit.getDefaultContainer();
           if (container && typeof container.fetchCurrentUserIdentity === "function") {
@@ -2711,22 +2712,12 @@
     async function confirmClearPassLog() {
       if (!canClearPassLog()) return;
       const c = t();
-      const typed = String((document.getElementById("passWipeCode") || {}).value || "").trim();
-      if (!typed) {
-        setPassWipeError(c.adminPassWipeBadCode);
-        return;
-      }
-      let proof = "";
-      try { proof = await cloudGateAllows("wipe", typed); } catch (_) {
-        setPassWipeError(c.appleNoSchool);
-        return;
-      }
-      if (!proof) {
+      const typed = String((document.getElementById("passWipeCode") || {}).value || "").trim().toUpperCase();
+      if (typed !== "CLEAR") {
         setPassWipeError(c.adminPassWipeBadCode);
         return;
       }
       setPassWipeError("");
-      window._passWipeProof = proof;
       openSheet(`
         <div class="card-title"><b>${c.adminPassWipeConfirmTitle}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
         <p>${c.adminPassWipeConfirmBody}</p>
@@ -2819,23 +2810,13 @@
     async function handleClearPassLog() {
       if (!canClearPassLog() || window._passWipeBusy) return;
       const c = t();
-      const typed = String((document.getElementById("passWipeCode") || {}).value || "").trim();
-      let proof = String(window._passWipeProof || "").trim();
-      if (!staffProofShape(proof) && typed) {
-        try { proof = await cloudGateAllows("wipe", typed); } catch (_) {
-          window._passWipeBusy = false;
-          setPassWipeError(c.appleNoSchool);
-          closeSheet();
-          return;
-        }
-      }
-      if (!staffProofShape(proof)) {
+      const typed = String((document.getElementById("passWipeCode") || {}).value || "").trim().toUpperCase();
+      if (typed !== "CLEAR") {
         window._passWipeBusy = false;
         setPassWipeError(c.adminPassWipeBadCode);
         closeSheet();
         return;
       }
-      window._passWipeProof = proof;
       window._passWipeBusy = true;
       let ids = [];
       try {
@@ -3232,7 +3213,7 @@
               <b>${c.adminPassWipeTitle}</b>
               <p class="muted">${c.adminPassWipeBody}</p>
               <label class="muted">${c.adminPassWipeCode}</label>
-              <input id="passWipeCode" type="password" inputmode="numeric" autocomplete="off" style="margin:8px 0;">
+              <input id="passWipeCode" type="text" autocomplete="off" spellcheck="false" style="margin:8px 0;">
               <button class="ghost" type="button" data-action="askClearPassLog" style="width:100%;color:#B42318;">${c.adminPassWipe}</button>
               <p class="error" id="passWipeError"></p>
               <p class="ok hidden" id="passWipeOk"></p>
@@ -3242,9 +3223,14 @@
       const face = window._profilePhoto
         ? `<span class="avatar"><img alt="" src="${escapeHtml(window._profilePhoto)}"></span>`
         : `<span class="avatar">${escapeHtml(initials(profile ? profile.displayName : ""))}</span>`;
+      const localStaff = currentRole() === "teacher" || currentRole() === "administrator";
+      const staffWait = localStaff && !verifiedStaffRole()
+        ? `<div class="card wide"><b>${c.staffNotListed}</b><p class="muted" id="staffCloudId">${escapeHtml(window._ckUserRecordName || "")}</p><button class="ghost" type="button" data-action="copyStaffId" style="width:100%;">${c.staffCopyId}</button></div>`
+        : "";
       document.getElementById("view-more").innerHTML = `
         <div class="dash">
           <div class="card wide"><div class="more-face">${face}<div><div class="t">${escapeHtml(profile ? profile.displayName : "")}</div><div class="s">${escapeHtml(roleLabel())}</div></div></div></div>
+          ${staffWait}
           ${adminTools}
           ${guestWebCodeCard()}
           ${isGuest() ? `${guestHomeCard()}<button class="card action" type="button" data-action="useCode"><div class="t">${c.useCode}</div></button>` : ""}
@@ -3255,6 +3241,12 @@
       if (tokenEl) tokenEl.value = schoolToken();
       if (envEl) envEl.value = schoolEnv();
       mountCkAuth(document.getElementById("ck-auth-more"));
+      if (localStaff && !verifiedStaffRole() && ckWebAuthToken() && !window._ckUserRecordName) {
+        ckUserRecordName().then((id) => {
+          const node = document.getElementById("staffCloudId");
+          if (node && id) node.textContent = id;
+        }).catch(() => {});
+      }
     }
 
     function personButton(person) {
@@ -4455,7 +4447,6 @@
       try {
         showWorkProgress(8, c.issuePassWorking, c.issuePassStepSave, "", false, "finishIssuePass");
         await ensureCloud();
-        const savedStaff = localStaffRole();
         try { await restoreStaffCloudSession(); } catch (_) {}
         if (window._appleNeedsRenew || !ckWebAuthToken()) {
           showWorkProgress(12, c.issuePassWorking, c.issuePassNeedApple, "", false, "finishIssuePass");
@@ -4464,7 +4455,7 @@
         } else if (renewWindow && !renewWindow.closed) {
           renewWindow.close();
         }
-        if (!savedStaff && !ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
+        if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
         window._issuePassAwaitingApple = false;
         window._pendingIssuePass = false;
         keepAppleSessionFresh();
@@ -5537,6 +5528,11 @@
       const action = event.target.closest("[data-action]");
       if (action) {
         const name = action.dataset.action;
+        if (name === "copyStaffId") {
+          const id = (document.getElementById("staffCloudId") || {}).textContent || window._ckUserRecordName || "";
+          if (id && navigator.clipboard) navigator.clipboard.writeText(id).catch(() => {});
+          return;
+        }
         if (name === "guestSetup") {
           showGuestStep();
           return;
@@ -5779,25 +5775,23 @@
       const gradeRow = document.getElementById("guestGradeRow");
       const accessRow = document.getElementById("guestAccessRow");
       if (gradeRow) gradeRow.classList.toggle("hidden", staff);
-      if (accessRow) accessRow.classList.toggle("hidden", !staff);
+      if (accessRow) accessRow.classList.add("hidden");
     }
     function pendingStaffFromForm() {
       if (!((window._gateStep === "guest" || window._gateStep === "apple") && gateIsOpen())) return null;
       const name = String((document.getElementById("guestName") || {}).value || "").trim();
       const role = normalizeRole((document.getElementById("guestRole") || {}).value);
-      const code = String((document.getElementById("guestAccess") || {}).value || "").trim();
-      if ((role !== "teacher" && role !== "administrator") || !name || !code) return null;
-      return { name, role, code };
+      if ((role !== "teacher" && role !== "administrator") || !name) return null;
+      return { name, role };
     }
     async function enterGuest() {
       const name = String((document.getElementById("guestName") || {}).value || "").trim();
       const role = normalizeRole((document.getElementById("guestRole") || {}).value);
       const grade = String((document.getElementById("guestGrade") || {}).value || "").trim();
-      const code = String((document.getElementById("guestAccess") || {}).value || "").trim();
       const err = document.getElementById("setupError");
       const staff = role === "teacher" || role === "administrator";
       if (!name) {
-        if (err) err.textContent = staff ? t().guestNeedStaff : t().guestNeedInfo;
+        if (err) err.textContent = t().guestNeedInfo;
         return;
       }
       if (role !== "student" && role !== "teacher" && role !== "administrator") {
@@ -5808,23 +5802,10 @@
         if (err) err.textContent = t().guestNeedInfo;
         return;
       }
-      if (staff && !code) {
-        if (err) err.textContent = t().guestNeedStaff;
-        return;
-      }
       if (err) err.textContent = "";
       const finish = document.getElementById("guestFinish");
       if (staff) {
-        let proof = "";
-        try { proof = await cloudGateAllows("staff", code); } catch (_) {
-          if (err) err.textContent = t().appleNoSchool;
-          return;
-        }
-        if (!proof) {
-          if (err) err.textContent = t().staffCodeWrong;
-          return;
-        }
-        window._pendingGuestStaff = { name, role, code };
+        window._pendingGuestStaff = { name, role };
         await showAppleStep();
         return;
       } else {
@@ -5848,46 +5829,31 @@
         return;
       }
       if (err) err.textContent = "";
-      let proof = "";
-      try { proof = await allowStaffGate(pending.code); } catch (error) {
-        if (err) err.textContent = (error && error.apple) ? t().appleStepBody : t().appleNoSchool;
-        return;
-      }
-      if (!proof) {
-        if (err) err.textContent = t().staffCodeWrong;
-        return;
-      }
-      let enrolled = "";
-      for (let i = 0; i < 4 && !enrolled; i += 1) {
-        if (i) await new Promise((resolve) => setTimeout(resolve, 350));
-        try { enrolled = await enrollWebStaff(pending.role, pending.code); } catch (error) {
-          enrolled = "";
-          if (error && error.apple) {
-            if (err) err.textContent = t().appleStepBody;
-            return;
-          }
-        }
-      }
-      if (enrolled !== "teacher" && enrolled !== "administrator") {
-        if (err) err.textContent = t().staffAppleFail;
-        return;
-      }
-      window._pendingGuestStaff = null;
-      document.body.classList.remove("whs-apple-gate");
-      window._gateStep = "pair";
-      parkCkAuth();
+      const looked = await fetchStaffRole();
       let appleUser = window._ckUserRecordName || "";
       if (!appleUser) {
         try { appleUser = await ckUserRecordName(); } catch (_) { appleUser = ""; }
       }
+      if (looked.state === "error") {
+        if (err) err.textContent = t().staffRoleRetry;
+        return;
+      }
+      if (looked.state !== "staff") {
+        window._verifiedStaffRole = "";
+        if (err) err.textContent = t().staffNotListed + (appleUser ? " " + appleUser : "");
+        return;
+      }
+      window._verifiedStaffRole = looked.role;
+      window._pendingGuestStaff = null;
+      document.body.classList.remove("whs-apple-gate");
+      window._gateStep = "pair";
+      parkCkAuth();
       profile = {
         displayName: pending.name,
         firstName: pending.name,
-        role: enrolled,
+        role: looked.role,
         key: "",
         guest: true,
-        staffEnrolled: true,
-        staffProof: proof,
         appleUser
       };
       localStorage.setItem("whsWebProfile", JSON.stringify(profile));
