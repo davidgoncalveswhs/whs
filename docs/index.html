@@ -1438,8 +1438,11 @@
       const key = normalizeCode(person && person.key);
       const names = [];
       if (key.length === 10) {
+        const tag = await privateCodeTag(key);
         names.push(key, "webpass." + key, "webpass." + key.slice(0, 5) + "-" + key.slice(5));
+        if (tag) names.push("webpass.p." + tag);
         inboxNames(key).forEach((name) => names.push(name));
+        privateInboxNames(tag).forEach((name) => names.push(name));
       }
       let staffName = "";
       const role = normalizeRole(person && person.role);
@@ -1463,16 +1466,8 @@
           operationType: "forceDelete",
           record: { recordName }
         }));
-        if (ckWebAuthToken()) {
-          try { await restModifyOps(ops); } catch (_) {}
-        }
-        try {
-          await fetch(restPublicUrl("records/modify", true), {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ operations: ops })
-          });
-        } catch (_) {}
+        if (!ckWebAuthToken()) continue;
+        try { await restModifyOps(ops); } catch (_) {}
       }
     }
     function forgetLocalProfile() {
@@ -2111,6 +2106,68 @@
       const bytes = new TextEncoder().encode(String(text || ""));
       const hash = await crypto.subtle.digest("SHA-256", bytes);
       return Array.from(new Uint8Array(hash)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+    }
+    async function privateCodeTag(code) {
+      const key = normalizeCode(code);
+      if (key.length !== 10) return "";
+      return (await sha256Hex("whs-private:" + key)).slice(0, 24);
+    }
+    function bytesToBase64(bytes) {
+      let bin = "";
+      for (let i = 0; i < bytes.length; i += 0x8000) {
+        bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      }
+      return btoa(bin);
+    }
+    function base64ToBytes(text) {
+      const bin = atob(String(text || ""));
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+      return bytes;
+    }
+    async function sealKey(code) {
+      const raw = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("whs-seal-v1:" + normalizeCode(code)));
+      return crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
+    }
+    async function sealText(code, plain) {
+      const text = String(plain || "");
+      if (!text || normalizeCode(code).length !== 10) return text;
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const cipher = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await sealKey(code), new TextEncoder().encode(text)));
+      const blob = new Uint8Array(iv.length + cipher.length);
+      blob.set(iv, 0);
+      blob.set(cipher, iv.length);
+      return "whs1." + bytesToBase64(blob);
+    }
+    async function openSeal(code, stored) {
+      const raw = String(stored || "");
+      if (raw.indexOf("whs1.") !== 0) return raw;
+      try {
+        const blob = base64ToBytes(raw.slice(5));
+        if (blob.length <= 28) return "";
+        const clear = await crypto.subtle.decrypt(
+          { name: "AES-GCM", iv: blob.slice(0, 12) },
+          await sealKey(code),
+          blob.slice(12)
+        );
+        return new TextDecoder().decode(clear);
+      } catch (_) {
+        return "";
+      }
+    }
+    async function sealedOrPlain(code, sealed, plain) {
+      const opened = await openSeal(code, sealed);
+      if (opened) return opened;
+      const fallback = String(plain || "");
+      return fallback.indexOf("whs1.") === 0 ? "" : fallback;
+    }
+    async function profileSecrets(record, code) {
+      return {
+        grade: await sealedOrPlain(code, fieldValue(record, "gradeSeal"), fieldValue(record, "grade")),
+        photo: await sealedOrPlain(code, fieldValue(record, "photoSeal"), fieldValue(record, "profilePhoto")),
+        swipe: await sealedOrPlain(code, fieldValue(record, "swipeSeal"), fieldValue(record, "swipeCard")),
+        study: await sealedOrPlain(code, fieldValue(record, "studySeal"), fieldValue(record, "studyJSON"))
+      };
     }
     async function staffPinOK(code) {
       return !!(await cloudGateAllows("staff", String(code || "").trim()));
@@ -3154,8 +3211,9 @@
       try { await ensureCloud(); } catch (_) {}
       try {
         const profiles = await fetchByNames(cloudDb(), [profile.key]);
-        const mine = profiles.find((item) => normalizeCode(item.recordName) === profile.key);
-        applyAvatar(fieldValue(mine, "profilePhoto"));
+        const mine = profiles.find((item) => normalizeCode(item.recordName) === normalizeCode(profile.key) || String(item.recordName || "") === profile.key);
+        const secrets = await profileSecrets(mine, profile.key);
+        applyAvatar(secrets.photo);
         if (view === "more") renderMore();
       } catch (_) {}
     }
@@ -3811,8 +3869,9 @@
       try { await ensureCloud(); } catch (_) {}
       try {
         const profiles = await fetchByNames(cloudDb(), [profile.key]);
-        const mine = profiles.find((item) => normalizeCode(item.recordName) === profile.key);
-        window._study = parseStudy(fieldValue(mine, "studyJSON"));
+        const mine = profiles.find((item) => normalizeCode(item.recordName) === normalizeCode(profile.key) || String(item.recordName || "") === profile.key);
+        const secrets = await profileSecrets(mine, profile.key);
+        window._study = parseStudy(secrets.study);
         applyClassTile();
         if (view === "classes") renderClasses();
         if (view === "class") renderClassDetail();
@@ -3841,8 +3900,9 @@
       try { await ensureCloud(); } catch (_) {}
       try {
         const profiles = await fetchByNames(cloudDb(), [profile.key]);
-        const mine = profiles.find((item) => normalizeCode(item.recordName) === profile.key);
-        const url = fieldValue(mine, "swipeCard");
+        const mine = profiles.find((item) => normalizeCode(item.recordName) === normalizeCode(profile.key) || String(item.recordName || "") === profile.key);
+        const secrets = await profileSecrets(mine, profile.key);
+        const url = secrets.swipe;
         applySwipeTile(url);
         if (list && view === "swipe") list.innerHTML = swipePage(url);
       } catch (error) {
@@ -4127,29 +4187,40 @@
       for (let i = 0; i < 160; i += 1) names.push("inbox." + code + "." + i);
       return names;
     }
+    function privateInboxNames(tag) {
+      const code = String(tag || "").trim().toLowerCase();
+      if (code.length !== 24) return [];
+      const names = [];
+      for (let i = 0; i < 160; i += 1) names.push("inbox.p." + code + "." + i);
+      return names;
+    }
+    async function studentInboxNames(key) {
+      const tag = await privateCodeTag(key);
+      return privateInboxNames(tag).concat(inboxNames(key));
+    }
     async function deliverPassToInbox(passId, webCode, studentName) {
       const key = normalizeCode(webCode);
       const id = String(passId || "").trim();
       if (key.length !== 10 || !id) return false;
-      const names = inboxNames(key);
+      const tag = await privateCodeTag(key);
+      const names = privateInboxNames(tag);
+      const known = names.concat(inboxNames(key));
       let existing = [];
-      try { existing = await restLookupExact(names); } catch (_) { existing = []; }
+      try { existing = await restLookupExact(known); } catch (_) { existing = []; }
       const taken = new Set(existing.map((record) => String(record.recordName || "").toLowerCase()));
       const already = existing.some((record) => parsePassIDs(fieldValue(record, "passIDs")).some((item) => item.toLowerCase() === id.toLowerCase()));
       if (already) return true;
+      const sealedName = await sealText(key, studentName || "");
+      const fields = {
+        kind: { value: "inbox" },
+        passIDs: { value: id },
+        destination: { value: tag },
+        studentName: { value: sealedName }
+      };
       for (const name of names) {
         if (taken.has(name.toLowerCase())) continue;
         try {
-          await createPassRecord({
-            recordType: PASS_TYPE,
-            recordName: name,
-            fields: {
-              kind: { value: "inbox" },
-              passIDs: { value: id },
-              destination: { value: key },
-              studentName: { value: studentName || "" }
-            }
-          }, "create");
+          await createPassRecord({ recordType: PASS_TYPE, recordName: name, fields }, "create");
           return true;
         } catch (error) {
           taken.add(name.toLowerCase());
@@ -4159,16 +4230,7 @@
       const reuse = names.find((name) => taken.has(name.toLowerCase())) || names[0];
       if (!reuse) return false;
       try {
-        await createPassRecord({
-          recordType: PASS_TYPE,
-          recordName: reuse,
-          fields: {
-            kind: { value: "inbox" },
-            passIDs: { value: id },
-            destination: { value: key },
-            studentName: { value: studentName || "" }
-          }
-        }, "forceUpdate");
+        await createPassRecord({ recordType: PASS_TYPE, recordName: reuse, fields }, "forceUpdate");
         return true;
       } catch (error) {
         if (isAuthError(error)) throw error;
@@ -4200,7 +4262,8 @@
           }
         }
       }
-      const linkName = "webpass." + key;
+      const tag = await privateCodeTag(key);
+      const linkName = tag ? "webpass.p." + tag : "webpass." + key;
       let link = null;
       try { link = (await fetchByNames(cloudDb(), [linkName]))[0] || null; } catch (_) {}
       const ids = capNewestIDs(parsePassIDs(fieldValue(link, "passIDs")), passId, 400);
@@ -4210,7 +4273,7 @@
         fields: {
           kind: { value: "webpass" },
           passIDs: { value: ids.join(",") },
-          studentName: { value: name }
+          studentName: { value: await sealText(key, name) }
         }
       };
       if (link && link.recordChangeTag) record.recordChangeTag = link.recordChangeTag;
@@ -4433,7 +4496,8 @@
       try {
         const key = normalizeCode(profile.key);
         const dashed = key.length === 10 ? `${key.slice(0, 5)}-${key.slice(5)}` : "";
-        const profiles = await restLookupExact([key, dashed, "webpass." + key, dashed ? "webpass." + dashed : ""].concat(inboxNames(key)));
+        const tag = await privateCodeTag(key);
+        const profiles = await restLookupExact([key, dashed, "webpass." + key, tag ? "webpass.p." + tag : "", dashed ? "webpass." + dashed : ""].concat(await studentInboxNames(key)));
         const ids = [...new Set(profiles.flatMap((record) => parsePassIDs(fieldValue(record, "passIDs"))))];
         const packed = await fetchByNames(cloudDb(), ids.concat(ids.flatMap((id) => [revokedName(id), tombstoneName(id)]), [CLEARED]));
         const byName = new Map(packed.map((record) => [String(record.recordName || "").toLowerCase(), record]));
@@ -5347,15 +5411,16 @@
           gateError.textContent = t().gateFail;
           return;
         }
+        const secrets = await profileSecrets(record, key);
         profile = {
           displayName: fieldValue(record, "displayName") || fieldValue(record, "firstName") || "Warrior",
           firstName: fieldValue(record, "firstName") || "",
           role,
-          grade: fieldValue(record, "grade") || "",
+          grade: secrets.grade || "",
           key
         };
         localStorage.setItem("whsWebProfile", JSON.stringify(profile));
-        applyAvatar(fieldValue(record, "profilePhoto"));
+        applyAvatar(secrets.photo);
         showGate();
         show("home");
       } catch (error) {
