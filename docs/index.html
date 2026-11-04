@@ -1919,31 +1919,65 @@
       if (profile && (profile.staffEnrolled || staffProofShape(profile.staffProof))) return role;
       return "";
     }
-    async function requireEnrolledStaff() {
-      if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
+    function alignLocalStaffRole(role, refresh) {
+      if (!profile || (role !== "teacher" && role !== "administrator")) return;
+      const changed = profile.role !== role || !profile.staffEnrolled;
+      profile.role = role;
+      profile.staffEnrolled = true;
+      try { localStorage.setItem("whsWebProfile", JSON.stringify(profile)); } catch (_) {}
+      if (changed && refresh) show(view || "home");
+    }
+    function clearUnenrolledStaffRole(refresh) {
+      if (!profile) return;
+      const wasStaff = profile.role === "teacher" || profile.role === "administrator" || profile.staffEnrolled || profile.staffProof;
+      if (!wasStaff) return;
+      profile.staffEnrolled = false;
+      profile.staffProof = "";
+      if (profile.role === "teacher" || profile.role === "administrator") {
+        profile.role = profile.key ? "student" : "guest";
+      }
+      try { localStorage.setItem("whsWebProfile", JSON.stringify(profile)); } catch (_) {}
+      if (refresh) show(view || "home");
+    }
+    async function syncStaffRoleFromCloud() {
+      if (!localStaffRole() || !ckWebAuthToken()) return;
+      let user = "";
+      try { user = await ckUserRecordName(); } catch (_) { user = ""; }
+      if (!user) return;
+      if (profile && profile.appleUser && profile.appleUser !== user) return;
       let cloudRole = "";
       try {
         cloudRole = await fetchEnrolledWebRole();
       } catch (error) {
+        if (error && (error.apple || error.message === "APPLE")) return;
+        return;
+      }
+      if (cloudRole === "teacher" || cloudRole === "administrator") {
+        alignLocalStaffRole(cloudRole, true);
+        return;
+      }
+      clearUnenrolledStaffRole(true);
+    }
+    async function requireEnrolledStaff() {
+      if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
+      let cloudRole = "";
+      let lookupFailed = false;
+      try {
+        cloudRole = await fetchEnrolledWebRole();
+      } catch (error) {
         if (error && (error.apple || error.message === "APPLE")) throw error;
+        lookupFailed = true;
       }
-      const local = localStaffRole();
-      let role = cloudRole;
-      if (local === "administrator" || cloudRole === "administrator") role = "administrator";
-      else if (!role) role = local;
-      if (role !== "teacher" && role !== "administrator") {
-        const repaired = local ? await repairEnrolledStaff(local) : "";
-        if (repaired) return repaired;
-        throw Object.assign(new Error("STAFF"), { staff: true });
+      if (cloudRole === "teacher" || cloudRole === "administrator") {
+        alignLocalStaffRole(cloudRole, false);
+        return cloudRole;
       }
-      if (cloudRole !== role) {
-        const user = await ckUserRecordName();
-        const name = staffUserRecordName(user);
-        if (name) {
-          try { await saveStaffUserRecord(name, role); } catch (_) {}
-        }
+      if (lookupFailed) {
+        const local = localStaffRole();
+        if (local === "teacher" || local === "administrator") return local;
       }
-      return role;
+      clearUnenrolledStaffRole(false);
+      throw Object.assign(new Error("STAFF"), { staff: true });
     }
     async function createPassRecord(record, operation) {
       const op = operation || "create";
@@ -5844,7 +5878,10 @@
         show("home");
         const role = currentRole();
         if (role === "teacher" || role === "administrator") {
-          restoreStaffCloudSession().then(() => keepAppleSessionFresh()).catch(() => keepAppleSessionFresh());
+          restoreStaffCloudSession().then(() => {
+            keepAppleSessionFresh();
+            return syncStaffRoleFromCloud();
+          }).catch(() => keepAppleSessionFresh());
         }
       });
     }
