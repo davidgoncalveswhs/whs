@@ -1987,18 +1987,45 @@
       try { localStorage.setItem("whsWebProfile", JSON.stringify(profile)); } catch (_) {}
       if (refresh) show(view || "home");
     }
-    async function syncStaffRoleFromCloud() {
-      if (!ckWebAuthToken()) {
-        window._verifiedStaffRole = "";
+    function dropRemovedStaff() {
+      window._verifiedStaffRole = "";
+      if (!profile) return;
+      const staff = profile.role === "teacher" || profile.role === "administrator";
+      if (!staff) return;
+      if (hasWebKey() && !profile.guest) {
+        profile.role = "student";
+        try { localStorage.setItem("whsWebProfile", JSON.stringify(profile)); } catch (_) {}
+        showGate();
+        show(view || "home");
         return;
       }
-      const looked = await fetchStaffRole();
-      window._verifiedStaffRole = looked.state === "staff" ? looked.role : "";
-      if (looked.state === "staff" && profile && (profile.role === "teacher" || profile.role === "administrator") && profile.role !== looked.role) {
-        profile.role = looked.role;
-        try { localStorage.setItem("whsWebProfile", JSON.stringify(profile)); } catch (_) {}
+      forgetLocalProfile();
+      showGate();
+      show("home");
+    }
+    let staffSyncing = false;
+    async function syncStaffRoleFromCloud() {
+      if (staffSyncing) return;
+      if (!profile || (currentRole() !== "teacher" && currentRole() !== "administrator")) return;
+      if (!ckWebAuthToken()) return;
+      staffSyncing = true;
+      try {
+        const looked = await fetchStaffRole();
+        if (looked.state === "staff") {
+          window._verifiedStaffRole = looked.role;
+          if (profile.role !== looked.role) {
+            profile.role = looked.role;
+            try { localStorage.setItem("whsWebProfile", JSON.stringify(profile)); } catch (_) {}
+          }
+          if (view) show(view);
+          return;
+        }
+        window._verifiedStaffRole = "";
+        if (looked.state === "none") dropRemovedStaff();
+        else if (view) show(view);
+      } finally {
+        staffSyncing = false;
       }
-      if (view) show(view);
     }
     async function requireEnrolledStaff() {
       if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
@@ -5870,18 +5897,21 @@
     }
     showGate();
     if (signedIn()) {
-      enforceGuestStaffProof().catch(() => {}).then(() => {
-        if (!signedIn()) return;
-        show("home");
-        const role = currentRole();
-        if (role === "teacher" || role === "administrator") {
-          restoreStaffCloudSession().then(() => {
-            keepAppleSessionFresh();
-            return syncStaffRoleFromCloud();
-          }).catch(() => keepAppleSessionFresh());
-        }
-      });
+      show("home");
+      if (currentRole() === "teacher" || currentRole() === "administrator") {
+        restoreStaffCloudSession().then(() => {
+          keepAppleSessionFresh();
+          return syncStaffRoleFromCloud();
+        }).catch(() => keepAppleSessionFresh());
+      }
     }
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState !== "visible") return;
+      syncStaffRoleFromCloud().catch(() => {});
+    });
+    setInterval(() => {
+      syncStaffRoleFromCloud().catch(() => {});
+    }, 30000);
   </script>
 </body>
 </html>
