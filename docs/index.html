@@ -661,6 +661,9 @@
     const CONTAINER = "iCloud.com.davidgoncalvespersonalteam.UntitledProject";
     const PASS_TYPE = "WHSTeacherPass";
     const NEWS_TYPE = "WHSAnnouncement";
+    const CAMPUS_TYPE = "WHSCampusLog";
+    const CAMPUS_LOG = "whs-campus-log";
+    const CAMPUS_CLEARED = "whs-campus-cleared";
     const MANIFEST = "whs-teacher-pass-manifest";
     const CLEARED = "whs-cleared-passes";
     const NEWS_MANIFEST = "whs-news-manifest";
@@ -2384,7 +2387,7 @@
       const id = String((record && record.recordName) || "");
       const key = id.toLowerCase();
       const kind = String(fieldValue(record, "kind") || "").toLowerCase();
-      if (!id || key === MANIFEST.toLowerCase() || key === CLEARED.toLowerCase() || key === NEWS_MANIFEST.toLowerCase()) return true;
+      if (!id || key === MANIFEST.toLowerCase() || key === CLEARED.toLowerCase() || key === CAMPUS_LOG.toLowerCase() || key === CAMPUS_CLEARED.toLowerCase() || key === NEWS_MANIFEST.toLowerCase()) return true;
       if (key.indexOf("cleared.") === 0 || key.indexOf("revoked.") === 0 || key.indexOf("news.") === 0 || key.indexOf("newsimg.") === 0 || key.indexOf("webpass.") === 0 || key.indexOf("passimg.") === 0 || key.indexOf("inbox.") === 0) return true;
       if (isGateRecordName(id)) return true;
       if (kind === "cleared" || kind === "revoked" || kind === "news" || kind === "newsimg" || kind === "webpass" || kind === "passimg" || kind === "inbox" || kind === "staffgate" || kind === "wipegate" || kind === "staffuser" || kind === "manifest" || kind === "nfchomework" || kind === "nfccourse") return true;
@@ -2590,52 +2593,20 @@
       showWorkProgress(percent, finished ? (failed ? c.adminPassWipeFail : c.adminPassWipeDone) : c.adminPassWipeWorking, step, detail, finished, "finishPassWipe");
     }
     async function emptyPassManifest() {
-      let existing = null;
-      try { existing = (await fetchByNames(cloudDb(), [MANIFEST]))[0] || null; } catch (_) {}
-      const record = {
-        recordType: PASS_TYPE,
-        recordName: MANIFEST,
-        fields: {
-          kind: { value: "manifest" },
-          passIDs: { value: "" }
-        }
-      };
-      if (existing && existing.recordChangeTag) {
-        record.recordChangeTag = existing.recordChangeTag;
-        try { await ckCreateRecords([record]); return; } catch (_) {}
-        try { await restModify(record, "update"); return; } catch (_) {}
-      }
-      try { await ckCreateNews(record); } catch (_) {
-        await restModify(record, existing ? "forceUpdate" : "create");
-      }
+      await storePassIndex(CAMPUS_LOG, MANIFEST, "manifest", [], false);
     }
     async function saveClearedPassIDs(ids) {
       const unique = [...new Set((ids || []).map((id) => String(id || "").trim()).filter(Boolean))];
-      let existing = null;
-      try { existing = (await fetchByNames(cloudDb(), [CLEARED]))[0] || null; } catch (_) {}
-      const merged = [...new Set(parsePassIDs(existing && fieldValue(existing, "passIDs")).concat(unique))];
-      const record = {
-        recordType: PASS_TYPE,
-        recordName: CLEARED,
-        fields: {
-          kind: { value: "cleared" },
-          passIDs: { value: merged.join(",") }
-        }
-      };
-      if (existing && existing.recordChangeTag) {
-        record.recordChangeTag = existing.recordChangeTag;
-        try { await ckCreateRecords([record]); return; } catch (_) {}
-        try { await restModify(record, "update"); return; } catch (_) {}
-      }
-      try { await ckCreateNews(record); } catch (_) {
-        await restModify(record, existing ? "forceUpdate" : "create");
-      }
+      const existing = await readExact(CAMPUS_CLEARED) || await readExact(CLEARED);
+      const merged = [...new Set(indexIDs(existing).concat(unique))];
+      await storePassIndex(CAMPUS_CLEARED, CLEARED, "cleared", merged, true);
     }
     async function collectCampusPassIDs() {
       const names = new Set();
       try {
-        const manifest = (await fetchByNames(cloudDb(), [MANIFEST]))[0];
-        parsePassIDs(manifest && fieldValue(manifest, "passIDs")).forEach((id) => names.add(id));
+        const campus = await readExact(CAMPUS_LOG);
+        const manifest = campus || await readExact(MANIFEST);
+        indexIDs(manifest).forEach((id) => names.add(id));
       } catch (_) {}
       try {
         (await restQuery(PASS_TYPE, 200)).forEach((record) => {
@@ -4063,23 +4034,42 @@
       const ok = document.getElementById("issuePassOk");
       if (ok && message) ok.classList.add("hidden");
     }
-    async function addPassToManifest(id) {
-      const unique = String(id || "").trim();
-      if (!unique) return;
+    async function readExact(name) {
+      try { return (await restLookupExact([name]))[0] || null; } catch (_) { return null; }
+    }
+    function indexIDs(record) {
+      return parsePassIDs(record && fieldValue(record, "passIDs"));
+    }
+    async function campusHiddenFromWorld(name) {
+      const token = schoolToken();
+      if (!token) return false;
+      try {
+        const response = await fetch(restPublicUrl("records/lookup", true), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ records: [{ recordName: name }] })
+        });
+        const payload = await response.json();
+        const row = (payload.records || []).find((item) => String(item.recordName || "").toLowerCase() === String(name || "").toLowerCase());
+        if (!row) return false;
+        const err = String(row.serverErrorCode || row.reason || "").toUpperCase();
+        if (/ACCESS_DENIED|PERMISSION|AUTHENTICATION|UNAUTHORIZED/.test(err)) return true;
+        if (fieldValue(row, "kind") || fieldValue(row, "passIDs")) return false;
+        return !!err;
+      } catch (_) {
+        return false;
+      }
+    }
+    async function writeIndexRecord(type, name, kind, ids, merge) {
+      const staffOnly = type === CAMPUS_TYPE;
       for (let attempt = 0; attempt < 6; attempt += 1) {
-        let existing = null;
-        try { existing = (await fetchByNames(cloudDb(), [MANIFEST]))[0] || null; } catch (_) {}
-        const ids = parsePassIDs(existing && fieldValue(existing, "passIDs"));
-        const already = ids.some((item) => item.toLowerCase() === unique.toLowerCase());
-        if (!already) ids.unshift(unique);
-        const capped = ids.slice(0, 500);
-        if (already && capped.length === ids.length) return;
+        const existing = await readExact(name);
         const record = {
-          recordType: PASS_TYPE,
-          recordName: MANIFEST,
+          recordType: type,
+          recordName: name,
           fields: {
-            kind: { value: "manifest" },
-            passIDs: { value: capped.join(",") }
+            kind: { value: kind },
+            passIDs: { value: (merge ? [...new Set((ids || []).concat(indexIDs(existing)))].slice(0, 500) : (ids || [])).join(",") }
           }
         };
         if (existing && existing.recordChangeTag) record.recordChangeTag = existing.recordChangeTag;
@@ -4087,30 +4077,54 @@
           if (existing && existing.recordChangeTag) {
             try {
               await restModify(record, "update");
-              return;
+              return true;
+            } catch (error) {
+              if (isConflictError(error)) continue;
+            }
+          }
+          if (!staffOnly) {
+            try {
+              await restModifySchool(record, existing ? "forceUpdate" : "create");
+              return true;
             } catch (error) {
               if (isConflictError(error)) continue;
             }
           }
           try {
-            await restModifySchool(record, existing ? "forceUpdate" : "create");
-            return;
+            await restModify(record, existing ? "forceUpdate" : "create");
+            return true;
           } catch (error) {
             if (isConflictError(error)) continue;
           }
-          try {
-            await ckCreateNews(record);
-            return;
-          } catch (error) {
-            if (isConflictError(error)) continue;
-          }
-          await restModify(record, existing ? "forceUpdate" : "create");
-          return;
+          if (await ckCreateRecords([record])) return true;
         } catch (error) {
           if (isConflictError(error) && attempt < 5) continue;
-          return;
+          return false;
         }
       }
+      return false;
+    }
+    async function storePassIndex(privateName, publicName, kind, ids, merge) {
+      const capped = (ids || []).slice(0, 500);
+      const privateOK = await writeIndexRecord(CAMPUS_TYPE, privateName, kind, capped, !!merge);
+      const hide = privateOK && await campusHiddenFromWorld(privateName);
+      const publicIDs = hide ? [] : capped;
+      if (!publicIDs.length) {
+        const existing = await readExact(publicName);
+        if (!existing || !indexIDs(existing).length) return privateOK;
+      }
+      await writeIndexRecord(PASS_TYPE, publicName, kind, publicIDs, hide ? false : !!merge);
+      return privateOK;
+    }
+    async function addPassToManifest(id) {
+      const unique = String(id || "").trim();
+      if (!unique) return;
+      const campus = await readExact(CAMPUS_LOG);
+      const pub = campus ? null : await readExact(MANIFEST);
+      const ids = indexIDs(campus || pub);
+      const already = ids.some((item) => item.toLowerCase() === unique.toLowerCase());
+      if (!already) ids.unshift(unique);
+      await storePassIndex(CAMPUS_LOG, MANIFEST, "manifest", ids.slice(0, 500), true);
     }
     function inboxNames(key) {
       const code = normalizeCode(key);
@@ -5267,11 +5281,15 @@
       const remember = (record) => { if (record && record.recordName) seen.set(record.recordName, record); };
       try {
         const db = CloudKit.getDefaultContainer().publicCloudDatabase;
-        (await fetchByNames(db, [MANIFEST])).forEach(remember);
-        const hasManifest = !!seen.get(MANIFEST);
-        const ids = hasManifest ? parsePassIDs(fieldValue(seen.get(MANIFEST), "passIDs")) : [];
+        const campus = await readExact(CAMPUS_LOG);
+        const campusReady = !!(campus && (fieldValue(campus, "kind") === "manifest" || indexIDs(campus).length));
+        if (campusReady) remember(campus);
+        if (!campusReady) (await fetchByNames(db, [MANIFEST])).forEach(remember);
+        const hasManifest = campusReady || !!seen.get(MANIFEST);
+        const ids = campusReady ? indexIDs(campus) : (hasManifest ? parsePassIDs(fieldValue(seen.get(MANIFEST), "passIDs")) : []);
         if (ids.length) {
-          (await fetchByNames(db, ids.concat(ids.flatMap((id) => [tombstoneName(id), revokedName(id)]), [CLEARED]))).forEach(remember);
+          (await fetchByNames(db, ids.concat(ids.flatMap((id) => [tombstoneName(id), revokedName(id)]), [CLEARED, CAMPUS_CLEARED]))).forEach(remember);
+          if (!campusReady) await storePassIndex(CAMPUS_LOG, MANIFEST, "manifest", ids, true);
         } else if (!hasManifest) {
           try { recordsFrom(await db.performQuery({ recordType: PASS_TYPE })).forEach(remember); } catch (_) {}
           const queried = [...seen.keys()];
@@ -5279,7 +5297,7 @@
             (await fetchByNames(db, queried.flatMap((id) => [tombstoneName(id), revokedName(id)]).concat([CLEARED]))).forEach(remember);
           }
         } else {
-          (await fetchByNames(db, [CLEARED])).forEach(remember);
+          (await fetchByNames(db, [CLEARED, CAMPUS_CLEARED])).forEach(remember);
         }
         window._revokedPassIDs = collectRevokedIDs([...seen.values()]);
         window._clearedPassIDs = collectClearedIDs([...seen.values()]);
