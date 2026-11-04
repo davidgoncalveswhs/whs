@@ -664,7 +664,7 @@
     const MANIFEST = "whs-teacher-pass-manifest";
     const CLEARED = "whs-cleared-passes";
     const NEWS_MANIFEST = "whs-news-manifest";
-    const LUNCH = "https://drive.google.com/file/d/1FcyUw6LwftfJC6cDnOQrlXgBXC4UjB57/preview";
+    const LUNCH = "./WHSLunchMenu.pdf?v=2026-11";
     const copy = {
       en: {
         welcome: "Welcome",
@@ -3030,7 +3030,7 @@
         <div class="card wide" style="max-width:920px;">
           <div class="t">${c.lunchMenu}</div>
           <p class="muted">${c.lunchSub}</p>
-          <iframe class="lunch" title="${c.lunchMenu}" src="./WHSLunchMenu.pdf"></iframe>
+          <iframe class="lunch" title="${c.lunchMenu}" src="./WHSLunchMenu.pdf?v=2026-11"></iframe>
           <p class="muted"><a href="${LUNCH}" target="_blank" rel="noopener">${c.lunchMenu}</a></p>
         </div>`;
       lunchReady = true;
