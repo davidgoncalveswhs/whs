@@ -4053,7 +4053,7 @@
         const row = (payload.records || []).find((item) => String(item.recordName || "").toLowerCase() === String(name || "").toLowerCase());
         if (!row) return false;
         const err = String(row.serverErrorCode || row.reason || "").toUpperCase();
-        if (/ACCESS_DENIED|PERMISSION|AUTHENTICATION|UNAUTHORIZED/.test(err)) return true;
+        if (/NOT_FOUND|ACCESS_DENIED|PERMISSION|AUTHENTICATION|UNAUTHORIZED/.test(err)) return true;
         if (fieldValue(row, "kind") || fieldValue(row, "passIDs")) return false;
         return !!err;
       } catch (_) {
