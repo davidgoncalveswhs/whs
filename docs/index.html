@@ -1444,23 +1444,13 @@
         inboxNames(key).forEach((name) => names.push(name));
         privateInboxNames(tag).forEach((name) => names.push(name));
       }
-      let staffName = "";
-      const role = normalizeRole(person && person.role);
-      if (role === "teacher" || role === "administrator") {
-        let apple = String((person && person.appleUser) || "").trim();
-        if (!apple) {
-          try { apple = await ckUserRecordName(); } catch (_) { apple = ""; }
-        }
-        staffName = staffUserRecordName(apple);
-        if (staffName) names.push(staffName);
-      }
       const unique = [...new Set(names.filter(Boolean))];
       if (!unique.length) return;
       let found = [];
       try {
         found = (await restLookupExact(unique)).map((record) => String(record.recordName || "")).filter(Boolean);
       } catch (_) {}
-      const targets = [...new Set(found.concat(key.length === 10 ? [key, "webpass." + key] : []).concat(staffName ? [staffName] : []))];
+      const targets = [...new Set(found.concat(key.length === 10 ? [key, "webpass." + key] : []))];
       for (let start = 0; start < targets.length; start += 40) {
         const ops = targets.slice(start, start + 40).map((recordName) => ({
           operationType: "forceDelete",
@@ -2161,12 +2151,52 @@
       const fallback = String(plain || "");
       return fallback.indexOf("whs1.") === 0 ? "" : fallback;
     }
+    async function decryptSealedBytes(code, bytes) {
+      if (!bytes || bytes.length < 29) return null;
+      let head = "";
+      try { head = new TextDecoder().decode(bytes.slice(0, 5)); } catch (_) { head = ""; }
+      if (head === "whs1.") {
+        const opened = await openSeal(code, new TextDecoder().decode(bytes));
+        return opened ? new TextEncoder().encode(opened) : null;
+      }
+      try {
+        const clear = await crypto.subtle.decrypt(
+          { name: "AES-GCM", iv: bytes.slice(0, 12) },
+          await sealKey(code),
+          bytes.slice(12)
+        );
+        return new Uint8Array(clear);
+      } catch (_) {
+        return null;
+      }
+    }
+    function imageValueFromBytes(bytes) {
+      if (!bytes || !bytes.length) return "";
+      let head = "";
+      try { head = new TextDecoder().decode(bytes.slice(0, 5)); } catch (_) { head = ""; }
+      if (head === "data:") return new TextDecoder().decode(bytes);
+      return "data:image/jpeg;base64," + bytesToBase64(bytes);
+    }
+    async function openSealedFile(code, record, field) {
+      const url = fieldValue(record, field);
+      if (!url || !/^https?:/i.test(url)) return null;
+      try {
+        const response = await fetch(url, { credentials: "omit", cache: "no-store" });
+        if (!response.ok) return null;
+        return decryptSealedBytes(code, new Uint8Array(await response.arrayBuffer()));
+      } catch (_) {
+        return null;
+      }
+    }
     async function profileSecrets(record, code) {
+      const photoFile = await openSealedFile(code, record, "photoFile");
+      const swipeFile = await openSealedFile(code, record, "swipeFile");
+      const studyFile = await openSealedFile(code, record, "studyFile");
       return {
         grade: await sealedOrPlain(code, fieldValue(record, "gradeSeal"), fieldValue(record, "grade")),
-        photo: await sealedOrPlain(code, fieldValue(record, "photoSeal"), fieldValue(record, "profilePhoto")),
-        swipe: await sealedOrPlain(code, fieldValue(record, "swipeSeal"), fieldValue(record, "swipeCard")),
-        study: await sealedOrPlain(code, fieldValue(record, "studySeal"), fieldValue(record, "studyJSON"))
+        photo: photoFile ? imageValueFromBytes(photoFile) : await sealedOrPlain(code, fieldValue(record, "photoSeal"), fieldValue(record, "profilePhoto")),
+        swipe: swipeFile ? imageValueFromBytes(swipeFile) : await sealedOrPlain(code, fieldValue(record, "swipeSeal"), fieldValue(record, "swipeCard")),
+        study: studyFile ? new TextDecoder().decode(studyFile) : await sealedOrPlain(code, fieldValue(record, "studySeal"), fieldValue(record, "studyJSON"))
       };
     }
     async function staffPinOK(code) {
