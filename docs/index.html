@@ -1817,9 +1817,39 @@
       } catch (_) {}
       return "";
     }
+    const STAFF_GRANT_CUTOFF = Date.parse("2026-11-04T02:00:00Z");
     function staffUserRecordName(user) {
       const id = String(user || "").trim();
       return id ? "whs-staff-user." + id : "";
+    }
+    function recordCreatedMs(record) {
+      const created = record && (record.created || record.creationDate);
+      if (!created) return 0;
+      if (typeof created === "number") return created;
+      if (typeof created.timestamp === "number") return created.timestamp;
+      if (created instanceof Date) return created.getTime();
+      const parsed = Date.parse(created);
+      return Number.isNaN(parsed) ? 0 : parsed;
+    }
+    async function staffGrantRole(record) {
+      const role = normalizeRole(fieldValue(record, "role"));
+      if (role !== "teacher" && role !== "administrator") return "";
+      const proof = String(fieldValue(record, "staffProof") || "").trim().toLowerCase();
+      if (staffProofShape(proof)) {
+        const gate = gateRecordName("staff", proof);
+        if (!gate) return "";
+        let records = [];
+        try {
+          records = await restLookupExact([gate]);
+        } catch (_) {
+          throw Object.assign(new Error("FAIL"), { reason: "staff" });
+        }
+        const found = records.some((item) => String(item.recordName || "").toLowerCase() === gate);
+        return found ? role : "";
+      }
+      const created = recordCreatedMs(record);
+      if (created > 0 && created < STAFF_GRANT_CUTOFF) return role;
+      return "";
     }
     async function fetchEnrolledWebRole() {
       if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
@@ -1844,9 +1874,7 @@
       const record = recordsFrom(payload).filter(usableRecord).find((item) => String(item.recordName || "").toLowerCase() === name.toLowerCase());
       if (!record && denied) throw Object.assign(new Error("FAIL"), { reason: "staff" });
       if (!record) return "";
-      const role = normalizeRole(fieldValue(record, "role"));
-      if (role === "teacher" || role === "administrator") return role;
-      return "";
+      return staffGrantRole(record);
     }
     async function repairEnrolledStaff(role) {
       const proof = String((profile && profile.staffProof) || "").trim().toLowerCase();
@@ -1864,7 +1892,7 @@
       const user = await ckUserRecordName();
       const name = staffUserRecordName(user);
       if (name) {
-        try { await saveStaffUserRecord(name, role); } catch (_) {}
+        try { await saveStaffUserRecord(name, role, proof); } catch (_) {}
       }
       if (user && profile && profile.appleUser !== user) {
         profile.appleUser = user;
@@ -1872,14 +1900,17 @@
       }
       return role;
     }
-    async function saveStaffUserRecord(name, role) {
+    async function saveStaffUserRecord(name, role, proof) {
+      const fields = {
+        kind: { value: "staffuser" },
+        role: { value: role }
+      };
+      const grant = String(proof || "").trim().toLowerCase();
+      if (staffProofShape(grant)) fields.staffProof = { value: grant };
       const record = {
         recordType: PASS_TYPE,
         recordName: name,
-        fields: {
-          kind: { value: "staffuser" },
-          role: { value: role }
-        }
+        fields
       };
       try {
         if (await restModifySchool(record, "create")) return true;
@@ -1909,7 +1940,7 @@
       const user = await ckUserRecordName();
       const name = staffUserRecordName(user);
       if (!name) return existing || "";
-      const saved = await saveStaffUserRecord(name, wanted);
+      const saved = await saveStaffUserRecord(name, wanted, proof);
       if (saved) return wanted;
       return existing || "";
     }
