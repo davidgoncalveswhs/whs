@@ -1212,8 +1212,10 @@
     }
     function makeWebUnlockKey() {
       const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+      const bytes = new Uint8Array(10);
+      crypto.getRandomValues(bytes);
       let key = "";
-      for (let i = 0; i < 10; i += 1) key += alphabet[Math.floor(Math.random() * alphabet.length)];
+      for (let i = 0; i < bytes.length; i += 1) key += alphabet[bytes[i] % alphabet.length];
       return key;
     }
     function isStandaloneApp() {
@@ -1822,15 +1824,10 @@
       } catch (_) {}
       return "";
     }
-    function staffProofShape() { return false; }
     const STAFF_ROLE_TYPE = "WHSStaffRole";
     function staffRoleRecordName(user) {
       const id = String(user || "").trim();
       return id ? "staff." + id : "";
-    }
-    function staffUserRecordName(user) {
-      const id = String(user || "").trim();
-      return id ? "whs-staff-user." + id : "";
     }
     async function fetchStaffRole() {
       if (!ckWebAuthToken()) return { state: "error" };
@@ -1864,128 +1861,6 @@
       if (missing) return { state: "none" };
       if (!response.ok) return { state: "error" };
       return { state: "none" };
-    }
-    function recordCreatedMs(record) {
-      const created = record && (record.created || record.creationDate);
-      if (!created) return 0;
-      if (typeof created === "number") return created;
-      if (typeof created.timestamp === "number") return created.timestamp;
-      if (created instanceof Date) return created.getTime();
-      const parsed = Date.parse(created);
-      return Number.isNaN(parsed) ? 0 : parsed;
-    }
-    async function staffGrantRole(record) {
-      const role = normalizeRole(fieldValue(record, "role"));
-      if (role !== "teacher" && role !== "administrator") return "";
-      const proof = String(fieldValue(record, "staffProof") || "").trim().toLowerCase();
-      if (staffProofShape(proof)) {
-        const gate = gateRecordName("staff", proof);
-        if (!gate) return "";
-        let records = [];
-        try {
-          records = await restLookupExact([gate]);
-        } catch (_) {
-          throw Object.assign(new Error("FAIL"), { reason: "staff" });
-        }
-        const found = records.some((item) => String(item.recordName || "").toLowerCase() === gate);
-        return found ? role : "";
-      }
-      const created = recordCreatedMs(record);
-      if (created > 0 && created < STAFF_GRANT_CUTOFF) return role;
-      return "";
-    }
-    async function fetchEnrolledWebRole() {
-      if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { apple: true });
-      const user = await ckUserRecordName();
-      const name = staffUserRecordName(user);
-      if (!name) throw Object.assign(new Error("APPLE"), { apple: true });
-      try { await ensureCloud(); } catch (_) {}
-      const response = await fetch(restPublicUrl("records/lookup", false), {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ records: [{ recordName: name }] })
-      });
-      const payload = await response.json().catch(() => ({}));
-      if (isAuthError(null, payload) || response.status === 421) {
-        throw Object.assign(new Error("APPLE"), { apple: true });
-      }
-      if (!response.ok && !(payload && payload.records)) {
-        throw Object.assign(new Error("FAIL"), { reason: "staff" });
-      }
-      const rows = (payload && payload.records) || [];
-      const denied = rows.some((row) => /ACCESS_DENIED|PERMISSION_FAILURE/i.test(String((row && row.serverErrorCode) || "")));
-      const record = recordsFrom(payload).filter(usableRecord).find((item) => String(item.recordName || "").toLowerCase() === name.toLowerCase());
-      if (!record && denied) throw Object.assign(new Error("FAIL"), { reason: "staff" });
-      if (!record) return "";
-      return staffGrantRole(record);
-    }
-    async function repairEnrolledStaff(role) {
-      const proof = String((profile && profile.staffProof) || "").trim().toLowerCase();
-      if (!staffProofShape(proof)) return "";
-      const gate = gateRecordName("staff", proof);
-      if (!gate) return "";
-      let confirmed = false;
-      try {
-        const records = await restLookupExact([gate]);
-        confirmed = records.some((record) => String(record.recordName || "").toLowerCase() === gate);
-      } catch (_) {
-        confirmed = false;
-      }
-      if (!confirmed) return "";
-      const user = await ckUserRecordName();
-      const name = staffUserRecordName(user);
-      if (name) {
-        try { await saveStaffUserRecord(name, role, proof); } catch (_) {}
-      }
-      if (user && profile && profile.appleUser !== user) {
-        profile.appleUser = user;
-        try { localStorage.setItem("whsWebProfile", JSON.stringify(profile)); } catch (_) {}
-      }
-      return role;
-    }
-    async function saveStaffUserRecord() {
-      return false;
-    }
-    async function enrollWebStaff(role, code) {
-      requireCloudWrite();
-      const wanted = normalizeRole(role);
-      if (wanted !== "teacher" && wanted !== "administrator") return "";
-      const proof = await allowStaffGate(code);
-      if (!proof) return "";
-      const existing = await fetchEnrolledWebRole();
-      if (existing === wanted) return existing;
-      const user = await ckUserRecordName();
-      const name = staffUserRecordName(user);
-      if (!name) return existing || "";
-      const saved = await saveStaffUserRecord(name, wanted, proof);
-      if (saved) return wanted;
-      return existing || "";
-    }
-    function localStaffRole() {
-      const role = currentRole();
-      if (role !== "teacher" && role !== "administrator") return "";
-      if (profile && (profile.staffEnrolled || staffProofShape(profile.staffProof))) return role;
-      return "";
-    }
-    function alignLocalStaffRole(role, refresh) {
-      if (!profile || (role !== "teacher" && role !== "administrator")) return;
-      const changed = profile.role !== role || !profile.staffEnrolled;
-      profile.role = role;
-      profile.staffEnrolled = true;
-      try { localStorage.setItem("whsWebProfile", JSON.stringify(profile)); } catch (_) {}
-      if (changed && refresh) show(view || "home");
-    }
-    function clearUnenrolledStaffRole(refresh) {
-      if (!profile) return;
-      const wasStaff = profile.role === "teacher" || profile.role === "administrator" || profile.staffEnrolled || profile.staffProof;
-      if (!wasStaff) return;
-      profile.staffEnrolled = false;
-      profile.staffProof = "";
-      if (profile.role === "teacher" || profile.role === "administrator") {
-        profile.role = profile.key ? "student" : "guest";
-      }
-      try { localStorage.setItem("whsWebProfile", JSON.stringify(profile)); } catch (_) {}
-      if (refresh) show(view || "home");
     }
     function dropRemovedStaff() {
       window._verifiedStaffRole = "";
@@ -2292,68 +2167,9 @@
         study: studyFile ? new TextDecoder().decode(studyFile) : await sealedOrPlain(code, fieldValue(record, "studySeal"), fieldValue(record, "studyJSON"))
       };
     }
-    async function staffPinOK(code) {
-      return !!(await cloudGateAllows("staff", String(code || "").trim()));
-    }
-    function gateRecordName(kind, digest) {
-      const hex = String(digest || "").trim().toLowerCase();
-      if (!staffProofShape(hex)) return "";
-      return (kind === "wipe" ? "whs-wipe-gate." : "whs-staff-gate.") + hex;
-    }
     function isGateRecordName(id) {
       const key = String(id || "").toLowerCase();
       return key.indexOf("whs-staff-gate.") === 0 || key.indexOf("whs-wipe-gate.") === 0 || key.indexOf("whs-staff-user.") === 0;
-    }
-    async function gateDigests(kind, code) {
-      const typed = String(code || "").trim();
-      if (!typed) return [];
-      const variants = kind === "staff"
-        ? [...new Set([typed, normalizeCode(typed)].filter(Boolean))]
-        : [typed];
-      const digests = [];
-      for (const value of variants) {
-        const digest = await sha256Hex(value);
-        if (staffProofShape(digest)) digests.push(digest);
-      }
-      return [...new Set(digests)];
-    }
-    async function cloudGateAllows(kind, code) {
-      const digests = await gateDigests(kind, code);
-      if (!digests.length) return "";
-      try { await ensureCloud(); } catch (_) {}
-      const expected = kind === "wipe" ? "wipegate" : "staffgate";
-      const names = digests.map((digest) => gateRecordName(kind, digest)).filter(Boolean);
-      const looked = names.length ? await restLookupDetailed(names, true) : { records: [], complete: true };
-      if (!looked.complete && !(looked.records || []).length) {
-        throw Object.assign(new Error("FAIL"), { reason: "gate" });
-      }
-      const records = looked.records || [];
-      for (let i = 0; i < names.length; i += 1) {
-        const name = names[i];
-        const record = records.find((item) => String(item.recordName || "").toLowerCase() === name.toLowerCase());
-        if (!record) continue;
-        const got = String(fieldValue(record, "kind") || "").toLowerCase();
-        if (got && got !== expected) continue;
-        return digests[i];
-      }
-      return "";
-    }
-    async function allowStaffGate(code) {
-      return cloudGateAllows("staff", String(code || "").trim());
-    }
-    function rememberStaffSession(proof) {
-      if (!profile) return;
-      profile.staffEnrolled = true;
-      if (staffProofShape(proof)) profile.staffProof = proof;
-      localStorage.setItem("whsWebProfile", JSON.stringify(profile));
-    }
-    async function enforceGuestStaffProof() {
-      if (!guestStaffNeedsProof()) return;
-      if (profile && (profile.staffEnrolled || staffProofShape(profile.staffProof))) {
-        rememberStaffSession(profile.staffProof);
-        return;
-      }
-      returnToCodeGate();
     }
     function requireCloudWrite() {
       if (ckWebAuthToken()) return true;
