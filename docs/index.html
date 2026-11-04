@@ -831,7 +831,7 @@
         moreBody: "This device site can show news, lunch, staff, and your ID card. Sending hallway passes, quizzes, and Ask WHS chat stay on iPhone.",
         signOut: "Delete this device profile",
         signOutTitle: "Delete this device profile?",
-        signOutBody: "This device will forget your name, WHS Web Code, and Swipe Card photo. You can sign in again after.",
+        signOutBody: "This deletes your name, web code, swipe photo, ID photo, and Apple sign-in from this device, and removes this profile from the school site.",
         signOutCancel: "Keep profile",
         signOutConfirm: "Delete profile",
         admin: "Administrator",
@@ -1076,7 +1076,7 @@
         moreBody: "Este sitio muestra noticias, almuerzo, personal y tu ID. Enviar pases, quizzes y el chat se quedan en iPhone.",
         signOut: "Eliminar este perfil de este dispositivo",
         signOutTitle: "¿Eliminar este perfil de este dispositivo?",
-        signOutBody: "Este dispositivo olvidará tu nombre, código web WHS y foto de Tarjeta Swipe. Puedes entrar de nuevo después.",
+        signOutBody: "Esto borra tu nombre, código web, foto de Tarjeta Swipe, foto del ID y el inicio de sesión de Apple de este dispositivo, y elimina este perfil del sitio de la escuela.",
         signOutCancel: "Conservar perfil",
         signOutConfirm: "Eliminar perfil",
         admin: "Administrador",
@@ -1427,11 +1427,93 @@
         <button class="ghost" type="button" data-action="removeProfile" style="width:100%;margin-top:8px;color:#B42318;">${c.signOutConfirm}</button>`);
     }
     function removeChromebookProfile() {
+      const person = profile;
       closeSheet();
-      localStorage.removeItem("whsWebProfile");
+      eraseOwnedProfileRecords(person).catch(() => {}).then(() => {
+        forgetLocalProfile();
+        showGate();
+      });
+    }
+    async function eraseOwnedProfileRecords(person) {
+      const key = normalizeCode(person && person.key);
+      const names = [];
+      if (key.length === 10) {
+        names.push(key, "webpass." + key, "webpass." + key.slice(0, 5) + "-" + key.slice(5));
+        inboxNames(key).forEach((name) => names.push(name));
+      }
+      let staffName = "";
+      const role = normalizeRole(person && person.role);
+      if (role === "teacher" || role === "administrator") {
+        let apple = String((person && person.appleUser) || "").trim();
+        if (!apple) {
+          try { apple = await ckUserRecordName(); } catch (_) { apple = ""; }
+        }
+        staffName = staffUserRecordName(apple);
+        if (staffName) names.push(staffName);
+      }
+      const unique = [...new Set(names.filter(Boolean))];
+      if (!unique.length) return;
+      let found = [];
+      try {
+        found = (await restLookupExact(unique)).map((record) => String(record.recordName || "")).filter(Boolean);
+      } catch (_) {}
+      const targets = [...new Set(found.concat(key.length === 10 ? [key, "webpass." + key] : []).concat(staffName ? [staffName] : []))];
+      for (let start = 0; start < targets.length; start += 40) {
+        const ops = targets.slice(start, start + 40).map((recordName) => ({
+          operationType: "forceDelete",
+          record: { recordName }
+        }));
+        if (ckWebAuthToken()) {
+          try { await restModifyOps(ops); } catch (_) {}
+        }
+        try {
+          await fetch(restPublicUrl("records/modify", true), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ operations: ops })
+          });
+        } catch (_) {}
+      }
+    }
+    function forgetLocalProfile() {
+      try {
+        const container = CloudKit.getDefaultContainer();
+        if (container && typeof container.signOut === "function") container.signOut();
+      } catch (_) {}
+      dropStaleCloudSession();
+      try {
+        const auth = CloudKit.getDefaultContainer()._auth;
+        if (auth && typeof auth._setSession === "function") auth._setSession(null);
+        if (auth) auth._ckSession = "";
+      } catch (_) {}
+      const expires = "expires=Thu, 01 Jan 1970 00:00:00 GMT";
+      document.cookie = CONTAINER + "=; " + expires + "; path=/";
+      document.cookie = CONTAINER + "=; " + expires + "; path=";
+      try { localStorage.removeItem("whsWebProfile"); } catch (_) {}
+      try { localStorage.removeItem("whsNewsIds"); } catch (_) {}
+      try {
+        Object.keys(sessionStorage).forEach((key) => {
+          if (/^whs/i.test(key)) sessionStorage.removeItem(key);
+        });
+      } catch (_) {}
       profile = null;
+      window._ckUserRecordName = "";
+      window._appleReady = false;
+      window._appleNeedsRenew = true;
+      window._pendingGuestStaff = null;
+      window._pendingNewsPost = false;
+      window._pendingIssuePass = false;
+      window._newsDraftFile = null;
+      window._passWipeProof = "";
+      window._passRecords = {};
+      window._passLogList = [];
+      window._revokedPassIDs = new Set();
+      window._clearedPassIDs = new Set();
+      window._profilePhoto = "";
       applyAvatar("");
-      showGate();
+      if (window.caches && caches.keys) {
+        caches.keys().then((keys) => keys.forEach((key) => caches.delete(key))).catch(() => {});
+      }
     }
 
     async function ensureCloud() {

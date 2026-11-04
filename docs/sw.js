@@ -1,4 +1,4 @@
-const CACHE = "whs-web-v42";
+const CACHE = "whs-web-v43";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
