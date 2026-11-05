@@ -63,7 +63,7 @@ async function loadAuditLog(reset) {
       desiredKeys: ["action", "passIDs", "count", "actor", "platform"]
     };
     if (window._auditMarker) body.continuationMarker = window._auditMarker;
-    const response = await fetch(restPublicUrl("records/query", false), {
+    const response = await cloudFetch(restPublicUrl("records/query", false), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body)
@@ -252,7 +252,7 @@ async function queryStaffPassIDs(maxCount) {
       if (marker) body.continuationMarker = marker;
       let payload = {};
       try {
-        const response = await fetch(restPublicUrl("records/query", false), {
+        const response = await cloudFetch(restPublicUrl("records/query", false), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(body)

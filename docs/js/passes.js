@@ -13,30 +13,7 @@ function dropPassFieldCache() {
     drop.forEach((name) => localStorage.removeItem(name));
   } catch (_) {}
 }
-function writePassCache() { dropPassFieldCache(); }
-function applyPassCache() {}
 dropPassFieldCache();
-async function redactPassImages(id, sealedSignature) {
-  let heads = [];
-  try { heads = await restLookupExact(["passimg." + id + ".0"]); } catch (_) { return; }
-  const head = heads[0];
-  if (!head) return;
-  const count = Math.min(200, Math.max(1, parseInt(fieldValue(head, "dates"), 10) || 1));
-  for (let i = 0; i < count; i += 1) {
-    const sealed = i === 0 && String(sealedSignature || "").indexOf("whs1.") === 0;
-    const record = {
-      recordType: PASS_TYPE,
-      recordName: "passimg." + id + "." + i,
-      fields: {
-        kind: { value: "passimg" },
-        studentName: { value: id },
-        destination: { value: sealed ? sealedSignature : "whs0." },
-        dates: { value: sealed ? "1" : "0" }
-      }
-    };
-    try { await restModify(record, "forceUpdate"); } catch (_) {}
-  }
-}
 async function revealStudentPasses(records, code) {
   const key = usableCode(code);
   if (!isUsableCode(key)) return;
@@ -54,7 +31,7 @@ async function revealStudentPasses(records, code) {
 async function readAsSignedIn(name) {
   if (!ckWebAuthToken() || !name) return null;
   try {
-    const response = await fetch(restPublicUrl("records/lookup", false), {
+    const response = await cloudFetch(restPublicUrl("records/lookup", false), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ records: [{ recordName: name }] })
@@ -82,7 +59,7 @@ async function campusHiddenFromWorld(name) {
   const token = schoolToken();
   if (!token) return false;
   try {
-    const response = await fetch(restPublicUrl("records/lookup", true), {
+    const response = await cloudFetch(restPublicUrl("records/lookup", true), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ records: [{ recordName: name }] })
@@ -487,10 +464,9 @@ async function loadStudentPasses() {
       return true;
     });
     await revealStudentPasses(usable, key);
-    applyPassCache(usable, key);
     paintStudentPasses(usable);
     await applyPassIcons(usable);
-    writePassCache(key, usable);
+    dropPassFieldCache();
     paintStudentPasses(usable);
   } catch (error) {
     if (list && view === "mypasses" && !(window._studentPassUsable && window._studentPassUsable.length)) {

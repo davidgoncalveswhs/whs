@@ -260,11 +260,6 @@ document.body.addEventListener("click", (event) => {
       showGuestStep();
       return;
     }
-    if (name === "swipe") show("swipe");
-    if (name === "passesInfo") openPassesInfo();
-    if (name === "ask") openAsk("");
-    if (name === "aide") openAide();
-    if (name === "askGo") answerAsk(document.getElementById("askBox") && document.getElementById("askBox").value);
     if (name === "closeSheet") closeSheet();
     if (name === "openNewsItem") {
       const item = window._newsItems && window._newsItems[action.dataset.newsId || ""];
@@ -275,7 +270,6 @@ document.body.addEventListener("click", (event) => {
           <p class="muted">${escapeHtml(item.subtitle)}</p>`);
       }
     }
-    if (name === "composeNews") show("posts");
     if (name === "askDeleteNews") confirmDeleteNews(action.dataset.newsId || "");
     if (name === "deleteNews") deleteNewsPost(action.dataset.newsId || "");
     if (name === "pickNewsImage") {
@@ -321,7 +315,7 @@ document.body.addEventListener("click", (event) => {
     if (name === "removeProfile") removeChromebookProfile();
     if (name === "addHome") showAddHome();
     if (name === "installHome") promptInstallHome();
-    if (name === "openPass" || name === "openStudentPass") openPass(action.dataset.passId || "");
+    if (name === "openPass") openPass(action.dataset.passId || "");
     if (name === "askDeletePass") confirmDeletePass(action.dataset.passId || "");
     if (name === "deletePass") handleDeletePass(action.dataset.passId || "");
     if (name === "askRevokePass") confirmRevokePass(action.dataset.passId || "");
@@ -453,10 +447,6 @@ document.body.addEventListener("change", (event) => {
   }
 });
 document.body.addEventListener("keydown", (event) => {
-  if (event.key === "Enter" && event.target.id === "askBox") {
-    event.preventDefault();
-    answerAsk(event.target.value);
-  }
   if (event.key === "Enter" && event.target.id === "webCode") {
     event.preventDefault();
     enterWithCode();
@@ -596,9 +586,6 @@ async function finishPendingGuestStaff() {
   show("home");
 }
 window.show = show;
-window.openAsk = openAsk;
-window.openAide = openAide;
-window.openPassesInfo = openPassesInfo;
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("./sw.js").catch(() => {});
 }

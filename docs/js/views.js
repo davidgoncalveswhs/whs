@@ -883,64 +883,9 @@ async function loadSwipeCard() {
   }
 }
 
-function openPassesInfo() {
-  const c = t();
-  openSheet(`
-    <div class="card-title"><b>${c.passesTile}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
-    <p class="muted">${c.passesHint}</p>
-    <button class="primary" type="button" data-go="contacts">${c.openContacts}</button>`);
-}
 
-function openAsk(preset) {
-  const c = t();
-  openSheet(`
-    <div class="card-title"><b>${c.askTitle}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
-    <input id="askBox" aria-label="${escapeHtml(c.askTitle)}" placeholder="${c.askPlaceholder}" value="${escapeHtml(preset || "")}">
-    <button class="primary" type="button" data-action="askGo">${c.askGo}</button>
-    <div id="askOut" class="muted" style="margin-top:12px;">${c.askEmpty}</div>`);
-  if (preset) answerAsk(preset);
-}
 
-function answerAsk(raw) {
-  const q = String(raw || "").trim().toLowerCase();
-  const out = document.getElementById("askOut");
-  if (!out) return;
-  const c = t();
-  if (!q) { out.textContent = c.askEmpty; return; }
-  if (/lunch|almuerzo|menu|menú/.test(q)) {
-    out.innerHTML = `<button class="primary" type="button" data-go="lunch">${c.openLunch}</button>`;
-    return;
-  }
-  if (/news|noticia|agenda|calendar|calendario/.test(q)) {
-    out.innerHTML = `<button class="primary" type="button" data-go="news">${c.openNews}</button>`;
-    return;
-  }
-  if (/pass|pase|hallway|flex/.test(q)) {
-    out.textContent = c.passesHint;
-    return;
-  }
-  if (/attendance|asistencia/.test(q)) {
-    out.innerHTML = `<a class="primary" style="display:block;text-align:center;text-decoration:none;" href="mailto:whsattendance@watertownps.org">${c.attendance}</a>`;
-    return;
-  }
-  const hits = staff.filter((person) => `${person.name} ${person.group} ${person.email}`.toLowerCase().includes(q)).slice(0, 6);
-  if (hits.length) {
-    out.innerHTML = hits.map(personButton).join("");
-    return;
-  }
-  out.textContent = c.askEmpty;
-}
 
-function openAide() {
-  const c = t();
-  openSheet(`
-    <div class="card-title"><b>${c.aideTitle}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
-    <p class="muted">${c.aideBody}</p>
-    <button class="primary" type="button" data-go="contacts">${c.openContacts}</button>
-    <button class="ghost" type="button" data-go="lunch" style="width:100%;margin-top:8px;">${c.openLunch}</button>
-    <button class="ghost" type="button" data-go="news" style="width:100%;margin-top:8px;">${c.openNews}</button>
-    <a class="ghost" style="display:block;text-align:center;margin-top:8px;text-decoration:none;" href="mailto:whsattendance@watertownps.org">${c.attendance}</a>`);
-}
 
 function renderIssuePass() {
   if (!canIssuePass()) return;
@@ -1109,7 +1054,7 @@ async function lookupAsSignedIn(names) {
   for (let start = 0; start < unique.length; start += 150) {
     const slice = unique.slice(start, start + 150);
     try {
-      const response = await fetch(restPublicUrl("records/lookup", false), {
+      const response = await cloudFetch(restPublicUrl("records/lookup", false), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ records: slice.map((recordName) => ({ recordName })) })

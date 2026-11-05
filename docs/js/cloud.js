@@ -22,7 +22,7 @@ async function restQuery(recordType, limit) {
   const token = schoolToken();
   if (!token || !recordType) return [];
   const url = restUrl("query");
-  const response = await fetch(url, {
+  const response = await cloudFetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ query: { recordType }, resultsLimit: limit || 80 })
@@ -41,7 +41,7 @@ async function restLookupDetailed(names, exact) {
   const results = await Promise.all(slices.map(async (slice) => {
     const once = async () => {
       try {
-        const response = await fetch(restUrl("lookup"), {
+        const response = await cloudFetch(restUrl("lookup"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ records: slice.map((recordName) => ({ recordName })) })
@@ -160,7 +160,7 @@ const STAFF_KEY_NAME = "whs-staff-key";
 const STAFF_BODY_PREFIX = "whs3.";
 const STAFF_BODY_CONTEXT = new TextEncoder().encode("whs-staff-body-v3");
 async function readStaffKeyRecord() {
-  const response = await fetch(restPublicUrl("records/lookup", false), {
+  const response = await cloudFetch(restPublicUrl("records/lookup", false), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ records: [{ recordName: STAFF_KEY_NAME }] })
@@ -352,7 +352,7 @@ async function restModify(record, operationType) {
   const token = schoolToken();
   if (!token || !record || !record.recordName) return null;
   const url = restPublicUrl("records/modify", false);
-  const response = await fetch(url, {
+  const response = await cloudFetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -373,7 +373,7 @@ async function restModifyOps(operations) {
   const token = schoolToken();
   if (!token || !operations.length) return {};
   const url = restPublicUrl("records/modify", false);
-  const response = await fetch(url, {
+  const response = await cloudFetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ operations })

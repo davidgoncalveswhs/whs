@@ -109,6 +109,13 @@ window.runWhsChecks = async function runWhsChecks() {
 
     // The same code must give the same names and keys as the app (values come from the app's tests).
     check(await profileRecordName("abcde-23456") === "profile.v2.5cc110d3709f3aa31942364a676d2032", "code-derived names match the app");
+    // CloudKit calls carry a time limit so a stalled connection can't hang the page.
+    let sawSignal = false;
+    const fetchBefore = window.fetch;
+    window.fetch = async (url, init) => { sawSignal = !!(init && init.signal); return new Response("{}"); };
+    await cloudFetch("https://api.apple-cloudkit.com/test", { method: "POST" });
+    window.fetch = fetchBefore;
+    check(sawSignal, "CloudKit calls are sent with a time limit");
     const derivedNames = [await profileRecordName("ABCDE23456"), await webPassLinkName("ABCDE23456")].concat(await studentInboxNames("ABCDE23456"));
     check(derivedNames.length === 162 && derivedNames.every((n) => !n.toUpperCase().includes("ABCDE23456")), "record names never contain the code");
     check(await openSeal("ABCDE23456", "whs1.C6t8uM5f3OYCmyozqyq6wi3pGxGATVjaoZi8K1GdfoL8wLmPdqmvDuvM92YQ2R2OxoseOGI/") === "Grade 10 · Señor García", "the website opens text the app locked");

@@ -194,6 +194,15 @@ if (profile && typeof profile === "object") {
   }
 }
 let lunchReady = false;
+// Calls to the CloudKit API give up after 25 seconds instead of leaving the page waiting on a stalled
+// connection; callers already show an error and let the student try again.
+const CLOUD_TIMEOUT_MS = 25000;
+function cloudFetch(url, init) {
+  if (typeof AbortController !== "function") return window.fetch(url, init);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), CLOUD_TIMEOUT_MS);
+  return window.fetch(url, { ...(init || {}), signal: controller.signal }).finally(() => clearTimeout(timer));
+}
 let deferredInstall = null;
 function normalizeRole(value) {
   const raw = String(value || "").toLowerCase().trim();
@@ -761,7 +770,7 @@ async function fetchAppleSignInURL() {
   if (existing) return existing;
   if (!schoolToken()) return "";
   try {
-    const response = await fetch(restPublicUrl("users/caller", true), {
+    const response = await cloudFetch(restPublicUrl("users/caller", true), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: "{}"
@@ -964,7 +973,7 @@ async function fetchStaffRole() {
   let response;
   let payload = {};
   try {
-    response = await fetch(restPublicUrl("records/lookup", false), {
+    response = await cloudFetch(restPublicUrl("records/lookup", false), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ records: [{ recordName: name }] })

@@ -280,14 +280,6 @@ const copy = {
     role: "Role",
     grade: "Grade",
     guest: "Guest",
-    passesHint: "Teachers send Hallway and Flex passes on iPhone. Students accept them there. The administrator log is in More.",
-    askTitle: "Ask WHS",
-    askPlaceholder: "Lunch, news, a teacher name…",
-    askGo: "Ask",
-    askEmpty: "Try lunch, news, a teacher name, or attendance.",
-    aideTitle: "Warrior's Aide",
-    aideBody: "Need a staff email, this week’s lunch, or school news? Use the buttons below. Attendance is whsattendance@watertownps.org.",
-    attendance: "Email attendance"
   },
   es: {
     welcome: "Bienvenido",
@@ -556,13 +548,5 @@ const copy = {
     role: "Rol",
     grade: "Grado",
     guest: "Invitado",
-    passesHint: "Los maestros envían pases en iPhone. Los estudiantes los aceptan allí. El registro de administrador está en Más.",
-    askTitle: "Ask WHS",
-    askPlaceholder: "Almuerzo, noticias, un maestro…",
-    askGo: "Preguntar",
-    askEmpty: "Prueba almuerzo, noticias, un maestro o asistencia.",
-    aideTitle: "Warrior's Aide",
-    aideBody: "¿Correo del personal, almuerzo o noticias? Usa los botones. Asistencia: whsattendance@watertownps.org.",
-    attendance: "Escribir a asistencia"
   }
 };
