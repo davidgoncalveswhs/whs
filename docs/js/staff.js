@@ -392,8 +392,9 @@ async function allocateGuestStudentKey(person) {
   try { await ensureCloud(); } catch (_) {}
   for (let i = 0; i < 8; i += 1) {
     const key = makeWebUnlockKey();
+    const recordName = await profileRecordName(key);
     let existing = [];
-    try { existing = await restLookup([key]); } catch (_) { existing = []; }
+    try { existing = await restLookup([recordName]); } catch (_) { existing = []; }
     if (existing.length) continue;
     const sealedGrade = await sealText(key, String(person.grade || ""));
     const fields = {
@@ -405,7 +406,7 @@ async function allocateGuestStudentKey(person) {
     try {
       await restModify({
         recordType: "WHSWebProfile",
-        recordName: key,
+        recordName,
         fields
       }, "create");
       return key;

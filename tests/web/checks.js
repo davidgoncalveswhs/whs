@@ -60,12 +60,8 @@ window.runWhsChecks = async function runWhsChecks() {
     check(document.getElementById("webCodeValue").textContent === "XXXXX-XXXXX", "it hides again when More reopens");
     restore();
 
-    // Teacher browsers keep only a few student codes.
-    localStorage.removeItem("whsPassWebKeys");
-    for (let i = 0; i < 60; i += 1) rememberPassCode("p" + i, "QQQQQ22222");
-    const kept = JSON.parse(localStorage.getItem("whsPassWebKeys") || "{}");
-    check(Object.keys(kept).length === 50 && kept.p59 && !kept.p0, "at most the 50 newest student codes are kept");
-    localStorage.removeItem("whsPassWebKeys");
+    // Teacher browsers don't keep student codes.
+    check(typeof window.rememberPassCode === "undefined" && localStorage.getItem("whsPassWebKeys") === null, "teacher browsers don't store student codes");
 
     // The site's own database setting can't be overridden from the browser.
     localStorage.setItem("whsAdminEnv", "production");
@@ -110,6 +106,12 @@ window.runWhsChecks = async function runWhsChecks() {
     confirmDeletePass("P-1"); await handleDeletePass("P-1");
     check(steps[0] === "audit:delete_pass" && steps[1] === "revoked" && /^delete:P-1\|body\.P-1\|seal\.P-1$/.test(steps[3] || ""), "delete logs, revokes, then deletes the pass records");
     check(!steps.join(" ").includes("whs-campus-archive"), "deleting one pass leaves the archive alone");
+
+    // The same code must give the same names and keys as the app (values come from the app's tests).
+    check(await profileRecordName("abcde-23456") === "profile.v2.5cc110d3709f3aa31942364a676d2032", "code-derived names match the app");
+    const derivedNames = [await profileRecordName("ABCDE23456"), await webPassLinkName("ABCDE23456")].concat(await studentInboxNames("ABCDE23456"));
+    check(derivedNames.length === 162 && derivedNames.every((n) => !n.toUpperCase().includes("ABCDE23456")), "record names never contain the code");
+    check(await openSeal("ABCDE23456", "whs1.C6t8uM5f3OYCmyozqyq6wi3pGxGATVjaoZi8K1GdfoL8wLmPdqmvDuvM92YQ2R2OxoseOGI/") === "Grade 10 · Señor García", "the website opens text the app locked");
     restore();
   } catch (error) {
     failed.push("checks crashed: " + (error && error.message));

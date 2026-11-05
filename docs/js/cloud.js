@@ -8,16 +8,9 @@ function restPublicUrl(path, schoolOnly) {
   return url;
 }
 
-function codeNames(value) {
-  const compact = normalizeCode(value);
-  const names = [compact, String(value || "").trim().toUpperCase()];
-  if (compact.length === 10) names.push(compact.slice(0, 5) + "-" + compact.slice(5));
-  return [...new Set(names.filter(Boolean))];
-}
 function lookupNames(value) {
   const raw = String(value || "").trim();
-  if (!raw) return [];
-  return [...new Set([raw, ...codeNames(raw)])];
+  return raw ? [raw] : [];
 }
 function usableRecord(record) {
   if (!record || record.deleted) return false;
@@ -90,15 +83,46 @@ async function restLookupExact(names) {
   }
   return found;
 }
-async function sha256Hex(text) {
-  const bytes = new TextEncoder().encode(String(text || ""));
-  const hash = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(hash)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+// A student's WHS Web Code is a password. The encryption key for their data and the tag used in their
+// record names both come from the code through PBKDF2-SHA256 (150,000 rounds), so record names never
+// contain the code, and checking a guessed code is slow. This must match WHSPrivateSeal.swift exactly.
+const CODE_KDF_SALT = new TextEncoder().encode("whs-code-v2");
+const CODE_KDF_ROUNDS = 150000;
+const codeKeyCache = new Map();
+function deriveCodeKeys(code) {
+  const compact = normalizeCode(code);
+  if (compact.length !== 10) return Promise.resolve(null);
+  if (!codeKeyCache.has(compact)) {
+    const pending = (async () => {
+      const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(compact), "PBKDF2", false, ["deriveBits"]);
+      const bits = new Uint8Array(await crypto.subtle.deriveBits(
+        { name: "PBKDF2", hash: "SHA-256", salt: CODE_KDF_SALT, iterations: CODE_KDF_ROUNDS }, base, 384));
+      const key = await crypto.subtle.importKey("raw", bits.slice(0, 32), "AES-GCM", false, ["encrypt", "decrypt"]);
+      const tag = Array.from(bits.slice(32, 48)).map((b) => b.toString(16).padStart(2, "0")).join("");
+      return { key, tag };
+    })();
+    pending.catch(() => codeKeyCache.delete(compact));
+    codeKeyCache.set(compact, pending);
+  }
+  return codeKeyCache.get(compact);
+}
+async function sealKey(code) {
+  const derived = await deriveCodeKeys(code);
+  if (!derived) throw new Error("CODE");
+  return derived.key;
 }
 async function privateCodeTag(code) {
-  const key = normalizeCode(code);
-  if (key.length !== 10) return "";
-  return (await sha256Hex("whs-private:" + key)).slice(0, 24);
+  const derived = await deriveCodeKeys(code);
+  return derived ? derived.tag : "";
+}
+// Record names that belong to a student, built from the derived tag, never from the code itself.
+async function profileRecordName(code) {
+  const tag = await privateCodeTag(code);
+  return tag ? "profile.v2." + tag : "";
+}
+async function webPassLinkName(code) {
+  const tag = await privateCodeTag(code);
+  return tag ? "webpass.v2." + tag : "";
 }
 function bytesToBase64(bytes) {
   let bin = "";
@@ -112,10 +136,6 @@ function base64ToBytes(text) {
   const bytes = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
   return bytes;
-}
-async function sealKey(code) {
-  const raw = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("whs-seal-v1:" + normalizeCode(code)));
-  return crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
 }
 // Staff copies of passes are encrypted with the school key: a random key stored once in CloudKit
 // in its own staff-only record type, WHSStaffKey. No key is in this code. "whs3." marks that format;

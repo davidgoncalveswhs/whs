@@ -1,46 +1,8 @@
-// WHS WebView: Issuing passes, student passes, and pass codes.
+// WHS WebView: Issuing passes and student passes.
 // Files load in order (see index.html) and share one global scope.
-// Student codes are passwords. Teachers' browsers keep them only to finish locking a pass,
-// so hold at most the 50 newest for 7 days.
-const PASS_CODE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
-const PASS_CODE_MAX_COUNT = 50;
-function loadPassCodes() {
-  let map = {};
-  try { map = JSON.parse(localStorage.getItem("whsPassWebKeys") || "{}") || {}; } catch (_) { map = {}; }
-  const now = Date.now();
-  const rows = Object.keys(map).map((id) => {
-    const entry = map[id];
-    // Older saves stored a bare code; treat them as saved now so they age out normally.
-    if (typeof entry === "string") return [id, { c: entry, t: now }];
-    return [id, entry && typeof entry === "object" ? entry : { c: "", t: 0 }];
-  }).filter(([, entry]) => normalizeCode(entry.c).length === 10 && now - Number(entry.t || 0) <= PASS_CODE_MAX_AGE);
-  rows.sort((a, b) => Number(b[1].t) - Number(a[1].t));
-  return Object.fromEntries(rows.slice(0, PASS_CODE_MAX_COUNT));
-}
-function savePassCodes(map) {
-  try {
-    if (Object.keys(map).length) localStorage.setItem("whsPassWebKeys", JSON.stringify(map));
-    else localStorage.removeItem("whsPassWebKeys");
-  } catch (_) {}
-}
-function rememberedPassCode(id) {
-  const map = loadPassCodes();
-  savePassCodes(map);
-  const code = normalizeCode((map[id] && map[id].c) || "");
-  return code.length === 10 ? code : "";
-}
-function rememberPassCode(id, code) {
-  const key = normalizeCode(code);
-  if (!id || key.length !== 10) return;
-  const map = loadPassCodes();
-  const latest = Math.max(0, ...Object.values(map).map((entry) => Number(entry.t || 0)));
-  map[id] = { c: key, t: Math.max(Date.now(), latest + 1) };
-  savePassCodes(loadPassCodesFrom(map));
-}
-function loadPassCodesFrom(map) {
-  const rows = Object.entries(map).sort((a, b) => Number(b[1].t) - Number(a[1].t));
-  return Object.fromEntries(rows.slice(0, PASS_CODE_MAX_COUNT));
-}
+// Teachers' browsers used to keep student codes to finish locking older passes. That's no longer
+// needed, so clear anything an earlier version saved.
+try { localStorage.removeItem("whsPassWebKeys"); } catch (_) {}
 function dropPassFieldCache() {
   try {
     const drop = [];
@@ -54,33 +16,6 @@ function dropPassFieldCache() {
 function writePassCache() { dropPassFieldCache(); }
 function applyPassCache() {}
 dropPassFieldCache();
-async function publishSealRecord(id, code, body) {
-  const key = normalizeCode(code);
-  if (!id || key.length !== 10) return false;
-  const payload = {
-    studentName: await sealText(key, body.studentName),
-    destination: await sealText(key, body.destination),
-    dates: await sealText(key, body.dates),
-    teacherName: await sealText(key, body.teacherName)
-  };
-  if (body.signature) {
-    const sealed = await sealText(key, body.signature);
-    if (String(sealed).indexOf("whs1.") === 0 && sealed.length < 700000) payload.signature = sealed;
-  }
-  if (String(payload.studentName).indexOf("whs1.") !== 0) return false;
-  const record = {
-    recordType: "WHSWebProfile",
-    recordName: "seal." + id,
-    fields: {
-      role: { value: "student" },
-      displayName: { value: "Seal" },
-      gradeSeal: { value: JSON.stringify(payload) }
-    }
-  };
-  try { await restModifySchool(record, "create"); return true; } catch (_) {}
-  try { await restModify(record, "create"); return true; } catch (_) {}
-  try { await restModify(record, "forceUpdate"); return true; } catch (_) { return false; }
-}
 async function redactPassImages(id, sealedSignature) {
   let heads = [];
   try { heads = await restLookupExact(["passimg." + id + ".0"]); } catch (_) { return; }
@@ -100,60 +35,6 @@ async function redactPassImages(id, sealedSignature) {
       }
     };
     try { await restModify(record, "forceUpdate"); } catch (_) {}
-  }
-}
-async function protectPlainPasses(records) {
-  if (!canSeePassLog()) return;
-  for (const record of records || []) {
-    const id = passRecordName(record);
-    const name = String(fieldValue(record, "studentName") || "");
-    if (!id || name.indexOf("whs1.") === 0 || name === "whs0.") continue;
-    const body = {
-      studentName: name,
-      destination: fieldValue(record, "destination"),
-      dates: fieldValue(record, "dates"),
-      teacherName: fieldValue(record, "teacherName"),
-      kind: fieldValue(record, "kind") || "hallway",
-      signature: record._passIcon || ""
-    };
-    const code = rememberedPassCode(id);
-    if (code) {
-      if (!(await saveStaffPassBody(id, body))) continue;
-      const signature = body.signature ? await sealText(code, body.signature) : "";
-      try {
-        await restModify({
-          recordType: PASS_TYPE,
-          recordName: id,
-          fields: {
-            studentName: { value: await sealText(code, body.studentName) },
-            destination: { value: await sealText(code, body.destination) },
-            dates: { value: await sealText(code, body.dates) },
-            teacherName: { value: await sealText(code, body.teacherName) }
-          }
-        }, "forceUpdate");
-      } catch (_) { continue; }
-      await redactPassImages(id, signature);
-      continue;
-    }
-    let seal = null;
-    try { seal = await readExact("seal." + id); } catch (_) { seal = null; }
-    let parsed = null;
-    try { parsed = JSON.parse(fieldValue(seal, "gradeSeal") || ""); } catch (_) { parsed = null; }
-    if (!(parsed && String(parsed.studentName || "").indexOf("whs1.") === 0)) continue;
-    if (!(await saveStaffPassBody(id, body))) continue;
-    try {
-      await restModify({
-        recordType: PASS_TYPE,
-        recordName: id,
-        fields: {
-          studentName: { value: parsed.studentName },
-          destination: { value: parsed.destination || "" },
-          dates: { value: parsed.dates || "" },
-          teacherName: { value: parsed.teacherName || "" }
-        }
-      }, "forceUpdate");
-    } catch (_) { continue; }
-    await redactPassImages(id, parsed.signature || "");
   }
 }
 async function revealStudentPasses(records, code) {
@@ -273,23 +154,16 @@ async function storePassIndex(privateName, publicName, kind, ids, merge) {
   await writeIndexRecord(PASS_TYPE, publicName, kind, publicIDs, hide ? false : !!merge);
   return privateOK;
 }
-function inboxNames(key) {
-  const code = normalizeCode(key);
-  if (code.length !== 10) return [];
-  const names = [];
-  for (let i = 0; i < 160; i += 1) names.push("inbox." + code + "." + i);
-  return names;
-}
+// Each student has 160 inbox slots, named from their derived tag (see deriveCodeKeys).
 function privateInboxNames(tag) {
   const code = String(tag || "").trim().toLowerCase();
-  if (code.length !== 24) return [];
+  if (code.length !== 32) return [];
   const names = [];
-  for (let i = 0; i < 160; i += 1) names.push("inbox.p." + code + "." + i);
+  for (let i = 0; i < 160; i += 1) names.push("inbox.v2." + code + "." + i);
   return names;
 }
 async function studentInboxNames(key) {
-  const tag = await privateCodeTag(key);
-  return privateInboxNames(tag).concat(inboxNames(key));
+  return privateInboxNames(await privateCodeTag(key));
 }
 async function deliverPassToInbox(passId, webCode, studentName) {
   const key = normalizeCode(webCode);
@@ -297,7 +171,7 @@ async function deliverPassToInbox(passId, webCode, studentName) {
   if (key.length !== 10 || !id) return false;
   const tag = await privateCodeTag(key);
   const names = privateInboxNames(tag);
-  const known = names.concat(inboxNames(key));
+  const known = names;
   let existing = [];
   try { existing = await restLookupExact(known); } catch (_) { existing = []; }
   const taken = new Set(existing.map((record) => String(record.recordName || "").toLowerCase()));
@@ -335,7 +209,8 @@ async function attachPassToStudent(passId, webCode, studentName) {
   if (key.length !== 10) throw Object.assign(new Error("CODE"), { code: "CODE" });
   await deliverPassToInbox(passId, key, studentName);
   let profileRec = null;
-  try { profileRec = (await fetchByNames(cloudDb(), [key]))[0] || null; } catch (_) {}
+  const profileName = await profileRecordName(key);
+  try { profileRec = (await restLookupExact([profileName]))[0] || null; } catch (_) {}
   const role = normalizeRole(fieldValue(profileRec, "role"));
   if (profileRec && role && role !== "student" && role !== "guest") {
     throw Object.assign(new Error("CODE"), { code: "CODE" });
@@ -345,7 +220,7 @@ async function attachPassToStudent(passId, webCode, studentName) {
     const ids = capNewestIDs(parsePassIDs(fieldValue(profileRec, "passIDs")), passId, 400);
     const rec = {
       recordType: "WHSWebProfile",
-      recordName: profileRec.recordName || key,
+      recordName: profileName,
       fields: { passIDs: { value: ids.join(",") } }
     };
     if (profileRec.recordChangeTag) rec.recordChangeTag = profileRec.recordChangeTag;
@@ -355,8 +230,7 @@ async function attachPassToStudent(passId, webCode, studentName) {
       }
     }
   }
-  const tag = await privateCodeTag(key);
-  const linkName = tag ? "webpass.p." + tag : "webpass." + key;
+  const linkName = await webPassLinkName(key);
   let link = null;
   try { link = (await fetchByNames(cloudDb(), [linkName]))[0] || null; } catch (_) {}
   const ids = capNewestIDs(parsePassIDs(fieldValue(link, "passIDs")), passId, 400);
@@ -493,7 +367,6 @@ async function issuePassFromWeb() {
       try { saved = (await fetchByNames(cloudDb(), [recordName]))[0] || null; } catch (_) {}
     }
     if (!saved) throw Object.assign(new Error("FAIL"), { reason: "create" });
-    rememberPassCode(recordName, webCode);
     auditLog("issue_pass", [recordName]);
     showWorkProgress(40, c.issuePassWorking, c.issuePassStepSave, "", false, "finishIssuePass");
     showWorkProgress(55, c.issuePassWorking, c.issuePassStepStudent, "", false, "finishIssuePass");
@@ -602,9 +475,7 @@ async function loadStudentPasses() {
   try { await ensureCloud(); } catch (_) {}
   try {
     const key = normalizeCode(profile.key);
-    const dashed = key.length === 10 ? `${key.slice(0, 5)}-${key.slice(5)}` : "";
-    const tag = await privateCodeTag(key);
-    const profiles = await restLookupExact([key, dashed, "webpass." + key, tag ? "webpass.p." + tag : "", dashed ? "webpass." + dashed : ""].concat(await studentInboxNames(key)));
+    const profiles = await restLookupExact([await profileRecordName(key), await webPassLinkName(key)].concat(await studentInboxNames(key)));
     const ids = [...new Set(profiles.flatMap((record) => parsePassIDs(fieldValue(record, "passIDs"))))];
     const packed = await fetchByNames(cloudDb(), ids.concat(ids.flatMap((id) => [revokedName(id), tombstoneName(id)]), [CLEARED]));
     const byName = new Map(packed.map((record) => [String(record.recordName || "").toLowerCase(), record]));
@@ -614,25 +485,11 @@ async function loadStudentPasses() {
       if (isPassMarker(record) || passIsRevoked(record)) return false;
       return true;
     });
-    const plainPasses = usable.filter((record) => {
-      const name = String(fieldValue(record, "studentName") || "");
-      return name && name.indexOf("whs1.") !== 0 && name !== "whs0.";
-    });
     await revealStudentPasses(usable, key);
     applyPassCache(usable, key);
     paintStudentPasses(usable);
     await applyPassIcons(usable);
     writePassCache(key, usable);
-    for (const record of plainPasses) {
-      const id = passRecordName(record);
-      await publishSealRecord(id, key, {
-        studentName: fieldValue(record, "studentName"),
-        destination: fieldValue(record, "destination"),
-        dates: fieldValue(record, "dates"),
-        teacherName: fieldValue(record, "teacherName"),
-        signature: record._passIcon || ""
-      });
-    }
     paintStudentPasses(usable);
   } catch (error) {
     if (list && view === "mypasses" && !(window._studentPassUsable && window._studentPassUsable.length)) {

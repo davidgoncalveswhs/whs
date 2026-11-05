@@ -296,24 +296,22 @@ function removeChromebookProfile() {
 async function eraseOwnedProfileRecords(person) {
   const key = normalizeCode(person && person.key);
   const names = [];
-  if (key.length === 10) {
-    const tag = await privateCodeTag(key);
-    names.push(key, "webpass." + key, "webpass." + key.slice(0, 5) + "-" + key.slice(5));
-    if (tag) names.push("webpass.p." + tag);
-    inboxNames(key).forEach((name) => names.push(name));
-    privateInboxNames(tag).forEach((name) => names.push(name));
+  const profileName = key.length === 10 ? await profileRecordName(key) : "";
+  if (profileName) {
+    names.push(profileName, await webPassLinkName(key));
+    privateInboxNames(await privateCodeTag(key)).forEach((name) => names.push(name));
   }
   const unique = [...new Set(names.filter(Boolean))];
   if (!unique.length) return;
   let foundRecords = [];
   try { foundRecords = await restLookupExact(unique); } catch (_) {}
   foundRecords.forEach((record) => {
-    if (normalizeCode(record.recordName) !== key) return;
+    if (String(record.recordName || "") !== profileName) return;
     parsePassIDs(fieldValue(record, "passIDs")).forEach((id) => names.push("seal." + id));
   });
   const found = foundRecords.map((record) => String(record.recordName || "")).filter(Boolean);
   const seals = names.filter((name) => name.indexOf("seal.") === 0);
-  const targets = [...new Set(found.concat(seals).concat(key.length === 10 ? [key, "webpass." + key] : []))];
+  const targets = [...new Set(found.concat(seals).concat(profileName ? [profileName] : []))];
   if (!targets.length) return true;
   if (!ckWebAuthToken()) return false;
   for (let start = 0; start < targets.length; start += 40) {

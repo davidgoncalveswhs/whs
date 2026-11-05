@@ -163,10 +163,6 @@ async function loadPasses() {
       if (window._clearedPassIDs && window._clearedPassIDs.has(id)) return false;
       return !!(fieldValue(r, "studentName") || fieldValue(r, "teacherName"));
     });
-    const plainPasses = usable.filter((record) => {
-      const name = String(fieldValue(record, "studentName") || "");
-      return name && name.indexOf("whs1.") !== 0 && name !== "whs0.";
-    });
     await applyStaffBodies(usable);
     window._passRecords = {};
     usable.forEach((record) => {
@@ -177,7 +173,6 @@ async function loadPasses() {
     if (view === "passes") paintPassLog();
     if (usable.length) auditLog("view_log", [], usable.length);
     await applyPassIcons(usable);
-    await protectPlainPasses(plainPasses);
     if (view === "passes") paintPassLog();
   } catch (error) {
     if (view === "passes" && node && !document.getElementById("passes")) {
@@ -213,8 +208,10 @@ async function enterWithCode() {
   try {
     let db = null;
     try { db = CloudKit.getDefaultContainer().publicCloudDatabase; } catch (_) {}
-    const records = await fetchByNames(db, [key]);
-    const record = records.find((item) => codeNames(item.recordName).includes(key));
+    // Profiles are stored under a name derived from the code, never the code itself.
+    const recordName = await profileRecordName(key);
+    const records = await fetchByNames(db, [recordName]);
+    const record = records.find((item) => String(item.recordName || "") === recordName);
     if (!record) {
       gateError.textContent = t().gateFail;
       return;
