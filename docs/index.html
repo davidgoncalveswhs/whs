@@ -666,6 +666,8 @@
     const CAMPUS_TYPE = "WHSCampusLog";
     const CAMPUS_LOG = "whs-campus-log";
     const CAMPUS_CLEARED = "whs-campus-cleared";
+    // Staff-only list of passes that fell off the 500-entry log (written by the iPhone app).
+    const CAMPUS_ARCHIVE = "whs-campus-archive";
     const MANIFEST = "whs-teacher-pass-manifest";
     const CLEARED = "whs-cleared-passes";
     const NEWS_MANIFEST = "whs-news-manifest";
@@ -1533,6 +1535,7 @@
       window._newsDraftFile = null;
       window._passWipeProof = "";
       window._passRecords = {};
+      window._staffKeyPromise = null;
       window._passLogList = [];
       window._revokedPassIDs = new Set();
       window._clearedPassIDs = new Set();
@@ -2121,35 +2124,95 @@
       const raw = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("whs-seal-v1:" + normalizeCode(code)));
       return crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
     }
+    // Staff copies of passes are encrypted with the school key: a random key stored once in CloudKit
+    // in its own staff-only record type, WHSStaffKey. No key is in this code. "whs3." marks that format;
+    // older "whs2." copies used a key that was in the code and can't be opened.
+    const STAFF_KEY_TYPE = "WHSStaffKey";
+    const STAFF_KEY_NAME = "whs-staff-key";
+    const STAFF_BODY_PREFIX = "whs3.";
+    const STAFF_BODY_CONTEXT = new TextEncoder().encode("whs-staff-body-v3");
+    async function readStaffKeyRecord() {
+      const response = await fetch(restPublicUrl("records/lookup", false), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ records: [{ recordName: STAFF_KEY_NAME }] })
+      });
+      const payload = await response.json().catch(() => ({}));
+      const row = ((payload && payload.records) || [])[0];
+      if (!row) return { state: "error" };
+      const code = String(row.serverErrorCode || "");
+      if (/NOT_FOUND|UNKNOWN_ITEM/i.test(code)) return { state: "missing" };
+      if (code || String(row.recordType || "") !== STAFF_KEY_TYPE) return { state: "error" };
+      let bytes = null;
+      try { bytes = base64ToBytes(String(fieldValue(row, "key") || "")); } catch (_) { bytes = null; }
+      if (!bytes || bytes.length !== 32) return { state: "error" };
+      const key = await crypto.subtle.importKey("raw", bytes, "AES-GCM", false, ["encrypt", "decrypt"]);
+      return { state: "found", key };
+    }
+    async function loadOrCreateStaffKey() {
+      if (!ckWebAuthToken()) return null;
+      try {
+        const first = await readStaffKeyRecord();
+        if (first.state === "found") return first.key;
+        if (first.state !== "missing") return null;
+        // The first enrolled staff member to need the key creates it.
+        try { await requireEnrolledStaff(); } catch (_) { return null; }
+        const fresh = crypto.getRandomValues(new Uint8Array(32));
+        try {
+          await restModify({
+            recordType: STAFF_KEY_TYPE,
+            recordName: STAFF_KEY_NAME,
+            fields: { key: { value: bytesToBase64(fresh) }, version: { value: 1 } }
+          }, "create");
+        } catch (_) {}
+        // Read it back either way: if another staff device created it first, use theirs.
+        const second = await readStaffKeyRecord();
+        return second.state === "found" ? second.key : null;
+      } catch (_) {
+        return null;
+      }
+    }
     async function staffBodyKey() {
-      const raw = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("whs-staff-body-v1"));
-      return crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
+      if (!window._staffKeyPromise) window._staffKeyPromise = loadOrCreateStaffKey();
+      const key = await window._staffKeyPromise;
+      if (!key) window._staffKeyPromise = null;
+      return key;
     }
     async function sealStaffBody(plain) {
       const text = String(plain || "");
       if (!text) return "";
+      const key = await staffBodyKey();
+      if (!key) return "";
       const iv = crypto.getRandomValues(new Uint8Array(12));
-      const cipher = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await staffBodyKey(), new TextEncoder().encode(text)));
+      const cipher = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: STAFF_BODY_CONTEXT }, key, new TextEncoder().encode(text)));
       const blob = new Uint8Array(iv.length + cipher.length);
       blob.set(iv, 0);
       blob.set(cipher, iv.length);
-      return "whs2." + bytesToBase64(blob);
+      return STAFF_BODY_PREFIX + bytesToBase64(blob);
     }
     async function openStaffBody(stored) {
       const raw = String(stored || "");
-      if (raw.indexOf("whs2.") !== 0) return raw;
-      try {
-        const blob = base64ToBytes(raw.slice(5));
-        if (blob.length <= 28) return "";
-        const clear = await crypto.subtle.decrypt(
-          { name: "AES-GCM", iv: blob.slice(0, 12) },
-          await staffBodyKey(),
-          blob.slice(12)
-        );
-        return new TextDecoder().decode(clear);
-      } catch (_) {
-        return "";
+      if (raw.indexOf("whs2.") === 0) return "";
+      if (raw.indexOf(STAFF_BODY_PREFIX) !== 0) return raw;
+      const blob = (() => { try { return base64ToBytes(raw.slice(STAFF_BODY_PREFIX.length)); } catch (_) { return null; } })();
+      if (!blob || blob.length <= 28) return "";
+      const attempt = async () => {
+        const key = await staffBodyKey();
+        if (!key) return null;
+        try {
+          const clear = await crypto.subtle.decrypt({ name: "AES-GCM", iv: blob.slice(0, 12), additionalData: STAFF_BODY_CONTEXT }, key, blob.slice(12));
+          return new TextDecoder().decode(clear);
+        } catch (_) {
+          return null;
+        }
+      };
+      let text = await attempt();
+      if (text === null) {
+        // The key may have been replaced in CloudKit since this page loaded; reload it once.
+        window._staffKeyPromise = null;
+        text = await attempt();
       }
+      return text || "";
     }
     async function sealText(code, plain) {
       const text = String(plain || "");
@@ -2651,6 +2714,7 @@
         const manifest = campus || await readExact(MANIFEST);
         indexIDs(manifest).forEach((id) => names.add(id));
       } catch (_) {}
+      try { indexIDs(await readExact(CAMPUS_ARCHIVE)).forEach((id) => names.add(id)); } catch (_) {}
       (window._passLogList || []).forEach((record) => {
         const id = passRecordName(record);
         if (id) names.add(id);
@@ -2659,6 +2723,27 @@
         if (!id || id === MANIFEST || id === CLEARED || isGateRecordName(id)) return false;
         return true;
       });
+    }
+    // Clearing means deleting: remove each pass, its staff copy, and its images.
+    // Only the empty "revoked." markers stay, so student devices drop their copies.
+    async function deletePassData(ids) {
+      const names = [];
+      ids.forEach((id) => names.push(id, "body." + id, "seal." + id));
+      for (let start = 0; start < ids.length; start += 180) {
+        let heads = [];
+        try { heads = await restLookupExact(ids.slice(start, start + 180).map((id) => "passimg." + id + ".0")); } catch (_) {}
+        heads.forEach((record) => {
+          const base = passRecordName(record).replace(/\.0$/, "");
+          if (!base) return;
+          const count = Math.min(Math.max(parseInt(fieldValue(record, "dates"), 10) || 1, 1), 200);
+          for (let i = 0; i < count; i += 1) names.push(base + "." + i);
+        });
+      }
+      names.push(CAMPUS_ARCHIVE);
+      for (let start = 0; start < names.length; start += 40) {
+        const ops = names.slice(start, start + 40).map((recordName) => ({ operationType: "forceDelete", record: { recordName } }));
+        try { await restModifyOps(ops); } catch (_) {}
+      }
     }
     async function handleClearPassLog() {
       if (!canClearPassLog() || window._passWipeBusy) return;
@@ -2707,6 +2792,7 @@
         }
         showPassWipeProgress(92, c.adminPassWipeStepEmpty, "", false, false);
         await emptyPassManifest();
+        if (ids.length) await deletePassData(ids);
         window._passLogList = [];
         window._revokedPassIDs = new Set(ids.map((id) => id.toLowerCase()));
         window._clearedPassIDs = new Set(ids.map((id) => id.toLowerCase()));
@@ -4094,7 +4180,7 @@
       let text = "";
       try { text = JSON.stringify(body || {}); } catch (_) { return false; }
       const sealed = await sealStaffBody(text);
-      if (sealed.indexOf("whs2.") !== 0 || sealed.length > 900000) return false;
+      if (sealed.indexOf(STAFF_BODY_PREFIX) !== 0 || sealed.length > 900000) return false;
       const record = {
         recordType: CAMPUS_TYPE,
         recordName: "body." + id,
@@ -4125,7 +4211,7 @@
         let parsed = null;
         try { parsed = JSON.parse(await openStaffBody(fieldValue(body, "passIDs") || "")); } catch (_) { parsed = null; }
         if (!parsed) continue;
-        if (String(fieldValue(body, "passIDs") || "").indexOf("whs2.") !== 0 && verifiedStaffRole()) {
+        if (String(fieldValue(body, "passIDs") || "").indexOf(STAFF_BODY_PREFIX) !== 0 && verifiedStaffRole()) {
           await saveStaffPassBody(passRecordName(record), parsed);
         }
         record.fields = record.fields || {};
@@ -4137,20 +4223,46 @@
         else if (sig) record._passIcon = "data:image/jpeg;base64," + sig;
       }
     }
-    function rememberedPassCode(id) {
+    // Student codes are passwords. Teachers' browsers keep them only to finish locking a pass,
+    // so hold at most the 50 newest for 7 days.
+    const PASS_CODE_MAX_AGE = 7 * 24 * 60 * 60 * 1000;
+    const PASS_CODE_MAX_COUNT = 50;
+    function loadPassCodes() {
+      let map = {};
+      try { map = JSON.parse(localStorage.getItem("whsPassWebKeys") || "{}") || {}; } catch (_) { map = {}; }
+      const now = Date.now();
+      const rows = Object.keys(map).map((id) => {
+        const entry = map[id];
+        // Older saves stored a bare code; treat them as saved now so they age out normally.
+        if (typeof entry === "string") return [id, { c: entry, t: now }];
+        return [id, entry && typeof entry === "object" ? entry : { c: "", t: 0 }];
+      }).filter(([, entry]) => normalizeCode(entry.c).length === 10 && now - Number(entry.t || 0) <= PASS_CODE_MAX_AGE);
+      rows.sort((a, b) => Number(b[1].t) - Number(a[1].t));
+      return Object.fromEntries(rows.slice(0, PASS_CODE_MAX_COUNT));
+    }
+    function savePassCodes(map) {
       try {
-        const map = JSON.parse(localStorage.getItem("whsPassWebKeys") || "{}");
-        const code = normalizeCode(map[id] || "");
-        return code.length === 10 ? code : "";
-      } catch (_) { return ""; }
+        if (Object.keys(map).length) localStorage.setItem("whsPassWebKeys", JSON.stringify(map));
+        else localStorage.removeItem("whsPassWebKeys");
+      } catch (_) {}
+    }
+    function rememberedPassCode(id) {
+      const map = loadPassCodes();
+      savePassCodes(map);
+      const code = normalizeCode((map[id] && map[id].c) || "");
+      return code.length === 10 ? code : "";
     }
     function rememberPassCode(id, code) {
       const key = normalizeCode(code);
       if (!id || key.length !== 10) return;
-      let map = {};
-      try { map = JSON.parse(localStorage.getItem("whsPassWebKeys") || "{}"); } catch (_) { map = {}; }
-      map[id] = key;
-      localStorage.setItem("whsPassWebKeys", JSON.stringify(map));
+      const map = loadPassCodes();
+      const latest = Math.max(0, ...Object.values(map).map((entry) => Number(entry.t || 0)));
+      map[id] = { c: key, t: Math.max(Date.now(), latest + 1) };
+      savePassCodes(loadPassCodesFrom(map));
+    }
+    function loadPassCodesFrom(map) {
+      const rows = Object.entries(map).sort((a, b) => Number(b[1].t) - Number(a[1].t));
+      return Object.fromEntries(rows.slice(0, PASS_CODE_MAX_COUNT));
     }
     function dropPassFieldCache() {
       try {

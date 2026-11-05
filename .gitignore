@@ -1,18 +1,19 @@
+# This repo holds only the GitHub Pages website (docs/) and its deploy workflow.
+# Everything else here (the iOS app, design files, screenshots, notes) stays on this Mac.
+/*
+!/.gitignore
+!/.github/
+!/docs/
+
+# Local-only files inside the website folder
+docs/config.js
+docs/config.example.js
+docs/icon.svg
+
+# Never commit secrets or system files
 .DS_Store
 **/.DS_Store
-xcuserdata/
-*.xcuserstate
-DerivedData/
-.derived-ios26/
-.derived-seal/
-.build/
-*.moved-aside
-*.hmap
-*.ipa
-*.dSYM.zip
-*.dSYM
 .env
 .env.*
-docs/config.js
 *.p12
 *.mobileprovision
