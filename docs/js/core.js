@@ -4,10 +4,118 @@ let lang = localStorage.getItem("whsAdminLang") || "en";
 let view = "home";
 let configured = false;
 let staff = [];
-let profile = JSON.parse(localStorage.getItem("whsWebProfile") || "null");
+// The WHS Web Code is a password, so the browser never saves it. It saves a locked device key instead:
+// the AES key made from the code (kept in IndexedDB where scripts can use it but can't read it out)
+// and its record tag. While this browser session lasts, profile.key is the code itself so Show and
+// Copy code work; after the browser closes it's "whsk:<tag>", which unlocks the same records.
+const DEVICE_KEY_PREFIX = "whsk:";
+const SESSION_CODE = "whsSessionCode";
+const deviceKeys = new Map();
+function isKeyHandle(value) {
+  return /^whsk:[0-9a-f]{32}$/.test(String(value || ""));
+}
+// A typed code (normalized) or a saved device key, ready for deriveCodeKeys.
+function usableCode(value) {
+  return isKeyHandle(value) ? String(value) : normalizeCode(value);
+}
+function isUsableCode(value) {
+  const code = usableCode(value);
+  return isKeyHandle(code) || code.length === 10;
+}
+function openKeyStore() {
+  return new Promise((resolve) => {
+    try {
+      const request = indexedDB.open("whs-device-keys", 1);
+      request.onupgradeneeded = () => request.result.createObjectStore("keys");
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => resolve(null);
+      request.onblocked = () => resolve(null);
+    } catch (_) { resolve(null); }
+  });
+}
+async function keyStoreDo(mode, work) {
+  const db = await openKeyStore();
+  if (!db) return null;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction("keys", mode);
+      const request = work(tx.objectStore("keys"));
+      tx.oncomplete = () => { db.close(); resolve(request ? request.result : true); };
+      tx.onerror = () => { db.close(); resolve(null); };
+      tx.onabort = () => { db.close(); resolve(null); };
+    } catch (_) { db.close(); resolve(null); }
+  });
+}
+async function deviceKeyFor(handle) {
+  const tag = String(handle || "").slice(DEVICE_KEY_PREFIX.length);
+  if (deviceKeys.has(tag)) return deviceKeys.get(tag);
+  const key = await keyStoreDo("readonly", (store) => store.get(tag));
+  if (!key || typeof key !== "object" || !key.type) return null;
+  const found = { key, tag };
+  deviceKeys.set(tag, found);
+  return found;
+}
+// Keeps only this one key on the device. True when it was saved for later visits.
+async function saveDeviceKey(tag, key) {
+  const ok = await keyStoreDo("readwrite", (store) => { store.clear(); store.put(key, tag); return null; });
+  return ok === true;
+}
+async function clearDeviceKeys() {
+  deviceKeys.clear();
+  await keyStoreDo("readwrite", (store) => { store.clear(); return null; });
+}
+// Saves the profile without the code. With no saved device key it only lasts this browser session.
+function storeProfile() {
+  if (!profile) return;
+  const saved = { ...profile };
+  delete saved.keyHandle;
+  delete saved.keyStored;
+  if (saved.key && !isKeyHandle(saved.key)) {
+    if (!profile.keyHandle) return;
+    saved.key = profile.keyHandle;
+  }
+  const text = JSON.stringify(saved);
+  try {
+    if (!saved.key || profile.keyStored !== false) {
+      localStorage.setItem("whsWebProfile", text);
+      sessionStorage.removeItem("whsWebProfileSession");
+    } else {
+      sessionStorage.setItem("whsWebProfileSession", text);
+      localStorage.removeItem("whsWebProfile");
+    }
+  } catch (_) {}
+}
+// Call after the student types or gets a code: saves the device key, keeps the code for this
+// session only, then saves the profile.
+async function rememberProfileCode(code) {
+  const derived = await deriveCodeKeys(code);
+  if (!derived || !profile) return false;
+  deviceKeys.set(derived.tag, derived);
+  const stored = await saveDeviceKey(derived.tag, derived.key);
+  try { sessionStorage.setItem(SESSION_CODE, JSON.stringify({ tag: derived.tag, code: normalizeCode(code) })); } catch (_) {}
+  profile.keyHandle = DEVICE_KEY_PREFIX + derived.tag;
+  profile.keyStored = stored;
+  storeProfile();
+  return stored;
+}
+let profile = null;
+try {
+  const lasting = localStorage.getItem("whsWebProfile");
+  profile = JSON.parse(lasting || sessionStorage.getItem("whsWebProfileSession") || "null");
+  if (profile && typeof profile === "object" && !lasting) profile.keyStored = false;
+} catch (_) { profile = null; }
 if (profile && typeof profile === "object") {
   delete profile.staffProof;
   delete profile.staffEnrolled;
+  if (isKeyHandle(profile.key)) {
+    profile.keyHandle = profile.key;
+    try {
+      const session = JSON.parse(sessionStorage.getItem(SESSION_CODE) || "null");
+      if (session && DEVICE_KEY_PREFIX + session.tag === profile.key && normalizeCode(session.code).length === 10) {
+        profile.key = normalizeCode(session.code);
+      }
+    } catch (_) {}
+  }
 }
 let lunchReady = false;
 let deferredInstall = null;
@@ -28,7 +136,7 @@ function isGuest() {
   return !String(profile.key || "").trim();
 }
 function hasWebKey() {
-  return normalizeCode(profile && profile.key).length === 10;
+  return !!profile && isUsableCode(profile.key);
 }
 function isPairedStudent() {
   return currentRole() === "student" && hasWebKey() && !isGuest();
@@ -306,8 +414,8 @@ async function removeChromebookProfile() {
 // Profiles paired from the app belong to the app's iCloud account; the app deletes those.
 async function eraseOwnedProfileRecords(person) {
   if (!person || !person.cloudSaved) return true;
-  const key = normalizeCode(person.key);
-  if (key.length !== 10) return true;
+  const key = usableCode(person.key);
+  if (!isUsableCode(key)) return true;
   const profileName = await profileRecordName(key);
   const names = [profileName, await webPassLinkName(key)].concat(privateInboxNames(await privateCodeTag(key)));
   if (!ckWebAuthToken()) return "needsApple";
@@ -371,6 +479,7 @@ function forgetLocalProfile() {
     });
   } catch (_) {}
   forgetCodeKeys();
+  clearDeviceKeys();
   profile = null;
   window._ckUserRecordName = "";
   window._appleReady = false;
@@ -447,7 +556,7 @@ function rememberAppleUser(name) {
   window._ckUserRecordName = id;
   if (!profile || profile.appleUser === id) return;
   profile.appleUser = id;
-  try { localStorage.setItem("whsWebProfile", JSON.stringify(profile)); } catch (_) {}
+  storeProfile();
 }
 function dropStaleCloudSession() {
   window._ckUserRecordName = "";
@@ -754,7 +863,7 @@ function dropRemovedStaff() {
   if (!staff) return;
   if (hasWebKey() && !profile.guest) {
     profile.role = "student";
-    try { localStorage.setItem("whsWebProfile", JSON.stringify(profile)); } catch (_) {}
+    storeProfile();
     showGate();
     show(view || "home");
     return;
@@ -776,7 +885,7 @@ async function syncStaffRoleFromCloud() {
       window._verifiedStaffRole = looked.role;
       if (profile.role !== looked.role) {
         profile.role = looked.role;
-        try { localStorage.setItem("whsWebProfile", JSON.stringify(profile)); } catch (_) {}
+        storeProfile();
       }
       if (changed && view) show(view);
       return;

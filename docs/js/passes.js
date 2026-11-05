@@ -38,8 +38,8 @@ async function redactPassImages(id, sealedSignature) {
   }
 }
 async function revealStudentPasses(records, code) {
-  const key = normalizeCode(code);
-  if (key.length !== 10) return;
+  const key = usableCode(code);
+  if (!isUsableCode(key)) return;
   for (const record of records || []) {
     for (const field of ["studentName", "destination", "dates", "teacherName"]) {
       const raw = String(fieldValue(record, field) || "");
@@ -476,7 +476,7 @@ async function loadStudentPasses() {
   }
   try { await ensureCloud(); } catch (_) {}
   try {
-    const key = normalizeCode(profile.key);
+    const key = usableCode(profile.key);
     const profiles = await restLookupExact([await profileRecordName(key), await webPassLinkName(key)].concat(await studentInboxNames(key)));
     const ids = [...new Set(profiles.flatMap((record) => parsePassIDs(fieldValue(record, "passIDs"))))];
     const packed = await fetchByNames(cloudDb(), ids.concat(ids.flatMap((id) => [revokedName(id), tombstoneName(id)]), [CLEARED]));

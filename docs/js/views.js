@@ -231,7 +231,7 @@ function swipePage(url) {
 function saveGuestSwipe(dataUrl) {
   if (!profile || !isGuestStudent() || !dataUrl) return;
   profile.swipeCard = dataUrl;
-  localStorage.setItem("whsWebProfile", JSON.stringify(profile));
+  storeProfile();
 }
 function compressSwipePhoto(file) {
   return new Promise((resolve, reject) => {
@@ -394,7 +394,7 @@ function guestClassList() {
 function persistGuestClasses(classes) {
   if (!profile) return;
   profile.classes = classes;
-  localStorage.setItem("whsWebProfile", JSON.stringify(profile));
+  storeProfile();
   window._study = { classes, spanish: {}, english: {} };
 }
 

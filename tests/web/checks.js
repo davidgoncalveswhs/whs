@@ -142,6 +142,25 @@ window.runWhsChecks = async function runWhsChecks() {
     await privateCodeTag("ABCDE23456");
     forgetLocalProfile();
     check(codeKeyCache.size === 0, "signing out clears cached code keys");
+
+    // The browser saves a locked device key, never the code.
+    profile = { displayName: "T", firstName: "T", role: "student", key: "ABCDE23456", guest: true, cloudSaved: true, classes: [] };
+    const keptForLater = await rememberProfileCode("ABCDE23456");
+    const savedText = localStorage.getItem("whsWebProfile") || sessionStorage.getItem("whsWebProfileSession") || "";
+    check(keptForLater && savedText && !savedText.toUpperCase().includes("ABCDE23456") && JSON.parse(savedText).key === "whsk:5cc110d3709f3aa31942364a676d2032", "the saved profile holds a device key, not the code");
+    const handle = JSON.parse(savedText).key;
+    forgetCodeKeys();
+    check(await profileRecordName(handle) === "profile.v2.5cc110d3709f3aa31942364a676d2032", "the device key finds the same records after a restart");
+    check(await openSeal(handle, "whs1.C6t8uM5f3OYCmyozqyq6wi3pGxGATVjaoZi8K1GdfoL8wLmPdqmvDuvM92YQ2R2OxoseOGI/") === "Grade 10 · Señor García", "the device key opens the student's data");
+    const stored = await keyStoreDo("readonly", (store) => store.get("5cc110d3709f3aa31942364a676d2032"));
+    check(stored && stored.extractable === false, "the device key can't be read out of the browser");
+    profile.key = handle;
+    check(hasWebKey() && !guestWebCodeCard().includes("ABCDE") && guestWebCodeCard().includes(t().webCodeNotKept), "after the browser closes, More shows a note instead of the code");
+    profile.key = "ABCDE23456";
+    check(guestWebCodeCard().includes('data-action="toggleWebCode"'), "during the session the code can still be shown");
+    forgetLocalProfile();
+    await sleep(150);
+    check(!(await keyStoreDo("readonly", (store) => store.count())) && !sessionStorage.getItem("whsSessionCode"), "signing out removes the device key and the session code");
     profile = { displayName: "T", firstName: "T", role: "student", key: "ABCDE23456", classes: [] };
     let askedFor = [];
     stub("fetchByNames", async (db, names) => { askedFor = names; return []; });

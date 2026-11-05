@@ -90,6 +90,7 @@ const CODE_KDF_SALT = new TextEncoder().encode("whs-code-v2");
 const CODE_KDF_ROUNDS = 150000;
 const codeKeyCache = new Map();
 function deriveCodeKeys(code) {
+  if (isKeyHandle(code)) return deviceKeyFor(code);
   const compact = normalizeCode(code);
   if (compact.length !== 10) return Promise.resolve(null);
   if (!codeKeyCache.has(compact)) {
@@ -109,6 +110,7 @@ function deriveCodeKeys(code) {
 // Drops every cached code key, e.g. on sign-out.
 function forgetCodeKeys() {
   codeKeyCache.clear();
+  deviceKeys.clear();
 }
 async function sealKey(code) {
   const derived = await deriveCodeKeys(code);
@@ -235,7 +237,7 @@ async function openStaffBody(stored) {
 // stores the text in the clear.
 async function sealText(code, plain) {
   const text = String(plain || "");
-  if (!text || normalizeCode(code).length !== 10) return "";
+  if (!text || !isUsableCode(code)) return "";
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const cipher = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await sealKey(code), new TextEncoder().encode(text)));
   const blob = new Uint8Array(iv.length + cipher.length);

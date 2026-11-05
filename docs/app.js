@@ -230,7 +230,7 @@ async function enterWithCode() {
       grade: secrets.grade || "",
       key
     };
-    localStorage.setItem("whsWebProfile", JSON.stringify(profile));
+    await rememberProfileCode(key);
     applyAvatar(secrets.photo);
     showGate();
     show("home");
@@ -302,7 +302,8 @@ document.body.addEventListener("click", (event) => {
     if (name === "askResetWebCode") askResetWebCode();
     if (name === "confirmResetWebCode") resetWebCode();
     if (name === "copyWebCode") {
-      const formatted = formatWebKey(profile && profile.key);
+      if (!profile || isKeyHandle(profile.key)) return;
+      const formatted = formatWebKey(profile.key);
       const button = document.getElementById("copyWebCode");
       const done = () => {
         if (button) button.textContent = t().webCodeCopied;
@@ -536,8 +537,9 @@ async function enterGuest() {
     const key = savedKey || makeWebUnlockKey();
     if (finish) finish.disabled = false;
     profile = { displayName: name, firstName: name, role: "student", grade, key, guest: true, cloudSaved: !!savedKey, classes: [] };
+    await rememberProfileCode(key);
   }
-  localStorage.setItem("whsWebProfile", JSON.stringify(profile));
+  storeProfile();
   applyAvatar("");
   showGate();
   show("home");
@@ -578,7 +580,7 @@ async function finishPendingGuestStaff() {
     guest: true,
     appleUser
   };
-  localStorage.setItem("whsWebProfile", JSON.stringify(profile));
+  storeProfile();
   applyAvatar("");
   showGate();
   show("home");
@@ -589,6 +591,18 @@ window.openAide = openAide;
 window.openPassesInfo = openPassesInfo;
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("./sw.js").catch(() => {});
+}
+// Browsers that saved the code itself (older versions) switch to the locked device key once.
+if (profile && !isKeyHandle(profile.key) && normalizeCode(profile.key).length === 10) {
+  rememberProfileCode(profile.key).catch(() => {});
+}
+// If the device key is gone (site data partly cleared), the profile can't unlock anything; sign out.
+if (profile && isKeyHandle(profile.key)) {
+  deviceKeyFor(profile.key).then((found) => {
+    if (found || !profile || !isKeyHandle(profile.key)) return;
+    forgetLocalProfile();
+    showGate();
+  }).catch(() => {});
 }
 showGate();
 if (signedIn()) {

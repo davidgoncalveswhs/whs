@@ -235,7 +235,7 @@ async function applyPassIcons(records) {
   if (rest.length) {
     try { (await restLookupExact(rest)).forEach((record) => rememberPassIconChunk(grouped, record)); } catch (_) {}
   }
-  const code = normalizeCode(profile && profile.key);
+  const code = usableCode(profile && profile.key);
   for (const record of missing) {
     const rawParts = (grouped[record.recordName] || []).filter(Boolean);
     const parts = [];
@@ -243,7 +243,7 @@ async function applyPassIcons(records) {
     for (const part of rawParts) {
       if (part === "whs0.") { broken = true; break; }
       if (String(part).indexOf("whs1.") === 0) {
-        if (code.length !== 10) { broken = true; break; }
+        if (!isUsableCode(code)) { broken = true; break; }
         const open = await openSeal(code, part);
         if (!open) { broken = true; break; }
         parts.push(open);

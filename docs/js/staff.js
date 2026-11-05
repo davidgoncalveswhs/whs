@@ -422,7 +422,7 @@ async function ensureGuestStudentProfile() {
   profile.key = key;
   profile.guest = true;
   if (!profile.role || profile.role === "guest") profile.role = "student";
-  localStorage.setItem("whsWebProfile", JSON.stringify(profile));
+  await rememberProfileCode(key);
 }
 function askResetWebCode() {
   const c = t();
@@ -464,7 +464,7 @@ async function resetWebCode() {
     }
     profile.key = next;
     profile.cloudSaved = !!ckWebAuthToken();
-    localStorage.setItem("whsWebProfile", JSON.stringify(profile));
+    await rememberProfileCode(next);
     dropPassFieldCache();
     window._studentPassUsable = [];
     closeSheet();
@@ -494,12 +494,14 @@ function setWebCodeShown(shown) {
 function guestWebCodeCard() {
   const c = t();
   if (!isGuestStudent() || !hasWebKey()) return "";
+  // After the browser closes, only the locked device key is left, so the code can't be shown.
+  const kept = !isKeyHandle(profile.key);
   return `<div class="card wide">
       <div class="t">${c.webCodeTitle}</div>
-      ${webCodeValueHTML()}
+      ${kept ? webCodeValueHTML() : `<p class="muted" style="margin:6px 0 10px;">${c.webCodeNotKept}</p>`}
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button class="ghost" type="button" data-action="toggleWebCode" id="toggleWebCode" aria-controls="webCodeValue">${window._webCodeShown ? c.webCodeHide : c.webCodeShow}</button>
-        <button class="ghost" type="button" data-action="copyWebCode" id="copyWebCode">${c.webCodeCopy}</button>
+        ${kept ? `<button class="ghost" type="button" data-action="toggleWebCode" id="toggleWebCode" aria-controls="webCodeValue">${window._webCodeShown ? c.webCodeHide : c.webCodeShow}</button>
+        <button class="ghost" type="button" data-action="copyWebCode" id="copyWebCode">${c.webCodeCopy}</button>` : ""}
         <button class="ghost" type="button" data-action="askResetWebCode" style="color:#B42318;">${c.webCodeReset}</button>
       </div>
     </div>`;
