@@ -846,8 +846,6 @@
         signOutCancel: "Keep profile",
         signOutConfirm: "Delete profile",
         signOutCloudSkipped: "This device profile is deleted. The school site copy was not removed because Apple sign-in was not active in this browser. Sign in with Apple on this device and delete the profile again to remove it from the school site.",
-        studentPrivacyTitle: "Student privacy",
-        studentPrivacyNotice: "Student information is used only for Watertown High School. WHS does not sell student information, show ads based on students, or use student information outside of school. The site stores the student's name, role, web code, grade, photo, ID photo, study notes, and hallway or Flex passes. The web code is both the password and the lock. Grade, photo, ID photo, study notes, and a pass sent to that code use that same code. A person who has the code can open that student. Enrolled teachers and administrators can see the passes they need for school. The web code works like a password. Sign out on a shared computer. Delete this device profile removes it from this device and asks the school site to remove that student's web profile, photo, and ID photo. Hallway and Flex passes stay in the staff log because they are school records. The school can clear that log. This service is for Watertown High School students. It is not directed to children under 13. A parent or the school can ask Watertown Public Schools to review or delete a student's information. Records that leave the device are stored by Apple in iCloud for this school service. The website is hosted on GitHub Pages and does not keep its own student file. If student information is exposed, WHS tells the school, and the school handles the notice Connecticut law requires. School-wide use requires a written agreement with the Watertown Board of Education.",
         admin: "Administrator",
         adminHint: "CloudKit API token. Students can ignore this. The pass log stays in this menu.",
         token: "CloudKit API token",
@@ -1098,8 +1096,6 @@
         signOutCancel: "Conservar perfil",
         signOutConfirm: "Eliminar perfil",
         signOutCloudSkipped: "El perfil de este dispositivo se eliminó. La copia del sitio de la escuela no se quitó porque el inicio de sesión con Apple no estaba activo en este navegador. Entra con Apple en este dispositivo y elimina el perfil otra vez para quitarlo del sitio de la escuela.",
-        studentPrivacyTitle: "Privacidad del estudiante",
-        studentPrivacyNotice: "La información del estudiante se usa solo para Watertown High School. WHS no vende información de estudiantes, no muestra anuncios basados en estudiantes y no usa esa información fuera de la escuela. El sitio guarda el nombre, el rol, el código web, el grado, la foto, la foto del ID, las notas de estudio y los pases de pasillo o Flex. El código web es la contraseña y el candado. El grado, la foto, la foto del ID, las notas de estudio y un pase enviado a ese código usan ese mismo código. Quien tiene el código puede abrir a ese estudiante. Los maestros y administradores inscritos pueden ver los pases que necesitan para la escuela. El código web funciona como una contraseña. Cierra sesión en una computadora compartida. Eliminar este perfil del dispositivo lo borra de este dispositivo y pide al sitio de la escuela que elimine el perfil web, la foto y la foto del ID de ese estudiante. Los pases de pasillo y Flex permanecen en el registro del personal porque son registros de la escuela. La escuela puede borrar ese registro. Este servicio es para estudiantes de Watertown High School. No está dirigido a niños menores de 13 años. Un padre o la escuela puede pedir a Watertown Public Schools que revise o elimine la información de un estudiante. Los registros que salen del dispositivo los guarda Apple en iCloud para este servicio escolar. El sitio web está en GitHub Pages y no guarda su propio archivo del estudiante. Si se expone información de un estudiante, WHS avisa a la escuela, y la escuela hace el aviso que exige la ley de Connecticut. El uso en toda la escuela requiere un acuerdo por escrito con la Junta de Educación de Watertown.",
         admin: "Administrador",
         adminHint: "Token de API de CloudKit. Los estudiantes pueden ignorar esto. El registro de pases está en este menú.",
         token: "Token de API de CloudKit",
@@ -3172,7 +3168,6 @@
           ${adminTools}
           ${guestWebCodeCard()}
           ${isGuest() ? `${guestHomeCard()}<button class="card action" type="button" data-action="useCode"><div class="t">${c.useCode}</div></button>` : ""}
-          <div class="card wide"><b>${c.studentPrivacyTitle}</b><p class="muted">${c.studentPrivacyNotice}</p></div>
           <button class="card action" type="button" id="signOutProfile">${c.signOut}</button>
         </div>`;
       const tokenEl = document.getElementById("token");
