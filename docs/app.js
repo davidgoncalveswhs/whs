@@ -631,6 +631,9 @@ if ("serviceWorker" in navigator) {
 const SESSION_IDLE_MS = 30 * 60 * 1000;
 // Only real input counts: a page left open (or reopened by the browser) never extends either limit.
 function noteActivity() {
+  // Check the deadlines first: a device waking after the limit must sign out, not renew.
+  checkStudentIdle();
+  if (!profile) return;
   try { sessionStorage.setItem("whsLastActive", String(Date.now())); } catch (_) {}
   // A kept device key's 180 days restart only when the student actually uses the site (at most hourly).
   if (profile && profile.key && profile.keyStored !== false && !profile.sealed && currentRole() === "student"

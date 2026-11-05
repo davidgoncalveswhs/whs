@@ -215,6 +215,14 @@ window.runWhsChecks = async function runWhsChecks() {
     check(profile && profile.seenAt === seenBefore, "an open page with no input doesn't restart the 180 days");
     noteActivity();
     check(profile && profile.seenAt > seenBefore, "real input restarts the 180 days");
+    profile = { displayName: "T", firstName: "T", role: "student", key: "whsk:" + "1".repeat(32), guest: false, classes: [], seenAt: Date.now() - 181 * 86400000 };
+    noteActivity();
+    check(profile === null, "a device waking after 180 days is signed out by its first tap, not renewed");
+    profile = { displayName: "T", firstName: "T", role: "student", key: "ABCDE23456", guest: true, cloudSaved: false, classes: [], keyStored: false };
+    sessionStorage.setItem("whsLastActive", String(Date.now() - 31 * 60000));
+    noteActivity();
+    check(profile === null, "a session waking after 30 idle minutes is signed out by its first tap, not renewed");
+    gateError.textContent = "";
     profile = null;
 
     // Signing out in another tab signs this one out too.
