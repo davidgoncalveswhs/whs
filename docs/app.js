@@ -229,6 +229,13 @@ const copy = {
     passNoDate: "No date",
     revoked: "Revoked",
     revokePass: "Revoke pass",
+    deletePass: "Delete pass",
+    deletePassTitle: "Delete this pass permanently?",
+    deletePassBody: "Use this when the school or a parent asks to delete a student's records. The pass, its staff copy, and its signature are deleted, and it disappears from the student's iPhone and website. This can't be undone. The audit log keeps a note that it was deleted, without the student's name.",
+    deletePassCancel: "Keep pass",
+    deletePassWorking: "Deleting…",
+    deletePassFail: "The pass wasn't deleted. Only administrators can delete passes. Check your connection and try again.",
+    auditDelete: "Deleted a pass",
     revokePassTitle: "Revoke this pass?",
     revokePassBody: "It will leave the student's iPhone and website. It stays in this log as revoked.",
     revokePassFail: "Could not revoke that pass.",
@@ -508,6 +515,13 @@ const copy = {
     passNoDate: "Sin fecha",
     revoked: "Revocado",
     revokePass: "Revocar pase",
+    deletePass: "Eliminar pase",
+    deletePassTitle: "¿Eliminar este pase para siempre?",
+    deletePassBody: "Úsalo cuando la escuela o un padre pida eliminar los registros de un estudiante. Se eliminan el pase, su copia del personal y su firma, y desaparece del iPhone y del sitio del estudiante. No se puede deshacer. El registro de auditoría guarda una nota de que se eliminó, sin el nombre del estudiante.",
+    deletePassCancel: "Mantener pase",
+    deletePassWorking: "Eliminando…",
+    deletePassFail: "El pase no se eliminó. Solo los administradores pueden eliminar pases. Revisa tu conexión e inténtalo de nuevo.",
+    auditDelete: "Eliminó un pase",
     revokePassTitle: "¿Revocar este pase?",
     revokePassBody: "Saldrá del iPhone y del sitio del estudiante. Se queda en este registro como revocado.",
     revokePassFail: "No se pudo revocar ese pase.",
@@ -1819,6 +1833,48 @@ function showRevokePassError(kind) {
   openSheet(`
     <div class="card-title"><b>${needApple ? c.revokePassNeedApple : c.revokePassFail}</b><button type="button" data-action="closeSheet">${c.close}</button></div>`);
 }
+// Administrators can permanently delete one pass, for example when a parent or the school asks to
+// delete a student's records. CloudKit only lets the WHSAdmin role delete other staff's passes.
+function confirmDeletePass(id) {
+  if (!canClearPassLog()) return;
+  const c = t();
+  openSheet(`
+    <div class="card-title"><b>${c.deletePassTitle}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
+    <p class="muted">${c.deletePassBody}</p>
+    <p class="error" id="deletePassError"></p>
+    <button class="primary" type="button" data-action="closeSheet">${c.deletePassCancel}</button>
+    <button class="ghost" type="button" data-action="deletePass" data-pass-id="${escapeHtml(id || "")}" id="deletePassConfirm" style="width:100%;margin-top:8px;color:#B42318;">${c.deletePass}</button>`);
+}
+async function handleDeletePass(id) {
+  const unique = String(id || "").trim();
+  if (!canClearPassLog() || !unique || window._deletePassBusy) return;
+  const c = t();
+  const err = document.getElementById("deletePassError");
+  const button = document.getElementById("deletePassConfirm");
+  window._deletePassBusy = true;
+  if (button) { button.disabled = true; button.textContent = c.deletePassWorking; }
+  try {
+    await ensureCloud();
+    watchAppleSignIn();
+    if (!(await ensureSavedStaffSession())) throw Object.assign(new Error("APPLE"), { apple: true });
+    if ((await requireEnrolledStaff()) !== "administrator") throw new Error("STAFF");
+    await auditLog("delete_pass", [unique]);
+    // Revoked marker first, so students' phones and the website drop their copies.
+    await markPassesRevoked([unique]);
+    await saveClearedPassIDs([unique]);
+    await deletePassData([unique], false);
+    window._passLogList = (window._passLogList || []).filter((record) => passRecordName(record) !== unique);
+    if (window._passRecords) delete window._passRecords[unique];
+    closeSheet();
+    if (view === "passes") paintPassLog();
+  } catch (error) {
+    const apple = (error && error.apple) || (error && error.message === "APPLE") || isAuthError(error);
+    if (err) err.textContent = apple ? c.revokePassNeedApple : c.deletePassFail;
+    if (button) { button.disabled = false; button.textContent = c.deletePass; }
+  } finally {
+    window._deletePassBusy = false;
+  }
+}
 function confirmRevokePass(id) {
   if (!canRevokePass()) return;
   const c = t();
@@ -2116,7 +2172,8 @@ function auditActionLabel(action) {
     issue_pass: c.auditIssue,
     revoke_pass: c.auditRevoke,
     clear_log: c.auditClear,
-    view_audit: c.auditViewAudit
+    view_audit: c.auditViewAudit,
+    delete_pass: c.auditDelete
   })[action] || action;
 }
 function paintAuditLog(message) {
@@ -2304,7 +2361,7 @@ async function collectCampusPassIDs() {
 }
 // Clearing means deleting: remove each pass, its staff copy, and its images.
 // Only the empty "revoked." markers stay, so student devices drop their copies.
-async function deletePassData(ids) {
+async function deletePassData(ids, clearArchive) {
   const names = [];
   ids.forEach((id) => names.push(id, "body." + id, "seal." + id));
   for (let start = 0; start < ids.length; start += 180) {
@@ -2317,7 +2374,7 @@ async function deletePassData(ids) {
       for (let i = 0; i < count; i += 1) names.push(base + "." + i);
     });
   }
-  names.push(CAMPUS_ARCHIVE);
+  if (clearArchive) names.push(CAMPUS_ARCHIVE);
   for (let start = 0; start < names.length; start += 40) {
     const ops = names.slice(start, start + 40).map((recordName) => ({ operationType: "forceDelete", record: { recordName } }));
     try { await restModifyOps(ops); } catch (_) {}
@@ -2371,7 +2428,7 @@ async function handleClearPassLog() {
     }
     showPassWipeProgress(92, c.adminPassWipeStepEmpty, "", false, false);
     await emptyPassManifest();
-    if (ids.length) await deletePassData(ids);
+    if (ids.length) await deletePassData(ids, true);
     window._passLogList = [];
     window._revokedPassIDs = new Set(ids.map((id) => id.toLowerCase()));
     window._clearedPassIDs = new Set(ids.map((id) => id.toLowerCase()));
@@ -4530,6 +4587,9 @@ function openPass(id) {
       ? `<p class="muted" style="margin-top:12px;">${c.revokePassDone}</p>`
       : `<button class="ghost" type="button" data-action="askRevokePass" data-pass-id="${escapeHtml(id)}" style="width:100%;margin-top:12px;color:#B42318;">${c.revokePass}</button>`;
   }
+  if (view === "passes" && canClearPassLog()) {
+    extra += `<button class="ghost" type="button" data-action="askDeletePass" data-pass-id="${escapeHtml(id)}" style="width:100%;margin-top:8px;color:#B42318;">${c.deletePass}</button>`;
+  }
   openSheet(`
     <div class="card-title"><button type="button" data-action="closeSheet">${c.close}</button></div>
     ${passPaper(record, true)}
@@ -5537,6 +5597,8 @@ document.body.addEventListener("click", (event) => {
     if (name === "addHome") showAddHome();
     if (name === "installHome") promptInstallHome();
     if (name === "openPass" || name === "openStudentPass") openPass(action.dataset.passId || "");
+    if (name === "askDeletePass") confirmDeletePass(action.dataset.passId || "");
+    if (name === "deletePass") handleDeletePass(action.dataset.passId || "");
     if (name === "askRevokePass") confirmRevokePass(action.dataset.passId || "");
     if (name === "revokePass") handleRevokePass(action.dataset.passId || "");
     if (name === "askClearPassLog") confirmClearPassLog();
