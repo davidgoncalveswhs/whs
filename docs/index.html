@@ -8,6 +8,8 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="WHS">
+  <meta name="referrer" content="no-referrer">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.apple-cloudkit.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; media-src 'self' data: blob:; connect-src 'self' https://*.apple-cloudkit.com https://*.icloud.com https://*.icloud-content.com https://*.apple.com; frame-src 'self' blob: https://*.apple.com https://*.icloud.com; worker-src 'self'; manifest-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'">
   <title>WHS</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./favicon.png" type="image/png" sizes="32x32">
@@ -702,6 +704,7 @@
         useCode: "Use my WHS Web Code",
         webCodeTitle: "WHS Web Code",
         webCodeGuestHint: "Show this to a teacher so they can issue a hallway or Flex pass to this device.",
+        guestCloudNote: "This code is the password for this student. Show it to a teacher to issue a pass. The school site then stores the student's name with that code. Anyone who has the code can open that student.",
         webCodeCopy: "Copy code",
         webCodeCopied: "Copied",
         webCodeSaveFail: "Could not save your web code. Check the school connection and try again.",
@@ -840,6 +843,9 @@
         signOutBody: "This deletes your name, web code, swipe photo, ID photo, and Apple sign-in from this device, and removes this profile from the school site.",
         signOutCancel: "Keep profile",
         signOutConfirm: "Delete profile",
+        signOutCloudSkipped: "This device profile is deleted. The school site copy was not removed because Apple sign-in was not active in this browser. Sign in with Apple on this device and delete the profile again to remove it from the school site.",
+        studentPrivacyTitle: "Student privacy",
+        studentPrivacyNotice: "Student information is used only for Watertown High School. WHS does not sell student information, show ads based on students, or use student information outside of school. The site stores the student's name, role, web code, grade, photo, ID photo, study notes, and hallway or Flex passes. The web code is both the password and the lock. Grade, photo, ID photo, study notes, and a pass sent to that code use that same code. A person who has the code can open that student. Enrolled teachers and administrators can see the passes they need for school. The web code works like a password. Sign out on a shared computer. Delete this device profile removes it from this device and asks the school site to remove that student's web profile, photo, and ID photo. Hallway and Flex passes stay in the staff log because they are school records. The school can clear that log. This service is for Watertown High School students. It is not directed to children under 13. A parent or the school can ask Watertown Public Schools to review or delete a student's information. Records that leave the device are stored by Apple in iCloud for this school service. The website is hosted on GitHub Pages and does not keep its own student file. If student information is exposed, WHS tells the school, and the school handles the notice Connecticut law requires. School-wide use requires a written agreement with the Watertown Board of Education.",
         admin: "Administrator",
         adminHint: "CloudKit API token. Students can ignore this. The pass log stays in this menu.",
         token: "CloudKit API token",
@@ -950,6 +956,7 @@
         useCode: "Usar mi código web WHS",
         webCodeTitle: "Código web WHS",
         webCodeGuestHint: "Muéstralo a un maestro para que emita un pase de pasillo o Flex a este dispositivo.",
+        guestCloudNote: "Este código es la contraseña de este estudiante. Muéstralo a un maestro para emitir un pase. El sitio de la escuela guarda el nombre del estudiante con ese código. Quien tiene el código puede abrir a ese estudiante.",
         webCodeCopy: "Copiar código",
         webCodeCopied: "Copiado",
         webCodeSaveFail: "No se pudo guardar tu código web. Revisa la conexión de la escuela e inténtalo de nuevo.",
@@ -1088,6 +1095,9 @@
         signOutBody: "Esto borra tu nombre, código web, foto de Tarjeta Swipe, foto del ID y el inicio de sesión de Apple de este dispositivo, y elimina este perfil del sitio de la escuela.",
         signOutCancel: "Conservar perfil",
         signOutConfirm: "Eliminar perfil",
+        signOutCloudSkipped: "El perfil de este dispositivo se eliminó. La copia del sitio de la escuela no se quitó porque el inicio de sesión con Apple no estaba activo en este navegador. Entra con Apple en este dispositivo y elimina el perfil otra vez para quitarlo del sitio de la escuela.",
+        studentPrivacyTitle: "Privacidad del estudiante",
+        studentPrivacyNotice: "La información del estudiante se usa solo para Watertown High School. WHS no vende información de estudiantes, no muestra anuncios basados en estudiantes y no usa esa información fuera de la escuela. El sitio guarda el nombre, el rol, el código web, el grado, la foto, la foto del ID, las notas de estudio y los pases de pasillo o Flex. El código web es la contraseña y el candado. El grado, la foto, la foto del ID, las notas de estudio y un pase enviado a ese código usan ese mismo código. Quien tiene el código puede abrir a ese estudiante. Los maestros y administradores inscritos pueden ver los pases que necesitan para la escuela. El código web funciona como una contraseña. Cierra sesión en una computadora compartida. Eliminar este perfil del dispositivo lo borra de este dispositivo y pide al sitio de la escuela que elimine el perfil web, la foto y la foto del ID de ese estudiante. Los pases de pasillo y Flex permanecen en el registro del personal porque son registros de la escuela. La escuela puede borrar ese registro. Este servicio es para estudiantes de Watertown High School. No está dirigido a niños menores de 13 años. Un padre o la escuela puede pedir a Watertown Public Schools que revise o elimine la información de un estudiante. Los registros que salen del dispositivo los guarda Apple en iCloud para este servicio escolar. El sitio web está en GitHub Pages y no guarda su propio archivo del estudiante. Si se expone información de un estudiante, WHS avisa a la escuela, y la escuela hace el aviso que exige la ley de Connecticut. El uso en toda la escuela requiere un acuerdo por escrito con la Junta de Educación de Watertown.",
         admin: "Administrador",
         adminHint: "Token de API de CloudKit. Los estudiantes pueden ignorar esto. El registro de pases está en este menú.",
         token: "Token de API de CloudKit",
@@ -1442,7 +1452,11 @@
     function removeChromebookProfile() {
       const person = profile;
       closeSheet();
-      eraseOwnedProfileRecords(person).catch(() => {}).then(() => {
+      eraseOwnedProfileRecords(person).then((removed) => {
+        forgetLocalProfile();
+        showGate();
+        if (removed === false && gateError) gateError.textContent = t().signOutCloudSkipped;
+      }).catch(() => {
         forgetLocalProfile();
         showGate();
       });
@@ -1459,19 +1473,25 @@
       }
       const unique = [...new Set(names.filter(Boolean))];
       if (!unique.length) return;
-      let found = [];
-      try {
-        found = (await restLookupExact(unique)).map((record) => String(record.recordName || "")).filter(Boolean);
-      } catch (_) {}
-      const targets = [...new Set(found.concat(key.length === 10 ? [key, "webpass." + key] : []))];
+      let foundRecords = [];
+      try { foundRecords = await restLookupExact(unique); } catch (_) {}
+      foundRecords.forEach((record) => {
+        if (normalizeCode(record.recordName) !== key) return;
+        parsePassIDs(fieldValue(record, "passIDs")).forEach((id) => names.push("seal." + id));
+      });
+      const found = foundRecords.map((record) => String(record.recordName || "")).filter(Boolean);
+      const seals = names.filter((name) => name.indexOf("seal.") === 0);
+      const targets = [...new Set(found.concat(seals).concat(key.length === 10 ? [key, "webpass." + key] : []))];
+      if (!targets.length) return true;
+      if (!ckWebAuthToken()) return false;
       for (let start = 0; start < targets.length; start += 40) {
         const ops = targets.slice(start, start + 40).map((recordName) => ({
           operationType: "forceDelete",
           record: { recordName }
         }));
-        if (!ckWebAuthToken()) continue;
         try { await restModifyOps(ops); } catch (_) {}
       }
+      return true;
     }
     function forgetLocalProfile() {
       try {
@@ -1487,7 +1507,15 @@
       const expires = "expires=Thu, 01 Jan 1970 00:00:00 GMT";
       document.cookie = CONTAINER + "=; " + expires + "; path=/";
       document.cookie = CONTAINER + "=; " + expires + "; path=";
-      try { localStorage.removeItem("whsWebProfile"); } catch (_) {}
+      try {
+        const drop = [];
+        for (let i = 0; i < localStorage.length; i += 1) {
+          const name = localStorage.key(i);
+          if (name === "whsPassWebKeys" || (name && name.indexOf("whsPassCache:") === 0)) drop.push(name);
+        }
+        drop.forEach((name) => localStorage.removeItem(name));
+        localStorage.removeItem("whsWebProfile");
+      } catch (_) {}
       try { localStorage.removeItem("whsNewsIds"); } catch (_) {}
       try {
         Object.keys(sessionStorage).forEach((key) => {
@@ -1924,23 +1952,18 @@
     }
     async function createPassRecord(record, operation) {
       const op = operation || "create";
-      if (ckWebAuthToken()) {
-        try {
-          if (op === "create") {
-            const saved = await ckCreateNews(record);
-            if (saved) return saved;
-          }
-        } catch (error) {
-          if (!(error && (error.apple || isAuthError(error)))) throw error;
-        }
-        try {
-          const saved = await restModify(record, op);
+      requireCloudWrite();
+      try {
+        if (op === "create") {
+          const saved = await ckCreateNews(record);
           if (saved) return saved;
-        } catch (error) {
-          if (!(error && (error.apple || isAuthError(error)))) throw error;
         }
+      } catch (error) {
+        if (!(error && (error.apple || isAuthError(error)))) throw error;
       }
-      return restModifySchool(record, op);
+      const saved = await restModify(record, op);
+      if (saved) return saved;
+      throw Object.assign(new Error("FAIL"), { reason: "create" });
     }
     function keepAppleSessionFresh() {
       if (window._appleKeepalive) return;
@@ -2098,6 +2121,36 @@
       const raw = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("whs-seal-v1:" + normalizeCode(code)));
       return crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
     }
+    async function staffBodyKey() {
+      const raw = await crypto.subtle.digest("SHA-256", new TextEncoder().encode("whs-staff-body-v1"));
+      return crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
+    }
+    async function sealStaffBody(plain) {
+      const text = String(plain || "");
+      if (!text) return "";
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const cipher = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await staffBodyKey(), new TextEncoder().encode(text)));
+      const blob = new Uint8Array(iv.length + cipher.length);
+      blob.set(iv, 0);
+      blob.set(cipher, iv.length);
+      return "whs2." + bytesToBase64(blob);
+    }
+    async function openStaffBody(stored) {
+      const raw = String(stored || "");
+      if (raw.indexOf("whs2.") !== 0) return raw;
+      try {
+        const blob = base64ToBytes(raw.slice(5));
+        if (blob.length <= 28) return "";
+        const clear = await crypto.subtle.decrypt(
+          { name: "AES-GCM", iv: blob.slice(0, 12) },
+          await staffBodyKey(),
+          blob.slice(12)
+        );
+        return new TextDecoder().decode(clear);
+      } catch (_) {
+        return "";
+      }
+    }
     async function sealText(code, plain) {
       const text = String(plain || "");
       if (!text || normalizeCode(code).length !== 10) return text;
@@ -2186,24 +2239,8 @@
       if (ckWebAuthToken()) return true;
       throw Object.assign(new Error("APPLE"), { apple: true, serverErrorCode: "AUTHENTICATION_REQUIRED" });
     }
-    async function restModifySchool(record, operationType) {
-      const token = schoolToken();
-      if (!token || !record || !record.recordName) return null;
-      const url = restPublicUrl("records/modify", true);
-      const response = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          operations: [{
-            operationType: operationType || "create",
-            record
-          }]
-        })
-      });
-      const payload = await response.json();
-      const records = recordsFrom(payload).filter(usableRecord);
-      if (records.length) return records[0];
-      throw cloudRecordError(payload, payload.records && payload.records[0]);
+    async function restModifySchool() {
+      throw Object.assign(new Error("APPLE"), { apple: true, serverErrorCode: "AUTHENTICATION_REQUIRED" });
     }
     async function restModify(record, operationType) {
       await refreshCloudAuth();
@@ -2394,9 +2431,9 @@
       const key = id.toLowerCase();
       const kind = String(fieldValue(record, "kind") || "").toLowerCase();
       if (!id || key === MANIFEST.toLowerCase() || key === CLEARED.toLowerCase() || key === CAMPUS_LOG.toLowerCase() || key === CAMPUS_CLEARED.toLowerCase() || key === NEWS_MANIFEST.toLowerCase()) return true;
-      if (key.indexOf("cleared.") === 0 || key.indexOf("revoked.") === 0 || key.indexOf("news.") === 0 || key.indexOf("newsimg.") === 0 || key.indexOf("webpass.") === 0 || key.indexOf("passimg.") === 0 || key.indexOf("inbox.") === 0) return true;
+      if (key.indexOf("cleared.") === 0 || key.indexOf("revoked.") === 0 || key.indexOf("news.") === 0 || key.indexOf("newsimg.") === 0 || key.indexOf("webpass.") === 0 || key.indexOf("passimg.") === 0 || key.indexOf("inbox.") === 0 || key.indexOf("body.") === 0) return true;
       if (isGateRecordName(id)) return true;
-      if (kind === "cleared" || kind === "revoked" || kind === "news" || kind === "newsimg" || kind === "webpass" || kind === "passimg" || kind === "inbox" || kind === "staffgate" || kind === "wipegate" || kind === "staffuser" || kind === "manifest" || kind === "nfchomework" || kind === "nfccourse") return true;
+      if (kind === "cleared" || kind === "revoked" || kind === "news" || kind === "newsimg" || kind === "webpass" || kind === "passimg" || kind === "inbox" || kind === "staffgate" || kind === "wipegate" || kind === "staffuser" || kind === "manifest" || kind === "body" || kind === "nfchomework" || kind === "nfccourse") return true;
       return false;
     }
     function isRevokedFlag(record) {
@@ -2704,7 +2741,7 @@
       closeSheet();
     }
     async function allocateGuestStudentKey(person) {
-      if (!schoolToken()) return "";
+      if (!schoolToken() || !ckWebAuthToken()) return "";
       try { await ensureCloud(); } catch (_) {}
       for (let i = 0; i < 8; i += 1) {
         const key = makeWebUnlockKey();
@@ -2719,23 +2756,15 @@
         };
         if (String(sealedGrade).indexOf("whs1.") === 0) fields.gradeSeal = { value: sealedGrade };
         try {
-          await restModifySchool({
+          await restModify({
             recordType: "WHSWebProfile",
             recordName: key,
             fields
           }, "create");
-        } catch (_) {
-          try {
-            await restModify({
-              recordType: "WHSWebProfile",
-              recordName: key,
-              fields
-            }, "create");
-          } catch (_) {}
-        }
-        return key;
+          return key;
+        } catch (_) {}
       }
-      return makeWebUnlockKey();
+      return "";
     }
     async function ensureGuestStudentProfile() {
       if (!isGuestStudent() || hasWebKey()) return;
@@ -2752,7 +2781,7 @@
       return `<div class="card wide">
           <div class="t">${c.webCodeTitle}</div>
           <div class="s" style="font-size:22px;font-weight:700;letter-spacing:0.08em;margin:8px 0;color:var(--ink);">${escapeHtml(formatWebKey(profile.key))}</div>
-          <p class="muted" style="margin:0 0 10px;">${c.webCodeGuestHint}</p>
+          <p class="muted" style="margin:0 0 10px;">${c.guestCloudNote}</p>
           <button class="ghost" type="button" data-action="copyWebCode" id="copyWebCode">${c.webCodeCopy}</button>
         </div>`;
     }
@@ -3057,6 +3086,7 @@
           ${adminTools}
           ${guestWebCodeCard()}
           ${isGuest() ? `${guestHomeCard()}<button class="card action" type="button" data-action="useCode"><div class="t">${c.useCode}</div></button>` : ""}
+          <div class="card wide"><b>${c.studentPrivacyTitle}</b><p class="muted">${c.studentPrivacyNotice}</p></div>
           <button class="card action" type="button" id="signOutProfile">${c.signOut}</button>
         </div>`;
       const tokenEl = document.getElementById("token");
@@ -4041,6 +4071,216 @@
       const ok = document.getElementById("issuePassOk");
       if (ok && message) ok.classList.add("hidden");
     }
+    async function lookupAsSignedIn(names) {
+      const unique = [...new Set((names || []).map((name) => String(name || "").trim()).filter(Boolean))];
+      if (!ckWebAuthToken() || !unique.length) return [];
+      const found = [];
+      for (let start = 0; start < unique.length; start += 150) {
+        const slice = unique.slice(start, start + 150);
+        try {
+          const response = await fetch(restPublicUrl("records/lookup", false), {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ records: slice.map((recordName) => ({ recordName })) })
+          });
+          const payload = await response.json();
+          recordsFrom(payload).filter(usableRecord).forEach((record) => found.push(record));
+        } catch (_) {}
+      }
+      return found;
+    }
+    async function saveStaffPassBody(id, body) {
+      if (!ckWebAuthToken() || !id) return false;
+      let text = "";
+      try { text = JSON.stringify(body || {}); } catch (_) { return false; }
+      const sealed = await sealStaffBody(text);
+      if (sealed.indexOf("whs2.") !== 0 || sealed.length > 900000) return false;
+      const record = {
+        recordType: CAMPUS_TYPE,
+        recordName: "body." + id,
+        fields: {
+          kind: { value: "body" },
+          passIDs: { value: sealed }
+        }
+      };
+      try {
+        await restModify(record, "create");
+        return true;
+      } catch (_) {
+        try { await restModify(record, "forceUpdate"); return true; } catch (_) { return false; }
+      }
+    }
+    async function applyStaffBodies(records) {
+      const hiddenField = (value) => {
+        const raw = String(value || "");
+        return raw.indexOf("whs1.") === 0 || raw === "whs0.";
+      };
+      const need = (records || []).filter((record) => ["studentName", "destination", "dates", "teacherName"].some((key) => hiddenField(fieldValue(record, key))));
+      if (!need.length) return;
+      const bodies = await lookupAsSignedIn(need.map((record) => "body." + passRecordName(record)));
+      const byName = new Map(bodies.map((record) => [String(record.recordName || "").toLowerCase(), record]));
+      for (const record of need) {
+        const body = byName.get(("body." + passRecordName(record)).toLowerCase());
+        if (!body) continue;
+        let parsed = null;
+        try { parsed = JSON.parse(await openStaffBody(fieldValue(body, "passIDs") || "")); } catch (_) { parsed = null; }
+        if (!parsed) continue;
+        if (String(fieldValue(body, "passIDs") || "").indexOf("whs2.") !== 0 && verifiedStaffRole()) {
+          await saveStaffPassBody(passRecordName(record), parsed);
+        }
+        record.fields = record.fields || {};
+        ["studentName", "destination", "dates", "teacherName", "kind"].forEach((key) => {
+          if (parsed[key]) record.fields[key] = { value: parsed[key] };
+        });
+        const sig = String(parsed.signature || "");
+        if (sig.indexOf("data:") === 0) record._passIcon = sig;
+        else if (sig) record._passIcon = "data:image/jpeg;base64," + sig;
+      }
+    }
+    function rememberedPassCode(id) {
+      try {
+        const map = JSON.parse(localStorage.getItem("whsPassWebKeys") || "{}");
+        const code = normalizeCode(map[id] || "");
+        return code.length === 10 ? code : "";
+      } catch (_) { return ""; }
+    }
+    function rememberPassCode(id, code) {
+      const key = normalizeCode(code);
+      if (!id || key.length !== 10) return;
+      let map = {};
+      try { map = JSON.parse(localStorage.getItem("whsPassWebKeys") || "{}"); } catch (_) { map = {}; }
+      map[id] = key;
+      localStorage.setItem("whsPassWebKeys", JSON.stringify(map));
+    }
+    function dropPassFieldCache() {
+      try {
+        const drop = [];
+        for (let i = 0; i < localStorage.length; i += 1) {
+          const name = localStorage.key(i);
+          if (name && name.indexOf("whsPassCache:") === 0) drop.push(name);
+        }
+        drop.forEach((name) => localStorage.removeItem(name));
+      } catch (_) {}
+    }
+    function writePassCache() { dropPassFieldCache(); }
+    function applyPassCache() {}
+    dropPassFieldCache();
+    async function publishSealRecord(id, code, body) {
+      const key = normalizeCode(code);
+      if (!id || key.length !== 10) return false;
+      const payload = {
+        studentName: await sealText(key, body.studentName),
+        destination: await sealText(key, body.destination),
+        dates: await sealText(key, body.dates),
+        teacherName: await sealText(key, body.teacherName)
+      };
+      if (body.signature) {
+        const sealed = await sealText(key, body.signature);
+        if (String(sealed).indexOf("whs1.") === 0 && sealed.length < 700000) payload.signature = sealed;
+      }
+      if (String(payload.studentName).indexOf("whs1.") !== 0) return false;
+      const record = {
+        recordType: "WHSWebProfile",
+        recordName: "seal." + id,
+        fields: {
+          role: { value: "student" },
+          displayName: { value: "Seal" },
+          gradeSeal: { value: JSON.stringify(payload) }
+        }
+      };
+      try { await restModifySchool(record, "create"); return true; } catch (_) {}
+      try { await restModify(record, "create"); return true; } catch (_) {}
+      try { await restModify(record, "forceUpdate"); return true; } catch (_) { return false; }
+    }
+    async function redactPassImages(id, sealedSignature) {
+      let heads = [];
+      try { heads = await restLookupExact(["passimg." + id + ".0"]); } catch (_) { return; }
+      const head = heads[0];
+      if (!head) return;
+      const count = Math.min(200, Math.max(1, parseInt(fieldValue(head, "dates"), 10) || 1));
+      for (let i = 0; i < count; i += 1) {
+        const sealed = i === 0 && String(sealedSignature || "").indexOf("whs1.") === 0;
+        const record = {
+          recordType: PASS_TYPE,
+          recordName: "passimg." + id + "." + i,
+          fields: {
+            kind: { value: "passimg" },
+            studentName: { value: id },
+            destination: { value: sealed ? sealedSignature : "whs0." },
+            dates: { value: sealed ? "1" : "0" }
+          }
+        };
+        try { await restModify(record, "forceUpdate"); } catch (_) {}
+      }
+    }
+    async function protectPlainPasses(records) {
+      if (!canSeePassLog()) return;
+      for (const record of records || []) {
+        const id = passRecordName(record);
+        const name = String(fieldValue(record, "studentName") || "");
+        if (!id || name.indexOf("whs1.") === 0 || name === "whs0.") continue;
+        const body = {
+          studentName: name,
+          destination: fieldValue(record, "destination"),
+          dates: fieldValue(record, "dates"),
+          teacherName: fieldValue(record, "teacherName"),
+          kind: fieldValue(record, "kind") || "hallway",
+          signature: record._passIcon || ""
+        };
+        const code = rememberedPassCode(id);
+        if (code) {
+          if (!(await saveStaffPassBody(id, body))) continue;
+          const signature = body.signature ? await sealText(code, body.signature) : "";
+          try {
+            await restModify({
+              recordType: PASS_TYPE,
+              recordName: id,
+              fields: {
+                studentName: { value: await sealText(code, body.studentName) },
+                destination: { value: await sealText(code, body.destination) },
+                dates: { value: await sealText(code, body.dates) },
+                teacherName: { value: await sealText(code, body.teacherName) }
+              }
+            }, "forceUpdate");
+          } catch (_) { continue; }
+          await redactPassImages(id, signature);
+          continue;
+        }
+        let seal = null;
+        try { seal = await readExact("seal." + id); } catch (_) { seal = null; }
+        let parsed = null;
+        try { parsed = JSON.parse(fieldValue(seal, "gradeSeal") || ""); } catch (_) { parsed = null; }
+        if (!(parsed && String(parsed.studentName || "").indexOf("whs1.") === 0)) continue;
+        if (!(await saveStaffPassBody(id, body))) continue;
+        try {
+          await restModify({
+            recordType: PASS_TYPE,
+            recordName: id,
+            fields: {
+              studentName: { value: parsed.studentName },
+              destination: { value: parsed.destination || "" },
+              dates: { value: parsed.dates || "" },
+              teacherName: { value: parsed.teacherName || "" }
+            }
+          }, "forceUpdate");
+        } catch (_) { continue; }
+        await redactPassImages(id, parsed.signature || "");
+      }
+    }
+    async function revealStudentPasses(records, code) {
+      const key = normalizeCode(code);
+      if (key.length !== 10) return;
+      for (const record of records || []) {
+        for (const field of ["studentName", "destination", "dates", "teacherName"]) {
+          const raw = String(fieldValue(record, field) || "");
+          if (raw.indexOf("whs1.") !== 0) continue;
+          const open = await openSeal(key, raw);
+          if (!open) continue;
+          record.fields = record.fields || {};
+          record.fields[field] = { value: open };
+        }
+      }
+    }
     async function readAsSignedIn(name) {
       if (!ckWebAuthToken() || !name) return null;
       try {
@@ -4262,23 +4502,28 @@
         }
       }
     }
-    async function attachPassIcon(recordName, file, onProgress) {
+    async function attachPassIcon(recordName, file, onProgress, sealCode) {
       if (!recordName || !file) return;
       const note = (value) => { if (typeof onProgress === "function") onProgress(value); };
       try {
         const dataUrl = await compressPassSignature(file);
         note(0.12);
         const parts = chunkNewsImage(dataUrl, 200);
-        const records = parts.map((chunk, i) => ({
-          recordType: PASS_TYPE,
-          recordName: "passimg." + recordName + "." + i,
-          fields: {
-            kind: { value: "passimg" },
-            studentName: { value: recordName },
-            destination: { value: chunk },
-            dates: { value: String(parts.length) }
-          }
-        }));
+        const code = normalizeCode(sealCode || "");
+        const records = [];
+        for (let i = 0; i < parts.length; i += 1) {
+          const chunk = code.length === 10 ? await sealText(code, parts[i]) : parts[i];
+          records.push({
+            recordType: PASS_TYPE,
+            recordName: "passimg." + recordName + "." + i,
+            fields: {
+              kind: { value: "passimg" },
+              studentName: { value: recordName },
+              destination: { value: chunk },
+              dates: { value: String(parts.length) }
+            }
+          });
+        }
         const db = cloudDb();
         if (db && typeof db.newRecordsBatch === "function") {
           const batch = db.newRecordsBatch();
@@ -4348,28 +4593,38 @@
         keepAppleSessionFresh();
         await requireEnrolledStaff();
         const recordName = newPassRecordName();
+        const teacherName = (profile && (profile.displayName || profile.firstName)) || "WHS";
+        const code = normalizeCode(webCode);
+        showWorkProgress(22, c.issuePassWorking, c.issuePassStepSave, "", false, "finishIssuePass");
+        const dataUrl = await compressPassSignature(signature);
+        const bodyOK = await saveStaffPassBody(recordName, { studentName, destination, dates, teacherName, kind, signature: dataUrl });
+        if (!bodyOK) throw Object.assign(new Error("FAIL"), { reason: "body" });
         const fields = {
           kind: { value: kind },
-          studentName: { value: studentName },
-          destination: { value: destination },
-          dates: { value: dates },
-          teacherName: { value: (profile && (profile.displayName || profile.firstName)) || "WHS" }
+          studentName: { value: await sealText(code, studentName) },
+          destination: { value: await sealText(code, destination) },
+          dates: { value: await sealText(code, dates) },
+          teacherName: { value: await sealText(code, teacherName) }
         };
-        showWorkProgress(22, c.issuePassWorking, c.issuePassStepSave, "", false, "finishIssuePass");
+        if (["studentName", "destination", "dates", "teacherName"].some((key) => String(fields[key].value).indexOf("whs1.") !== 0)) {
+          throw Object.assign(new Error("FAIL"), { reason: "seal" });
+        }
         let saved = await createPassRecord({ recordType: PASS_TYPE, recordName, fields }, "create");
         if (!saved) {
           try { saved = (await fetchByNames(cloudDb(), [recordName]))[0] || null; } catch (_) {}
         }
         if (!saved) throw Object.assign(new Error("FAIL"), { reason: "create" });
+        rememberPassCode(recordName, webCode);
         showWorkProgress(40, c.issuePassWorking, c.issuePassStepSave, "", false, "finishIssuePass");
         await addPassToManifest(recordName);
         showWorkProgress(55, c.issuePassWorking, c.issuePassStepStudent, "", false, "finishIssuePass");
         await attachPassToStudent(recordName, webCode, studentName);
+        const sealIcon = true;
         showWorkProgress(68, c.issuePassWorking, c.issuePassStepSignature, "", false, "finishIssuePass");
         try {
           await attachPassIcon(recordName, signature, (part) => {
             showWorkProgress(68 + Math.round(part * 28), c.issuePassWorking, c.issuePassStepSignature, "", false, "finishIssuePass");
-          });
+          }, sealIcon ? webCode : "");
         } catch (_) {}
         window._pendingIssuePass = false;
         window._appleReady = true;
@@ -4381,10 +4636,10 @@
         }
         const student = document.getElementById("issueStudent");
         const dest = document.getElementById("issueDestination");
-        const code = document.getElementById("issueWebCode");
+        const codeInput = document.getElementById("issueWebCode");
         if (student) student.value = "";
         if (dest) dest.value = "";
-        if (code) code.value = "";
+        if (codeInput) codeInput.value = "";
         bindPassSignaturePad();
         window._issuePassBusy = false;
         showWorkProgress(100, c.issuePassDone, "", "", true, "finishIssuePass");
@@ -4480,8 +4735,25 @@
           if (isPassMarker(record) || passIsRevoked(record)) return false;
           return true;
         });
+        const plainPasses = usable.filter((record) => {
+          const name = String(fieldValue(record, "studentName") || "");
+          return name && name.indexOf("whs1.") !== 0 && name !== "whs0.";
+        });
+        await revealStudentPasses(usable, key);
+        applyPassCache(usable, key);
         paintStudentPasses(usable);
         await applyPassIcons(usable);
+        writePassCache(key, usable);
+        for (const record of plainPasses) {
+          const id = passRecordName(record);
+          await publishSealRecord(id, key, {
+            studentName: fieldValue(record, "studentName"),
+            destination: fieldValue(record, "destination"),
+            dates: fieldValue(record, "dates"),
+            teacherName: fieldValue(record, "teacherName"),
+            signature: record._passIcon || ""
+          });
+        }
         paintStudentPasses(usable);
       } catch (error) {
         if (list && view === "mypasses" && !(window._studentPassUsable && window._studentPassUsable.length)) {
@@ -4758,10 +5030,26 @@
       if (rest.length) {
         try { (await restLookupExact(rest)).forEach((record) => rememberPassIconChunk(grouped, record)); } catch (_) {}
       }
-      missing.forEach((record) => {
-        const parts = (grouped[record.recordName] || []).filter(Boolean);
-        if (parts.length) record._passIcon = "data:image/jpeg;base64," + parts.join("");
-      });
+      const code = normalizeCode(profile && profile.key);
+      for (const record of missing) {
+        const rawParts = (grouped[record.recordName] || []).filter(Boolean);
+        const parts = [];
+        let broken = false;
+        for (const part of rawParts) {
+          if (part === "whs0.") { broken = true; break; }
+          if (String(part).indexOf("whs1.") === 0) {
+            if (code.length !== 10) { broken = true; break; }
+            const open = await openSeal(code, part);
+            if (!open) { broken = true; break; }
+            parts.push(open);
+          } else parts.push(part);
+        }
+        if (!broken && parts.length) {
+          record._passIcon = parts.length === 1 && parts[0].indexOf("data:") === 0
+            ? parts[0]
+            : "data:image/jpeg;base64," + parts.join("");
+        }
+      }
     }
     function chunkNewsImage(dataUrl, maxParts) {
       const raw = String(dataUrl || "").split(",")[1] || "";
@@ -5331,6 +5619,11 @@
           if (window._clearedPassIDs && window._clearedPassIDs.has(id)) return false;
           return !!(fieldValue(r, "studentName") || fieldValue(r, "teacherName"));
         });
+        const plainPasses = usable.filter((record) => {
+          const name = String(fieldValue(record, "studentName") || "");
+          return name && name.indexOf("whs1.") !== 0 && name !== "whs0.";
+        });
+        await applyStaffBodies(usable);
         window._passRecords = {};
         usable.forEach((record) => {
           const id = passRecordName(record);
@@ -5339,6 +5632,7 @@
         window._passLogList = usable;
         if (view === "passes") paintPassLog();
         await applyPassIcons(usable);
+        await protectPlainPasses(plainPasses);
         if (view === "passes") paintPassLog();
       } catch (error) {
         if (view === "passes" && node && !document.getElementById("passes")) {
@@ -5698,10 +5992,10 @@
         return;
       } else {
         if (finish) finish.disabled = true;
-        const key = await allocateGuestStudentKey({ displayName: name, firstName: name, grade })
-          || makeWebUnlockKey();
+        const savedKey = await allocateGuestStudentKey({ displayName: name, firstName: name, grade });
+        const key = savedKey || makeWebUnlockKey();
         if (finish) finish.disabled = false;
-        profile = { displayName: name, firstName: name, role: "student", grade, key, guest: true, classes: [] };
+        profile = { displayName: name, firstName: name, role: "student", grade, key, guest: true, cloudSaved: !!savedKey, classes: [] };
       }
       localStorage.setItem("whsWebProfile", JSON.stringify(profile));
       applyAvatar("");

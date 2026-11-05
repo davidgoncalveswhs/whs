@@ -3,6 +3,8 @@
 xcuserdata/
 *.xcuserstate
 DerivedData/
+.derived-ios26/
+.derived-seal/
 .build/
 *.moved-aside
 *.hmap
