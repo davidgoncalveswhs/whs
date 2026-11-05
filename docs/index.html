@@ -1278,6 +1278,10 @@
       const role = verifiedStaffRole();
       return role === "teacher" || role === "administrator";
     }
+    function showPassMenu() {
+      const role = currentRole();
+      return canSeePassLog() || role === "teacher" || role === "administrator";
+    }
     function canClearPassLog() {
       return verifiedStaffRole() === "administrator";
     }
@@ -2906,8 +2910,18 @@
         loadNewsFeed();
       }
       if (id === "passes") {
-        if (!canSeePassLog()) {
+        if (!showPassMenu()) {
           show("home");
+          return;
+        }
+        if (!canSeePassLog()) {
+          const node = document.getElementById("view-passes");
+          node.innerHTML = `${backBar()}<div class="card wide"><p class="muted">${t().appleStepBody}</p></div>`;
+          syncStaffRoleFromCloud().then(() => {
+            if (view !== "passes") return;
+            if (canSeePassLog()) loadPasses();
+            else showAppleStep();
+          }).catch(() => { if (view === "passes") showAppleStep(); });
           return;
         }
         loadPasses();
@@ -2954,7 +2968,7 @@
           ${dashCard("news", c.openNews, "")}
           ${dashCard("lunch", c.openLunch, "")}
           ${dashCard("contacts", c.openContacts, "")}`;
-      } else if (canSeePassLog()) {
+      } else if (showPassMenu()) {
         cards = `
           <button class="card action hero-pass wide" type="button" data-go="passes">
             <div class="row-item">
