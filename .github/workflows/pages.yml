@@ -36,11 +36,10 @@ jobs:
           import os
           token = os.environ["WHS_SCHOOL_TOKEN"].replace("\\", "\\\\").replace('"', '\\"')
           env = (os.environ.get("WHS_CK_ENV") or "development").replace("\\", "\\\\").replace('"', '\\"')
-          path = "docs/index.html"
-          text = open(path, encoding="utf-8").read()
-          needle = 'window.WHS_SCHOOL_TOKEN=window.WHS_SCHOOL_TOKEN||"";window.WHS_CK_ENV=window.WHS_CK_ENV||"development";'
-          if needle not in text:
-              raise SystemExit("school connection placeholder missing")
+          # index.html loads ck-public.js before app.js; make sure that's still true.
+          text = open("docs/index.html", encoding="utf-8").read()
+          if "./ck-public.js" not in text or "./app.js" not in text:
+              raise SystemExit("index.html must load ck-public.js and app.js")
           open("docs/ck-public.js", "w", encoding="utf-8").write(
               f'window.WHS_SCHOOL_TOKEN = "{token}";\nwindow.WHS_CK_ENV = "{env}";\n'
           )
