@@ -1,8 +1,9 @@
-name: Deploy admin portal
+name: Test and deploy website
 
 on:
   push:
     branches: [main]
+  pull_request:
 
 permissions:
   contents: read
@@ -14,7 +15,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
+        with:
+          node-version: "20"
+      - name: Install headless Chromium
+        run: |
+          npm install --no-save --no-audit --no-fund playwright@1.48.2
+          npx playwright install --with-deps chromium
+      - name: Run website checks
+        run: node tests/web/run.mjs
+
   deploy:
+    needs: test
+    if: github.event_name == 'push'
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

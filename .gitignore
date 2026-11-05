@@ -4,11 +4,16 @@
 !/.gitignore
 !/.github/
 !/docs/
+!/tests/
+!/README.md
 
 # Local-only files inside the website folder
 docs/config.js
 docs/config.example.js
 docs/icon.svg
+
+# Test tooling installed during CI
+node_modules/
 
 # Never commit secrets or system files
 .DS_Store

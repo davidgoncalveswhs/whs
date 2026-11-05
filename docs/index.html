@@ -22,9 +22,11 @@
   <script src="./ck-public.js?v=28"></script>
   <style>
     :root {
-      --orange: #E87722;
+      /* WCAG 2.1 AA: text and buttons need 4.5:1 contrast. This is the closest WHS orange that passes
+         (white text on it, and it as text on white or the soft tint). The brighter orange measured about 2.9:1. */
+      --orange: #B05612;
       --ink: #000;
-      --muted: #8E8E93;
+      --muted: #6E6E73;
       --line: rgba(0,0,0,0.08);
       --paper: #FFFFFF;
       --bg: #F2F2F7;
@@ -333,7 +335,7 @@
       display: grid; grid-template-columns: repeat(3, 1fr);
       padding: 8px 10px 14px;
     }
-    nav.tabs button { font-family: var(--font-text); color: #8E8E93; font-size: 10px; font-weight: 500; letter-spacing: 0.06em; padding: 6px; border-radius: 14px; }
+    nav.tabs button { font-family: var(--font-text); color: var(--muted); font-size: 10px; font-weight: 500; letter-spacing: 0.06em; padding: 6px; border-radius: 14px; }
     nav.tabs button.on { color: var(--orange); background: var(--soft); }
     nav.tabs .ico { display: grid; place-items: center; margin: 0 auto 4px; }
     nav.tabs .ico .icon { width: 22px; height: 22px; }
@@ -390,7 +392,7 @@
     }
     .gate-bar {
       display: flex; align-items: center; gap: 10px;
-      background: #E87722; color: #fff;
+      background: var(--orange); color: #fff;
       padding: 18px 28px;
       font-family: var(--font-text); font-size: 18px; font-weight: 700;
     }
@@ -450,7 +452,7 @@
       margin-top: 16px; padding-right: var(--sign-inset);
     }
     .gate-signin {
-      background: #E87722; color: #fff; border-radius: 4px;
+      background: var(--orange); color: #fff; border-radius: 4px;
       padding: 4px 10px; font-size: 12px; font-weight: 700;
       width: auto; min-width: 0; height: auto; line-height: 1.2;
       white-space: nowrap; flex: none;
@@ -458,6 +460,8 @@
     }
     .web-code { font-size: 22px; font-weight: 700; letter-spacing: 0.08em; margin: 8px 0; color: var(--ink); transition: filter 0.2s ease; }
     .web-code.is-hidden { filter: blur(9px); user-select: none; -webkit-user-select: none; }
+    /* Visible focus for keyboard users (WCAG 2.4.7). */
+    :focus-visible { outline: 3px solid var(--orange); outline-offset: 2px; border-radius: 6px; }
     .gate-guest {
       margin-top: 28px; border: 1px solid #cfd6de; padding: var(--sign-inset);
     }
@@ -663,6 +667,14 @@
   </div>
 
   <script src="https://cdn.apple-cloudkit.com/ck/2/cloudkit.js"></script>
-  <script src="./app.js?v=1"></script>
+  <!-- App code, in load order. Each file shares one global scope with the others. -->
+  <script src="./js/strings.js?v=2"></script>
+  <script src="./js/core.js?v=2"></script>
+  <script src="./js/cloud.js?v=2"></script>
+  <script src="./js/staff.js?v=2"></script>
+  <script src="./js/views.js?v=2"></script>
+  <script src="./js/passes.js?v=2"></script>
+  <script src="./js/news.js?v=2"></script>
+  <script src="./app.js?v=2"></script>
 </body>
 </html>
