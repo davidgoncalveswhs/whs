@@ -462,7 +462,7 @@ document.body.addEventListener("keydown", (event) => {
     event.preventDefault();
     enterWithCode();
   }
-  if (event.key === "Enter" && (event.target.id === "guestName" || event.target.id === "guestGrade" || event.target.id === "guestAccess")) {
+  if (event.key === "Enter" && (event.target.id === "guestName" || event.target.id === "guestGrade")) {
     event.preventDefault();
     enterGuest();
   }
@@ -491,8 +491,6 @@ function showGuestStep() {
   document.getElementById("gateSetup").classList.remove("hidden");
   const apple = document.getElementById("gateApple");
   if (apple) apple.classList.add("hidden");
-  const access = document.getElementById("guestAccess");
-  if (access) access.value = "";
   applyChrome();
   const name = document.getElementById("guestName");
   if (name) name.focus();
@@ -501,9 +499,7 @@ function syncGuestRoleFields() {
   const role = normalizeRole((document.getElementById("guestRole") || {}).value);
   const staff = role === "teacher" || role === "administrator";
   const gradeRow = document.getElementById("guestGradeRow");
-  const accessRow = document.getElementById("guestAccessRow");
   if (gradeRow) gradeRow.classList.toggle("hidden", staff);
-  if (accessRow) accessRow.classList.add("hidden");
 }
 function pendingStaffFromForm() {
   if (!((window._gateStep === "guest" || window._gateStep === "apple") && gateIsOpen())) return null;

@@ -131,26 +131,15 @@
     }
     .t { font-family: var(--font-text); font-size: 17px; font-weight: 600; letter-spacing: -0.022em; }
     .s { font-family: var(--font-text); font-size: 13px; font-weight: 400; color: var(--muted); letter-spacing: -0.008em; line-height: 1.38; }
-    .wmark {
-      width: 34px; height: 34px; border-radius: 10px; background: var(--orange);
-      color: white; font-weight: 800; display: grid; place-items: center; flex: none;
-    }
+
     .lock, .chev { margin-left: auto; color: var(--muted); }
-    .home-grid {
-      display: grid;
-      grid-template-columns: 1fr;
-      gap: 14px;
-    }
+
     .pair {
       display: grid; grid-template-columns: 1fr 1px 1fr;
       background: white; border-radius: 28px; min-height: 96px;
       align-items: stretch;
     }
-    .pair .mini {
-      padding: 16px; display: flex; align-items: center; gap: 10px;
-      width: 100%; background: transparent;
-    }
-    .pair .mini:hover { background: #FAFAFC; }
+
     .pair .split { width: 1px; background: rgba(0,0,0,0.12); align-self: center; height: 48px; }
     .section { font-family: var(--font-display); font-size: 22px; font-weight: 700; letter-spacing: 0.016em; margin: 8px 0 0; grid-column: 1 / -1; }
     .shortcuts { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -164,13 +153,7 @@
     .shortcut .plate { width: 34px; height: 34px; border-radius: 10px; }
     .sf-glyph { width: 22px; height: 22px; object-fit: contain; display: block; }
     .tile-wire { width: 34px; height: 34px; object-fit: contain; flex: none; }
-    .wire-open {
-      display: inline-flex; align-items: center; justify-content: center;
-      margin-top: 10px; width: fit-content; max-width: 100%;
-      background: var(--orange); color: #fff; text-decoration: none;
-      border-radius: 12px; padding: 8px 12px; font-size: 13px; font-weight: 600;
-    }
-    .shortcut.wire-tile { cursor: default; }
+
     .news-row {
       display: flex; gap: 12px; align-items: center;
       width: 100%; text-align: left; padding: 12px 0;
@@ -201,7 +184,7 @@
       flex: 1; background: #F2F2F7; border-radius: 16px; padding: 12px; font-weight: 700;
     }
     .pass-type button.on { background: var(--orange); color: #fff; }
-    button, .btn { appearance: none; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
+    button { appearance: none; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
     input, select, textarea {
       width: 100%; padding: 14px; border-radius: 16px; border: 1px solid #E5E5EA;
       font: inherit; background: #F2F2F7;
@@ -216,7 +199,7 @@
     .muted { font-family: var(--font-text); color: var(--muted); line-height: 1.33; font-size: 15px; letter-spacing: -0.016em; }
     .error { color: #B42318; }
     .ok { color: #1F7A3A; }
-    .pass-kind { font-size: 18px; font-weight: 800; letter-spacing: 0.04em; margin: 0 0 10px; }
+
     .paper {
       background: #fff; border: 2px solid #111; border-radius: 0; padding: 16px;
       text-align: left; width: 100%; box-shadow: none;
@@ -314,7 +297,7 @@
       object-fit: contain; object-position: left center; background: #fff;
     }
     .paper.big .paper-sign img { height: 88px; }
-    .sig, .news-img { max-width: 100%; max-height: 220px; margin-top: 8px; border-radius: 12px; }
+    .sig { max-width: 100%; max-height: 220px; margin-top: 8px; border-radius: 12px; }
     .lunch { width: 100%; min-height: 72vh; border: 0; border-radius: 24px; background: white; }
     .search { margin-bottom: 12px; }
     .web-mark {
@@ -468,7 +451,7 @@
     .gate-guest .t { font-size: 18px; margin-bottom: 8px; }
     .gate-guest-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
     .gate-guest-row .muted { flex: 1; min-width: 0; }
-    .gate-hint { margin: 12px 0 0; font-size: 12px; }
+
     .sheet { background: rgba(0,0,0,0.28); display: grid; place-items: center; padding: 24px; }
     .sheet-card { width: min(560px, 100%); background: white; border-radius: 28px; padding: 22px; }
     .sheet-field { margin: 0 0 12px; }
@@ -478,11 +461,7 @@
     .wipe-pct { font-variant-numeric: tabular-nums; font-weight: 700; }
     .home-steps { margin: 12px 0 0; padding-left: 18px; }
     .home-steps li { margin: 0 0 10px; color: var(--muted); font-size: 15px; }
-    .id-card {
-      background: linear-gradient(160deg, #111 0%, #2A2A2A 100%);
-      color: white; border-radius: 22px; padding: 22px; margin: 12px 0 16px;
-    }
-    .id-card .school { color: var(--orange); font-size: 11px; font-weight: 800; letter-spacing: .08em; }
+
     .lang { display: flex; gap: 6px; }
     .lang button { padding: 6px 10px; border-radius: 999px; background: #F2F2F7; font-size: 13px; font-weight: 700; }
     .lang button.on { background: var(--orange); color: white; }
@@ -496,7 +475,7 @@
     details.admin { background: white; border-radius: 28px; padding: 16px; }
     details.admin summary { cursor: pointer; font-weight: 700; color: var(--muted); font-size: 14px; }
     .toolbar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; grid-column: 1 / -1; }
-    .news-grid, .pass-grid, .people-grid {
+    .pass-grid, .people-grid {
       display: grid; gap: 14px; grid-template-columns: 1fr;
     }
     .pass-grid .action { text-align: left; width: 100%; }
@@ -517,7 +496,7 @@
     }
     .pass-day { display: grid; gap: 14px; margin: 0 0 22px; }
     .pass-day .section { margin: 2px 0 0; font-size: 20px; }
-    .page-head { margin-bottom: 16px; }
+
     @media (min-width: 820px) {
       body {
         display: grid; grid-template-columns: 220px minmax(0, 1fr);
@@ -538,18 +517,17 @@
       nav.tabs .web-mark { display: flex; padding: 0 14px 18px; margin: 0; color: #000; }
       nav.tabs button.web-mark, nav.tabs button.web-mark span { color: #000; }
       .web-mark-inline { display: none; }
-      .home-grid { grid-template-columns: 1.15fr .85fr; }
-      .home-grid .wide { grid-column: 1 / -1; }
+
       .shortcuts { grid-template-columns: repeat(4, 1fr); }
       .dash .shortcuts { grid-template-columns: 1fr 1fr; }
-      .news-grid { grid-template-columns: repeat(2, 1fr); }
+
       .pass-grid { grid-template-columns: 1fr 1fr; align-items: start; }
       .pass-col { display: grid; gap: 14px; align-content: start; }
       .people-grid { grid-template-columns: repeat(2, 1fr); }
       .people-grid .card { padding: 8px 16px; }
     }
     @media (min-width: 1400px) {
-      .news-grid { grid-template-columns: repeat(3, 1fr); }
+
     }
   </style>
 </head>
@@ -640,10 +618,6 @@
                 <option value="12">12</option>
               </select>
             </div>
-            <div class="gate-row hidden" id="guestAccessRow">
-              <label id="staffCodeLabel" for="guestAccess">Staff access code</label>
-              <input id="guestAccess" type="password" inputmode="numeric" autocomplete="off" spellcheck="false">
-            </div>
           </div>
           <div class="gate-actions">
             <button class="gate-signin" type="button" id="guestFinish">Sign In</button>
@@ -668,13 +642,13 @@
 
   <script src="https://cdn.apple-cloudkit.com/ck/2/cloudkit.js"></script>
   <!-- App code, in load order. Each file shares one global scope with the others. -->
-  <script src="./js/strings.js?v=2"></script>
-  <script src="./js/core.js?v=2"></script>
-  <script src="./js/cloud.js?v=2"></script>
-  <script src="./js/staff.js?v=2"></script>
-  <script src="./js/views.js?v=2"></script>
-  <script src="./js/passes.js?v=2"></script>
-  <script src="./js/news.js?v=2"></script>
-  <script src="./app.js?v=2"></script>
+  <script src="./js/strings.js?v=3"></script>
+  <script src="./js/core.js?v=3"></script>
+  <script src="./js/cloud.js?v=3"></script>
+  <script src="./js/staff.js?v=3"></script>
+  <script src="./js/views.js?v=3"></script>
+  <script src="./js/passes.js?v=3"></script>
+  <script src="./js/news.js?v=3"></script>
+  <script src="./app.js?v=3"></script>
 </body>
 </html>

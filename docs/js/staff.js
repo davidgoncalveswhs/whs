@@ -562,14 +562,12 @@ function applyChrome() {
   const nameLabel = document.getElementById("nameLabel");
   const gradeLabel = document.getElementById("gradeLabel");
   const rolePickLabel = document.getElementById("rolePickLabel");
-  const staffCodeLabel = document.getElementById("staffCodeLabel");
   const roleOptStudent = document.getElementById("roleOptStudent");
   const roleOptTeacher = document.getElementById("roleOptTeacher");
   const roleOptAdmin = document.getElementById("roleOptAdmin");
   if (nameLabel) nameLabel.textContent = c.nameLabel;
   if (gradeLabel) gradeLabel.textContent = c.gradeLabel;
   if (rolePickLabel) rolePickLabel.textContent = c.role;
-  if (staffCodeLabel) staffCodeLabel.textContent = c.staffCodeLabel;
   if (roleOptStudent) roleOptStudent.textContent = c.roleStudent;
   if (roleOptTeacher) roleOptTeacher.textContent = c.roleTeacher;
   if (roleOptAdmin) roleOptAdmin.textContent = c.admin;
