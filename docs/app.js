@@ -95,6 +95,25 @@ const copy = {
     publishingSubtitle: "Warrior's Wire · Tap to view",
     openContacts: "Staff directory",
     openPasses: "Campus pass log",
+    auditOpen: "Audit log",
+    auditTitle: "Audit log",
+    auditIntro: "Every time staff view the pass log, issue, revoke, or clear passes. Entries can't be edited or deleted. The Apple ID is recorded by iCloud and can't be faked.",
+    auditSearch: "Search by staff, action, or pass",
+    auditLoading: "Loading audit log…",
+    auditEmpty: "No audit entries yet.",
+    auditMore: "Load more",
+    auditPasses: "Passes",
+    auditAppleID: "Apple ID",
+    auditUnknown: "Unknown staff",
+    auditViewLog: "Viewed the pass log",
+    auditIssue: "Issued a pass",
+    auditRevoke: "Revoked a pass",
+    auditClear: "Cleared the pass log",
+    auditViewAudit: "Viewed the audit log",
+    auditNeedApple: "Sign in with Apple in this browser to see the audit log.",
+    auditDenied: "Only administrators can see the audit log.",
+    auditNeedIndex: "The audit log isn't searchable yet. In CloudKit Dashboard, add a Sortable index on WHSAuditLog createdTimestamp.",
+    auditFail: "Couldn't load the audit log. Check your connection and try again.",
     swipe: "Swipe Card",
     swipeSub: "Add your ID photo to use Swipe",
     noSwipe: "No Swipe Card on this device yet. Add your ID photo in Swipe Card on iPhone, then reload.",
@@ -355,6 +374,25 @@ const copy = {
     publishingSubtitle: "Warrior's Wire · Toca para ver",
     openContacts: "Directorio",
     openPasses: "Registro de pases",
+    auditOpen: "Registro de auditoría",
+    auditTitle: "Registro de auditoría",
+    auditIntro: "Cada vez que el personal ve el registro de pases o emite, revoca o borra pases. Las entradas no se pueden editar ni borrar. iCloud registra el Apple ID y no se puede falsificar.",
+    auditSearch: "Buscar por personal, acción o pase",
+    auditLoading: "Cargando el registro de auditoría…",
+    auditEmpty: "Todavía no hay entradas.",
+    auditMore: "Cargar más",
+    auditPasses: "Pases",
+    auditAppleID: "Apple ID",
+    auditUnknown: "Personal desconocido",
+    auditViewLog: "Vio el registro de pases",
+    auditIssue: "Emitió un pase",
+    auditRevoke: "Revocó un pase",
+    auditClear: "Borró el registro de pases",
+    auditViewAudit: "Vio el registro de auditoría",
+    auditNeedApple: "Entra con Apple en este navegador para ver el registro de auditoría.",
+    auditDenied: "Solo los administradores pueden ver el registro de auditoría.",
+    auditNeedIndex: "El registro de auditoría aún no se puede buscar. En CloudKit Dashboard, agrega un índice Sortable en WHSAuditLog createdTimestamp.",
+    auditFail: "No se pudo cargar el registro de auditoría. Revisa tu conexión e inténtalo de nuevo.",
     swipe: "Tarjeta Swipe",
     swipeSub: "Añade la foto de tu ID para usar Swipe",
     noSwipe: "Aún no hay Tarjeta Swipe en este dispositivo. Añade la foto de tu ID en Tarjeta Swipe en iPhone y recarga.",
@@ -650,6 +688,11 @@ function showPassMenu() {
   return canSeePassLog() || role === "teacher" || role === "administrator";
 }
 function canClearPassLog() {
+  return verifiedStaffRole() === "administrator";
+}
+// Only shows the button. CloudKit is the real lock: it returns audit entries only to Apple IDs
+// with the WHSAdmin role, so changing this page can't reveal them to anyone else.
+function canSeeAuditLog() {
   return verifiedStaffRole() === "administrator";
 }
 function canRevokePass() {
@@ -1998,6 +2041,118 @@ async function auditLog(action, passIDs, count) {
     }, "create");
   } catch (_) {}
 }
+// Audit log viewer (administrators only). Entries come straight from CloudKit with the admin's own
+// Apple sign-in; anyone without the WHSAdmin role gets ACCESS_DENIED from CloudKit.
+// Every value is escaped before display. The "who" line shows the Apple ID CloudKit recorded,
+// because the typed staff name in an entry could be anything.
+function renderAuditLog() {
+  const c = t();
+  const node = document.getElementById("view-audit");
+  if (!node) return;
+  node.innerHTML = `${backBar()}
+    <div class="card wide">
+      <div class="t">${escapeHtml(c.auditTitle)}</div>
+      <p class="muted" style="margin:6px 0 10px;">${escapeHtml(c.auditIntro)}</p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px;">
+        <button class="ghost" type="button" data-action="auditRefresh">${escapeHtml(c.refresh)}</button>
+      </div>
+      <input class="search" id="auditQuery" placeholder="${escapeHtml(c.auditSearch)}" autocomplete="off" spellcheck="false">
+    </div>
+    <div id="auditList"><p class="muted">${escapeHtml(c.auditLoading)}</p></div>`;
+  auditLog("view_audit");
+  loadAuditLog(true);
+}
+async function loadAuditLog(reset) {
+  if (!canSeeAuditLog() || window._auditBusy) return;
+  const c = t();
+  if (reset) { window._auditEntries = []; window._auditMarker = null; }
+  if (!reset && !window._auditMarker) return;
+  window._auditBusy = true;
+  let message = "";
+  try {
+    if (!ckWebAuthToken()) throw Object.assign(new Error("APPLE"), { code: "APPLE" });
+    const body = {
+      query: { recordType: AUDIT_TYPE, sortBy: [{ systemFieldName: "createdTimestamp", ascending: false }] },
+      resultsLimit: 100,
+      desiredKeys: ["action", "passIDs", "count", "actor", "platform"]
+    };
+    if (window._auditMarker) body.continuationMarker = window._auditMarker;
+    const response = await fetch(restPublicUrl("records/query", false), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    const payload = await response.json().catch(() => ({}));
+    const code = String(payload.serverErrorCode || "");
+    if (code) throw Object.assign(new Error(code), { code });
+    (payload.records || []).forEach((record) => {
+      if (!record || record.recordType !== AUDIT_TYPE) return;
+      window._auditEntries.push({
+        when: Number((record.created && record.created.timestamp) || 0),
+        who: String((record.created && record.created.userRecordName) || ""),
+        action: String(fieldValue(record, "action") || ""),
+        passIDs: String(fieldValue(record, "passIDs") || ""),
+        count: Number(fieldValue(record, "count") || 0),
+        actor: String(fieldValue(record, "actor") || ""),
+        platform: String(fieldValue(record, "platform") || "")
+      });
+    });
+    window._auditMarker = payload.continuationMarker || null;
+  } catch (error) {
+    const code = String((error && error.code) || "");
+    if (code === "APPLE" || /AUTHENTICATION/.test(code)) message = c.auditNeedApple;
+    else if (/ACCESS_DENIED|PERMISSION/.test(code)) message = c.auditDenied;
+    else if (/BAD_REQUEST/.test(code)) message = c.auditNeedIndex;
+    else message = c.auditFail;
+  } finally {
+    window._auditBusy = false;
+  }
+  paintAuditLog(message);
+}
+function auditActionLabel(action) {
+  const c = t();
+  return ({
+    view_log: c.auditViewLog,
+    issue_pass: c.auditIssue,
+    revoke_pass: c.auditRevoke,
+    clear_log: c.auditClear,
+    view_audit: c.auditViewAudit
+  })[action] || action;
+}
+function paintAuditLog(message) {
+  const c = t();
+  const list = document.getElementById("auditList");
+  if (!list || view !== "audit") return;
+  if (message) {
+    list.innerHTML = `<div class="card wide"><p class="error" style="margin:0;">${escapeHtml(message)}</p></div>`;
+    return;
+  }
+  const q = String((document.getElementById("auditQuery") || {}).value || "").trim().toLowerCase();
+  const entries = (window._auditEntries || []).filter((entry) => {
+    if (!q) return true;
+    return [auditActionLabel(entry.action), entry.actor, entry.who, entry.platform, entry.passIDs].join(" ").toLowerCase().includes(q);
+  });
+  if (!entries.length) {
+    list.innerHTML = `<div class="card wide"><p class="muted" style="margin:0;">${escapeHtml(c.auditEmpty)}</p></div>`;
+    return;
+  }
+  const rows = entries.map((entry) => {
+    const when = entry.when ? new Date(entry.when).toLocaleString(lang === "es" ? "es-US" : "en-US") : "";
+    const ids = entry.passIDs.split(",").map((id) => id.trim()).filter(Boolean);
+    const shownIDs = ids.slice(0, 3).map((id) => id.slice(0, 8)).join(", ") + (ids.length > 3 ? ` +${ids.length - 3}` : "");
+    const appleID = entry.who ? `${c.auditAppleID} …${entry.who.slice(-8)}` : "";
+    return `<div class="card wide" style="padding:12px 16px;">
+        <div style="display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <b>${escapeHtml(auditActionLabel(entry.action))}</b>
+          <span class="muted">${escapeHtml(when)}</span>
+        </div>
+        <div class="s">${escapeHtml(entry.actor || c.auditUnknown)}${appleID ? " · " + escapeHtml(appleID) : ""}${entry.platform ? " · " + escapeHtml(entry.platform) : ""}</div>
+        ${entry.count ? `<div class="s">${escapeHtml(c.auditPasses)}: ${escapeHtml(String(entry.count))}${shownIDs ? " · " + escapeHtml(shownIDs) : ""}</div>` : ""}
+      </div>`;
+  }).join("");
+  const more = window._auditMarker ? `<button class="ghost" type="button" data-action="auditMore" style="width:100%;margin-top:8px;">${escapeHtml(c.auditMore)}</button>` : "";
+  list.innerHTML = rows + more;
+}
 async function revokePassRecord(id) {
   const unique = String(id || "").trim();
   if (!unique || unique === MANIFEST || unique === CLEARED) return;
@@ -2465,7 +2620,7 @@ function show(id) {
   view = id;
   if (id !== "study") document.body.classList.remove("ql-open");
   closeSheet();
-  ["home", "news", "lunch", "contacts", "more", "posts", "passes", "issuepass", "mypasses", "swipe", "classes", "class", "study"].forEach((name) => {
+  ["home", "news", "lunch", "contacts", "more", "posts", "passes", "audit", "issuepass", "mypasses", "swipe", "classes", "class", "study"].forEach((name) => {
     const node = document.getElementById("view-" + name);
     if (node) node.classList.toggle("hidden", name !== id);
   });
@@ -2516,6 +2671,13 @@ function show(id) {
     }
     renderPosts();
     loadNewsFeed();
+  }
+  if (id === "audit") {
+    if (!canSeeAuditLog()) {
+      show("more");
+      return;
+    }
+    renderAuditLog();
   }
   if (id === "passes") {
     if (!showPassMenu()) {
@@ -2640,6 +2802,7 @@ function renderMore() {
         <p class="ok hidden" id="tokenSaved"></p>
         ${canIssuePass() ? `<button class="ghost" type="button" data-go="issuepass" style="width:100%;margin-top:8px;">${c.issuePass}</button>` : ""}
         <button class="ghost" type="button" id="openPasses" style="width:100%;margin-top:8px;">${c.openPasses}</button>
+        ${canSeeAuditLog() ? `<button class="ghost" type="button" data-go="audit" style="width:100%;margin-top:8px;">${c.auditOpen}</button>` : ""}
         ${canClearPassLog() ? `<div style="margin-top:16px;padding-top:12px;border-top:1px solid var(--line,#ddd);">
           <b>${c.adminPassWipeTitle}</b>
           <p class="muted">${c.adminPassWipeBody}</p>
@@ -5350,6 +5513,8 @@ document.body.addEventListener("click", (event) => {
     if (name === "issuePass") issuePassFromWeb();
     if (name === "useCode") returnToCodeGate();
     if (name === "toggleWebCode") setWebCodeShown(!window._webCodeShown);
+    if (name === "auditMore") loadAuditLog(false);
+    if (name === "auditRefresh") loadAuditLog(true);
     if (name === "askResetWebCode") askResetWebCode();
     if (name === "confirmResetWebCode") resetWebCode();
     if (name === "copyWebCode") {
@@ -5490,6 +5655,7 @@ document.body.addEventListener("click", (event) => {
 document.body.addEventListener("input", (event) => {
   if (event.target.id === "staffQuery") renderStaff(event.target.value);
   if (event.target.id === "passQuery") paintPassLog();
+  if (event.target.id === "auditQuery") paintAuditLog();
 });
 document.body.addEventListener("change", (event) => {
   if (event.target.id === "guestRole") {
