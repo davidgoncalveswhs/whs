@@ -2032,7 +2032,9 @@
             });
             const payload = await response.json();
             const ok = response.ok || !!(payload && payload.records);
-            return { records: recordsFrom(payload).filter(usableRecord), ok, failed: ok ? [] : slice };
+            const rows = recordsFrom(payload);
+            const hidden = rows.filter((row) => !usableRecord(row)).map((row) => row.recordName).filter(Boolean);
+            return { records: rows.filter(usableRecord), ok, failed: ok ? hidden : slice };
           } catch (_) {
             return { records: [], ok: false, failed: slice };
           }
@@ -2054,10 +2056,10 @@
     }
     async function restLookupExact(names) {
       const looked = await restLookupDetailed(names, true);
-      if (looked.complete) return looked.records;
       const found = looked.records.slice();
       const db = cloudDb();
       const pending = looked.failed || [];
+      if (!pending.length) return found;
       if (db && typeof db.fetchRecord === "function") {
         for (const name of pending) {
           try { recordsFrom(await db.fetchRecord(name)).forEach((record) => { if (usableRecord(record)) found.push(record); }); } catch (_) {}
@@ -2608,12 +2610,6 @@
         const manifest = campus || await readExact(MANIFEST);
         indexIDs(manifest).forEach((id) => names.add(id));
       } catch (_) {}
-      try {
-        (await restQuery(PASS_TYPE, 200)).forEach((record) => {
-          const id = passRecordName(record);
-          if (id && !isPassMarker(record)) names.add(id);
-        });
-      } catch (_) {}
       (window._passLogList || []).forEach((record) => {
         const id = passRecordName(record);
         if (id) names.add(id);
@@ -2711,28 +2707,25 @@
         let existing = [];
         try { existing = await restLookup([key]); } catch (_) { existing = []; }
         if (existing.length) continue;
+        const sealedGrade = await sealText(key, String(person.grade || ""));
+        const fields = {
+          displayName: { value: person.displayName || person.firstName || "Warrior" },
+          firstName: { value: person.firstName || person.displayName || "" },
+          role: { value: "student" }
+        };
+        if (String(sealedGrade).indexOf("whs1.") === 0) fields.gradeSeal = { value: sealedGrade };
         try {
           await restModifySchool({
             recordType: "WHSWebProfile",
             recordName: key,
-            fields: {
-              displayName: { value: person.displayName || person.firstName || "Warrior" },
-              firstName: { value: person.firstName || person.displayName || "" },
-              role: { value: "student" },
-              grade: { value: String(person.grade || "") }
-            }
+            fields
           }, "create");
         } catch (_) {
           try {
             await restModify({
               recordType: "WHSWebProfile",
               recordName: key,
-              fields: {
-                displayName: { value: person.displayName || person.firstName || "Warrior" },
-                firstName: { value: person.firstName || person.displayName || "" },
-                role: { value: "student" },
-                grade: { value: String(person.grade || "") }
-              }
+              fields
             }, "create");
           } catch (_) {}
         }
@@ -5290,13 +5283,7 @@
         if (ids.length) {
           (await fetchByNames(db, ids.concat(ids.flatMap((id) => [tombstoneName(id), revokedName(id)]), [CLEARED, CAMPUS_CLEARED]))).forEach(remember);
           if (!campusReady) await storePassIndex(CAMPUS_LOG, MANIFEST, "manifest", ids, true);
-        } else if (!hasManifest) {
-          try { recordsFrom(await db.performQuery({ recordType: PASS_TYPE })).forEach(remember); } catch (_) {}
-          const queried = [...seen.keys()];
-          if (queried.length) {
-            (await fetchByNames(db, queried.flatMap((id) => [tombstoneName(id), revokedName(id)]).concat([CLEARED]))).forEach(remember);
-          }
-        } else {
+        } else if (hasManifest) {
           (await fetchByNames(db, [CLEARED, CAMPUS_CLEARED])).forEach(remember);
         }
         window._revokedPassIDs = collectRevokedIDs([...seen.values()]);
