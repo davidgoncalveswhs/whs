@@ -20,7 +20,9 @@ try {
   page.on("pageerror", (error) => pageErrors.push(error.message));
   await page.goto(`http://127.0.0.1:${port}/index.html`, { waitUntil: "load" });
   await page.waitForTimeout(1500);
-  await page.addScriptTag({ path: path.join(here, "checks.js") });
+  // The site's security policy blocks inline scripts, so serve the checks as a same-origin file.
+  await page.route("**/__whs-checks.js", (route) => route.fulfill({ path: path.join(here, "checks.js"), contentType: "text/javascript" }));
+  await page.addScriptTag({ url: "/__whs-checks.js" });
   const result = await page.evaluate(() => window.runWhsChecks());
   await browser.close();
   for (const name of result.failed) console.log("FAIL " + name);
