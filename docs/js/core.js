@@ -74,7 +74,7 @@ async function clearDeviceKeys() {
 // Fields that stay readable before the device key unlocks the rest (no names, grades, or photos).
 const PROFILE_SHELL_FIELDS = ["key", "role", "guest", "cloudSaved", "seenAt", "appleUser"];
 // A device key that hasn't been used for this long is dropped; the student signs in again.
-const DEVICE_KEY_IDLE_DAYS = 90;
+const DEVICE_KEY_IDLE_DAYS = 180;
 let profileWrites = Promise.resolve();
 async function profileSealKey() {
   if (!profile || !profile.key) return null;

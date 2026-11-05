@@ -627,12 +627,12 @@ if ("serviceWorker" in navigator) {
   }
 })();
 // Without "Keep me signed in", a student is signed out after 30 minutes without use (classroom
-// devices). With it, the device key is dropped after 90 days without use, checked while open too.
+// devices). With it, the device key is dropped after 180 days without use, checked while open too.
 const SESSION_IDLE_MS = 30 * 60 * 1000;
 // Only real input counts: a page left open (or reopened by the browser) never extends either limit.
 function noteActivity() {
   try { sessionStorage.setItem("whsLastActive", String(Date.now())); } catch (_) {}
-  // A kept device key's 90 days restart only when the student actually uses the site (at most hourly).
+  // A kept device key's 180 days restart only when the student actually uses the site (at most hourly).
   if (profile && profile.key && profile.keyStored !== false && !profile.sealed && currentRole() === "student"
       && Date.now() - Number(profile.seenAt || 0) > 3600000) {
     profile.seenAt = Date.now();

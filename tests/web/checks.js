@@ -205,13 +205,16 @@ window.runWhsChecks = async function runWhsChecks() {
     check(profile === null && gateError.textContent === t().idleSignedOut, "a session signs out after 30 idle minutes");
     profile = { displayName: "T", firstName: "T", role: "student", key: "whsk:" + "1".repeat(32), guest: false, classes: [], seenAt: Date.now() - 91 * 86400000 };
     checkStudentIdle();
-    check(profile === null, "a kept device key is dropped after 90 days without use, even while the page is open");
+    check(!!profile, "a kept device key still works after 91 days without use");
+    profile = { displayName: "T", firstName: "T", role: "student", key: "whsk:" + "1".repeat(32), guest: false, classes: [], seenAt: Date.now() - 181 * 86400000 };
+    checkStudentIdle();
+    check(profile === null, "a kept device key is dropped after 180 days without use, even while the page is open");
     profile = { displayName: "T", firstName: "T", role: "student", key: "whsk:" + "1".repeat(32), guest: false, classes: [], seenAt: Date.now() - 2 * 86400000 };
     const seenBefore = profile.seenAt;
     checkStudentIdle();
-    check(profile && profile.seenAt === seenBefore, "an open page with no input doesn't restart the 90 days");
+    check(profile && profile.seenAt === seenBefore, "an open page with no input doesn't restart the 180 days");
     noteActivity();
-    check(profile && profile.seenAt > seenBefore, "real input restarts the 90 days");
+    check(profile && profile.seenAt > seenBefore, "real input restarts the 180 days");
     profile = null;
 
     // Signing out in another tab signs this one out too.
