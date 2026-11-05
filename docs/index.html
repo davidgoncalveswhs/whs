@@ -706,8 +706,15 @@
         useCode: "Use my WHS Web Code",
         webCodeTitle: "WHS Web Code",
         webCodeGuestHint: "Show this to a teacher so they can issue a hallway or Flex pass to this device.",
-        guestCloudNote: "This code is the password for this student. Show it to a teacher to issue a pass. The school site then stores the student's name with that code. Anyone who has the code can open that student.",
         webCodeCopy: "Copy code",
+        webCodeReset: "Reset web code",
+        webCodeResetTitle: "Reset your WHS Web Code?",
+        webCodeResetBody: "Use this if someone else saw your code. You get a new code and the old one stops working. Passes sent to the old code won't show here anymore.",
+        webCodeResetConfirm: "Reset code",
+        webCodeResetCancel: "Keep my code",
+        webCodeResetWorking: "Making your new code…",
+        webCodeResetNeedApple: "Sign in with Apple in this browser first, then reset your code.",
+        webCodeResetFail: "Your code wasn't changed. Check your connection and try again.",
         webCodeCopied: "Copied",
         webCodeSaveFail: "Could not save your web code. Check the school connection and try again.",
         addHome: "Add to Home Screen",
@@ -956,8 +963,15 @@
         useCode: "Usar mi código web WHS",
         webCodeTitle: "Código web WHS",
         webCodeGuestHint: "Muéstralo a un maestro para que emita un pase de pasillo o Flex a este dispositivo.",
-        guestCloudNote: "Este código es la contraseña de este estudiante. Muéstralo a un maestro para emitir un pase. El sitio de la escuela guarda el nombre del estudiante con ese código. Quien tiene el código puede abrir a ese estudiante.",
         webCodeCopy: "Copiar código",
+        webCodeReset: "Restablecer código web",
+        webCodeResetTitle: "¿Restablecer tu código web WHS?",
+        webCodeResetBody: "Úsalo si alguien vio tu código. Recibes un código nuevo y el anterior deja de funcionar. Los pases enviados al código anterior ya no aparecerán aquí.",
+        webCodeResetConfirm: "Restablecer código",
+        webCodeResetCancel: "Mantener mi código",
+        webCodeResetWorking: "Creando tu código nuevo…",
+        webCodeResetNeedApple: "Primero entra con Apple en este navegador y luego restablece tu código.",
+        webCodeResetFail: "Tu código no cambió. Revisa tu conexión e inténtalo de nuevo.",
         webCodeCopied: "Copiado",
         webCodeSaveFail: "No se pudo guardar tu código web. Revisa la conexión de la escuela e inténtalo de nuevo.",
         addHome: "Añadir a inicio",
@@ -2857,14 +2871,64 @@
       if (!profile.role || profile.role === "guest") profile.role = "student";
       localStorage.setItem("whsWebProfile", JSON.stringify(profile));
     }
+    function askResetWebCode() {
+      const c = t();
+      openSheet(`
+        <div class="card-title"><b>${c.webCodeResetTitle}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
+        <p class="muted">${c.webCodeResetBody}</p>
+        <p class="error" id="webCodeResetError"></p>
+        <button class="primary" type="button" data-action="closeSheet">${c.webCodeResetCancel}</button>
+        <button class="ghost" type="button" data-action="confirmResetWebCode" id="confirmResetWebCode" style="width:100%;margin-top:8px;color:#B42318;">${c.webCodeResetConfirm}</button>`);
+    }
+    // Gives a web-only student a new code: saves the profile under the new code, then deletes
+    // everything stored under the old one. (Students with the iPhone app reset it in the app.)
+    async function resetWebCode() {
+      if (!isGuestStudent() || !hasWebKey() || window._webCodeResetBusy) return;
+      const c = t();
+      const err = document.getElementById("webCodeResetError");
+      const button = document.getElementById("confirmResetWebCode");
+      const old = { ...profile };
+      if (old.cloudSaved && !ckWebAuthToken()) {
+        if (err) err.textContent = c.webCodeResetNeedApple;
+        return;
+      }
+      window._webCodeResetBusy = true;
+      if (button) { button.disabled = true; button.textContent = c.webCodeResetWorking; }
+      try {
+        let next = "";
+        if (ckWebAuthToken()) {
+          next = await allocateGuestStudentKey({ displayName: old.displayName, firstName: old.firstName, grade: old.grade });
+          if (!next) throw new Error("FAIL");
+        } else {
+          // Never saved to the school site, so the code only lives in this browser.
+          do { next = makeWebUnlockKey(); } while (next === normalizeCode(old.key));
+        }
+        // Sign-in was checked above, so this removes the old profile, passes, and seals.
+        if (old.cloudSaved) await eraseOwnedProfileRecords(old);
+        profile.key = next;
+        profile.cloudSaved = !!ckWebAuthToken();
+        localStorage.setItem("whsWebProfile", JSON.stringify(profile));
+        dropPassFieldCache();
+        window._studentPassUsable = [];
+        closeSheet();
+        renderMore();
+      } catch (_) {
+        if (err) err.textContent = c.webCodeResetFail;
+        if (button) { button.disabled = false; button.textContent = c.webCodeResetConfirm; }
+      } finally {
+        window._webCodeResetBusy = false;
+      }
+    }
     function guestWebCodeCard() {
       const c = t();
       if (!isGuestStudent() || !hasWebKey()) return "";
       return `<div class="card wide">
           <div class="t">${c.webCodeTitle}</div>
           <div class="s" style="font-size:22px;font-weight:700;letter-spacing:0.08em;margin:8px 0;color:var(--ink);">${escapeHtml(formatWebKey(profile.key))}</div>
-          <p class="muted" style="margin:0 0 10px;">${c.guestCloudNote}</p>
-          <button class="ghost" type="button" data-action="copyWebCode" id="copyWebCode">${c.webCodeCopy}</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="ghost" type="button" data-action="copyWebCode" id="copyWebCode">${c.webCodeCopy}</button>
+            <button class="ghost" type="button" data-action="askResetWebCode" style="color:#B42318;">${c.webCodeReset}</button>
+          </div>
         </div>`;
     }
     async function fetchByNames(db, names) {
@@ -5860,6 +5924,8 @@
         }
         if (name === "issuePass") issuePassFromWeb();
         if (name === "useCode") returnToCodeGate();
+        if (name === "askResetWebCode") askResetWebCode();
+        if (name === "confirmResetWebCode") resetWebCode();
         if (name === "copyWebCode") {
           const formatted = formatWebKey(profile && profile.key);
           const button = document.getElementById("copyWebCode");
