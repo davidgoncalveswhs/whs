@@ -194,8 +194,6 @@ const copy = {
     signOutBody: "This deletes your name, web code, swipe photo, ID photo, and Apple sign-in from this device, and removes this profile from the school site.",
     signOutCancel: "Keep profile",
     signOutConfirm: "Delete profile",
-    staffSignedOutIdle: "You were signed out after 30 minutes without activity. Sign in again to keep working.",
-    staffSignedOutClosed: "Staff accounts sign out when the browser closes. Sign in again to keep working.",
     signOutCloudSkipped: "This device profile is deleted. The school site copy was not removed because Apple sign-in was not active in this browser. Sign in with Apple on this device and delete the profile again to remove it from the school site.",
     admin: "Administrator",
     adminHint: "CloudKit API token. Students can ignore this. The pass log stays in this menu.",
@@ -456,8 +454,6 @@ const copy = {
     signOutBody: "Esto borra tu nombre, código web, foto de Tarjeta Swipe, foto del ID y el inicio de sesión de Apple de este dispositivo, y elimina este perfil del sitio de la escuela.",
     signOutCancel: "Conservar perfil",
     signOutConfirm: "Eliminar perfil",
-    staffSignedOutIdle: "Se cerró tu sesión después de 30 minutos sin actividad. Vuelve a entrar para seguir trabajando.",
-    staffSignedOutClosed: "Las cuentas del personal se cierran al cerrar el navegador. Vuelve a entrar para seguir trabajando.",
     signOutCloudSkipped: "El perfil de este dispositivo se eliminó. La copia del sitio de la escuela no se quitó porque el inicio de sesión con Apple no estaba activo en este navegador. Entra con Apple en este dispositivo y elimina el perfil otra vez para quitarlo del sitio de la escuela.",
     admin: "Administrador",
     adminHint: "Token de API de CloudKit. Los estudiantes pueden ignorar esto. El registro de pases está en este menú.",
@@ -5653,52 +5649,6 @@ window.openPassesInfo = openPassesInfo;
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("./sw.js").catch(() => {});
 }
-// Staff accounts can see every student's passes, so on shared computers they sign out by
-// themselves: after 30 minutes with no activity, and after the browser or tab is closed
-// (the browser clears sessionStorage then, so a fresh load with no marker means it was closed).
-const STAFF_IDLE_LIMIT = 30 * 60 * 1000;
-const STAFF_SESSION_KEY = "whsStaffSession";
-let staffMarkedAt = 0;
-function isStaffSignedIn() {
-  const role = currentRole();
-  return signedIn() && (role === "teacher" || role === "administrator");
-}
-function staffLastActive() {
-  try { return Number(sessionStorage.getItem(STAFF_SESSION_KEY) || 0); } catch (_) { return 0; }
-}
-function markStaffActive(force) {
-  if (!isStaffSignedIn()) return;
-  const now = Date.now();
-  if (!force && now - staffMarkedAt < 15000) return;
-  staffMarkedAt = now;
-  try { sessionStorage.setItem(STAFF_SESSION_KEY, String(now)); } catch (_) {}
-}
-function signOutStaff(message) {
-  forgetLocalProfile();
-  showGate();
-  show("home");
-  const note = document.getElementById("gateError");
-  if (note) note.textContent = message;
-}
-function checkStaffIdle() {
-  if (!isStaffSignedIn()) return;
-  const last = staffLastActive();
-  if (!last) { markStaffActive(true); return; }
-  if (Date.now() - last > STAFF_IDLE_LIMIT) signOutStaff(t().staffSignedOutIdle);
-}
-["pointerdown", "keydown", "wheel", "touchstart"].forEach((name) => {
-  document.addEventListener(name, () => markStaffActive(false), { passive: true, capture: true });
-});
-setInterval(checkStaffIdle, 60000);
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") checkStaffIdle();
-});
-if (isStaffSignedIn() && !staffLastActive()) {
-  signOutStaff(t().staffSignedOutClosed);
-} else {
-  markStaffActive(true);
-}
-
 showGate();
 if (signedIn()) {
   show("home");
