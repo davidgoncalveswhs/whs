@@ -2055,6 +2055,18 @@ async function markPassesRevoked(ids) {
   } catch (error) {
     if (isAuthError(error)) throw Object.assign(new Error("APPLE"), { apple: true });
   }
+  // Next try 40 markers per request; only fall back to one request per pass if that fails.
+  try {
+    let batched = true;
+    for (let start = 0; start < records.length && batched; start += 40) {
+      const result = await restModifyOps(records.slice(start, start + 40).map((record) => ({ operationType: "forceReplace", record })));
+      const rows = (result && result.records) || [];
+      if (!result || result.serverErrorCode || rows.length === 0 || rows.some((row) => row && row.serverErrorCode)) batched = false;
+    }
+    if (batched) return true;
+  } catch (error) {
+    if (isAuthError(error)) throw Object.assign(new Error("APPLE"), { apple: true });
+  }
   for (const record of records) {
     try {
       await restModify(record, "create");
@@ -5414,12 +5426,17 @@ async function loadPasses() {
   const remember = (record) => { if (record && record.recordName) seen.set(record.recordName, record); };
   try {
     const db = CloudKit.getDefaultContainer().publicCloudDatabase;
-    const campus = await readExact(CAMPUS_LOG);
+    // These three lookups don't depend on each other, so run them at the same time.
+    const [campus, manifestRecords, queriedIDs] = await Promise.all([
+      readExact(CAMPUS_LOG).catch(() => null),
+      fetchByNames(db, [MANIFEST]).catch(() => []),
+      queryStaffPassIDs(500).catch(() => null)
+    ]);
     const campusReady = !!(campus && (fieldValue(campus, "kind") === "manifest" || indexIDs(campus).length));
     if (campusReady) remember(campus);
-    if (!campusReady) (await fetchByNames(db, [MANIFEST])).forEach(remember);
+    if (!campusReady) (manifestRecords || []).forEach(remember);
     const legacyIDs = campusReady ? indexIDs(campus) : (seen.get(MANIFEST) ? parsePassIDs(fieldValue(seen.get(MANIFEST), "passIDs")) : []);
-    const queried = (await queryStaffPassIDs(500)) || [];
+    const queried = queriedIDs || [];
     const ids = [...new Set(queried.concat(legacyIDs))].slice(0, 500);
     const hasManifest = ids.length > 0 || campusReady || !!seen.get(MANIFEST);
     if (ids.length) {
