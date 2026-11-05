@@ -278,50 +278,68 @@ function confirmRemoveProfile() {
   openSheet(`
     <div class="card-title"><b>${c.signOutTitle}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
     <p class="muted">${c.signOutBody}</p>
+    <p class="error" id="removeProfileError" role="alert"></p>
     <button class="primary" type="button" data-action="closeSheet">${c.signOutCancel}</button>
-    <button class="ghost" type="button" data-action="removeProfile" style="width:100%;margin-top:8px;color:#B42318;">${c.signOutConfirm}</button>`);
+    <button class="ghost" type="button" id="removeProfileButton" data-action="removeProfile" style="width:100%;margin-top:8px;color:#B42318;">${c.signOutConfirm}</button>`);
 }
-function removeChromebookProfile() {
+// The device copy is only forgotten once the school-site copy is gone, so the code is never lost
+// while its records are still in iCloud.
+async function removeChromebookProfile() {
   const person = profile;
-  closeSheet();
-  eraseOwnedProfileRecords(person).then((removed) => {
+  const c = t();
+  const button = document.getElementById("removeProfileButton");
+  const err = document.getElementById("removeProfileError");
+  if (button) button.disabled = true;
+  let result = "failed";
+  try { result = await eraseOwnedProfileRecords(person); } catch (_) {}
+  if (result === true) {
+    closeSheet();
     forgetLocalProfile();
     showGate();
-    if (removed === false && gateError) gateError.textContent = t().signOutCloudSkipped;
-  }).catch(() => {
-    forgetLocalProfile();
-    showGate();
-  });
-}
-async function eraseOwnedProfileRecords(person) {
-  const key = normalizeCode(person && person.key);
-  const names = [];
-  const profileName = key.length === 10 ? await profileRecordName(key) : "";
-  if (profileName) {
-    names.push(profileName, await webPassLinkName(key));
-    privateInboxNames(await privateCodeTag(key)).forEach((name) => names.push(name));
+    return;
   }
-  const unique = [...new Set(names.filter(Boolean))];
-  if (!unique.length) return;
-  let foundRecords = [];
-  try { foundRecords = await restLookupExact(unique); } catch (_) {}
+  if (err) err.textContent = result === "needsApple" ? c.signOutCloudSkipped : c.signOutCloudFailed;
+  if (button) button.disabled = false;
+}
+// Deletes the school-site records this browser created for a guest profile. Returns true when
+// they're gone (or there were none), "needsApple" when Apple sign-in is missing, else "failed".
+// Profiles paired from the app belong to the app's iCloud account; the app deletes those.
+async function eraseOwnedProfileRecords(person) {
+  if (!person || !person.cloudSaved) return true;
+  const key = normalizeCode(person.key);
+  if (key.length !== 10) return true;
+  const profileName = await profileRecordName(key);
+  const names = [profileName, await webPassLinkName(key)].concat(privateInboxNames(await privateCodeTag(key)));
+  if (!ckWebAuthToken()) return "needsApple";
+  let foundRecords;
+  try { foundRecords = await restLookupExact([...new Set(names.filter(Boolean))]); } catch (_) { return "failed"; }
+  const seals = [];
   foundRecords.forEach((record) => {
     if (String(record.recordName || "") !== profileName) return;
-    parsePassIDs(fieldValue(record, "passIDs")).forEach((id) => names.push("seal." + id));
+    parsePassIDs(fieldValue(record, "passIDs")).forEach((id) => seals.push("seal." + id));
   });
   const found = foundRecords.map((record) => String(record.recordName || "")).filter(Boolean);
-  const seals = names.filter((name) => name.indexOf("seal.") === 0);
-  const targets = [...new Set(found.concat(seals).concat(profileName ? [profileName] : []))];
-  if (!targets.length) return true;
-  if (!ckWebAuthToken()) return false;
-  for (let start = 0; start < targets.length; start += 40) {
-    const ops = targets.slice(start, start + 40).map((recordName) => ({
-      operationType: "forceDelete",
-      record: { recordName }
-    }));
-    try { await restModifyOps(ops); } catch (_) {}
+  let pending = [...new Set(found.concat(seals, [profileName]))];
+  // Each batch gets one retry; anything still not deleted (other than already-missing) is a failure.
+  for (let attempt = 0; attempt < 2 && pending.length; attempt += 1) {
+    const stillThere = [];
+    for (let start = 0; start < pending.length; start += 40) {
+      const batch = pending.slice(start, start + 40);
+      let response = null;
+      try {
+        response = await restModifyOps(batch.map((recordName) => ({ operationType: "forceDelete", record: { recordName } })));
+      } catch (_) {}
+      const results = response && Array.isArray(response.records) ? response.records : null;
+      if (!results) { stillThere.push(...batch); continue; }
+      batch.forEach((recordName, index) => {
+        const item = results.find((record) => String(record.recordName || "") === recordName) || results[index];
+        const code = String((item && item.serverErrorCode) || "").toUpperCase();
+        if (!item || (code && code !== "NOT_FOUND" && code !== "UNKNOWN_ITEM")) stillThere.push(recordName);
+      });
+    }
+    pending = stillThere;
   }
-  return true;
+  return pending.length ? "failed" : true;
 }
 function forgetLocalProfile() {
   try {
@@ -352,6 +370,7 @@ function forgetLocalProfile() {
       if (/^whs/i.test(key)) sessionStorage.removeItem(key);
     });
   } catch (_) {}
+  forgetCodeKeys();
   profile = null;
   window._ckUserRecordName = "";
   window._appleReady = false;

@@ -112,6 +112,43 @@ window.runWhsChecks = async function runWhsChecks() {
     const derivedNames = [await profileRecordName("ABCDE23456"), await webPassLinkName("ABCDE23456")].concat(await studentInboxNames("ABCDE23456"));
     check(derivedNames.length === 162 && derivedNames.every((n) => !n.toUpperCase().includes("ABCDE23456")), "record names never contain the code");
     check(await openSeal("ABCDE23456", "whs1.C6t8uM5f3OYCmyozqyq6wi3pGxGATVjaoZi8K1GdfoL8wLmPdqmvDuvM92YQ2R2OxoseOGI/") === "Grade 10 · Señor García", "the website opens text the app locked");
+    check(await sealText("SHORT", "Grade 10") === "" && await sealText("ABCDE23456", "") === "", "text is never stored in the clear when it can't be locked");
+    const lockedNames = await sealProfileNames("ABCDE23456", "Jordan S", "Jordan");
+    const namesBack = await profileNames({ fields: { nameSeal: { value: lockedNames } } }, "ABCDE23456");
+    check(lockedNames.indexOf("whs1.") === 0 && !lockedNames.includes("Jordan") && namesBack.firstName === "Jordan" && namesBack.displayName === "Jordan S", "student names on the school site are locked with the code");
+    check((await profileNames({ fields: { nameSeal: { value: lockedNames } } }, "ZZZZZ99999")).firstName === "", "the wrong code can't read the name");
+
+    // Deleting a profile only reports success when iCloud confirms every record is gone.
+    const guest = { key: "ABCDE23456", cloudSaved: true };
+    stub("restLookupExact", async () => []);
+    stub("ckWebAuthToken", () => "");
+    check(await eraseOwnedProfileRecords(guest) === "needsApple", "deleting without Apple sign-in says so instead of succeeding");
+    stub("ckWebAuthToken", () => "test");
+    let deleteCalls = 0;
+    stub("restModifyOps", async (ops) => { deleteCalls += 1; return { records: ops.map((o) => ({ recordName: o.record.recordName, serverErrorCode: "SERVER_ERROR" })) }; });
+    check(await eraseOwnedProfileRecords(guest) === "failed" && deleteCalls === 2, "a failed delete is retried, then reported");
+    stub("restModifyOps", async () => { throw new Error("offline"); });
+    check(await eraseOwnedProfileRecords(guest) === "failed", "an offline delete is reported");
+    stub("restModifyOps", async (ops) => ({ records: ops.map((o) => ({ recordName: o.record.recordName, serverErrorCode: "NOT_FOUND" })) }));
+    check(await eraseOwnedProfileRecords(guest) === true, "records that are already gone count as deleted");
+    check(await eraseOwnedProfileRecords({ key: "ABCDE23456", cloudSaved: false }) === true, "profiles the app owns are left to the app");
+    profile = { displayName: "T", firstName: "T", role: "student", key: "ABCDE23456", guest: true, cloudSaved: true, classes: [] };
+    stub("restModifyOps", async () => { throw new Error("offline"); });
+    confirmRemoveProfile();
+    await removeChromebookProfile();
+    check(profile && profile.key === "ABCDE23456" && (document.getElementById("removeProfileError") || {}).textContent, "a failed delete keeps the profile and shows why");
+    closeSheet();
+    restore();
+    await privateCodeTag("ABCDE23456");
+    forgetLocalProfile();
+    check(codeKeyCache.size === 0, "signing out clears cached code keys");
+    profile = { displayName: "T", firstName: "T", role: "student", key: "ABCDE23456", classes: [] };
+    let askedFor = [];
+    stub("fetchByNames", async (db, names) => { askedFor = names; return []; });
+    await ownProfileSecrets();
+    check(askedFor.length === 1 && askedFor[0] === "profile.v2.5cc110d3709f3aa31942364a676d2032", "photo, ID, and study data load from the derived profile name");
+    restore();
+    profile = null;
     restore();
   } catch (error) {
     failed.push("checks crashed: " + (error && error.message));

@@ -222,9 +222,10 @@ async function enterWithCode() {
       return;
     }
     const secrets = await profileSecrets(record, key);
+    const names = await profileNames(record, key);
     profile = {
-      displayName: fieldValue(record, "displayName") || fieldValue(record, "firstName") || "Warrior",
-      firstName: fieldValue(record, "firstName") || "",
+      displayName: names.displayName || names.firstName || "Warrior",
+      firstName: names.firstName || "",
       role,
       grade: secrets.grade || "",
       key

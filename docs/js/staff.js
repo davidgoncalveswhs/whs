@@ -397,9 +397,10 @@ async function allocateGuestStudentKey(person) {
     try { existing = await restLookup([recordName]); } catch (_) { existing = []; }
     if (existing.length) continue;
     const sealedGrade = await sealText(key, String(person.grade || ""));
+    const sealedNames = await sealProfileNames(key, person.displayName || person.firstName || "Warrior", person.firstName || person.displayName || "");
+    if (sealedNames.indexOf("whs1.") !== 0) return "";
     const fields = {
-      displayName: { value: person.displayName || person.firstName || "Warrior" },
-      firstName: { value: person.firstName || person.displayName || "" },
+      nameSeal: { value: sealedNames },
       role: { value: "student" }
     };
     if (String(sealedGrade).indexOf("whs1.") === 0) fields.gradeSeal = { value: sealedGrade };
@@ -456,7 +457,11 @@ async function resetWebCode() {
       do { next = makeWebUnlockKey(); } while (next === normalizeCode(old.key));
     }
     // Sign-in was checked above, so this removes the old profile, passes, and seals.
-    if (old.cloudSaved) await eraseOwnedProfileRecords(old);
+    if (old.cloudSaved && await eraseOwnedProfileRecords(old) !== true) {
+      // Keep the old code; remove the new profile we just made so nothing is left behind.
+      if (ckWebAuthToken()) await eraseOwnedProfileRecords({ key: next, cloudSaved: true }).catch(() => {});
+      throw new Error("ERASE");
+    }
     profile.key = next;
     profile.cloudSaved = !!ckWebAuthToken();
     localStorage.setItem("whsWebProfile", JSON.stringify(profile));

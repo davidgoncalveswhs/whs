@@ -169,6 +169,15 @@ function applyAvatar(url) {
   }
 }
 
+// Reads the signed-in student's own profile record (named from their code, never the code itself).
+async function ownProfileSecrets() {
+  const recordName = await profileRecordName(profile.key);
+  if (!recordName) return profileSecrets(null, profile.key);
+  const profiles = await fetchByNames(cloudDb(), [recordName]);
+  const mine = profiles.find((item) => String(item.recordName || "") === recordName);
+  return profileSecrets(mine, profile.key);
+}
+
 async function loadProfilePhoto() {
   if (!profile || !profile.key) {
     applyAvatar("");
@@ -177,9 +186,7 @@ async function loadProfilePhoto() {
   if (!schoolToken()) return;
   try { await ensureCloud(); } catch (_) {}
   try {
-    const profiles = await fetchByNames(cloudDb(), [profile.key]);
-    const mine = profiles.find((item) => normalizeCode(item.recordName) === normalizeCode(profile.key) || String(item.recordName || "") === profile.key);
-    const secrets = await profileSecrets(mine, profile.key);
+    const secrets = await ownProfileSecrets();
     applyAvatar(secrets.photo);
     if (view === "more") renderMore();
   } catch (_) {}
@@ -835,9 +842,7 @@ async function loadStudy() {
   }
   try { await ensureCloud(); } catch (_) {}
   try {
-    const profiles = await fetchByNames(cloudDb(), [profile.key]);
-    const mine = profiles.find((item) => normalizeCode(item.recordName) === normalizeCode(profile.key) || String(item.recordName || "") === profile.key);
-    const secrets = await profileSecrets(mine, profile.key);
+    const secrets = await ownProfileSecrets();
     window._study = parseStudy(secrets.study);
     applyClassTile();
     if (view === "classes") renderClasses();
@@ -866,9 +871,7 @@ async function loadSwipeCard() {
   }
   try { await ensureCloud(); } catch (_) {}
   try {
-    const profiles = await fetchByNames(cloudDb(), [profile.key]);
-    const mine = profiles.find((item) => normalizeCode(item.recordName) === normalizeCode(profile.key) || String(item.recordName || "") === profile.key);
-    const secrets = await profileSecrets(mine, profile.key);
+    const secrets = await ownProfileSecrets();
     const url = secrets.swipe;
     applySwipeTile(url);
     if (list && view === "swipe") list.innerHTML = swipePage(url);

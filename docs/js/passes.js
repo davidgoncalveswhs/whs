@@ -215,7 +215,8 @@ async function attachPassToStudent(passId, webCode, studentName) {
   if (profileRec && role && role !== "student" && role !== "guest") {
     throw Object.assign(new Error("CODE"), { code: "CODE" });
   }
-  const name = studentName || fieldValue(profileRec, "displayName") || fieldValue(profileRec, "firstName") || "";
+  const known = profileRec ? await profileNames(profileRec, key) : { displayName: "", firstName: "" };
+  const name = studentName || known.displayName || known.firstName || "";
   if (profileRec) {
     const ids = capNewestIDs(parsePassIDs(fieldValue(profileRec, "passIDs")), passId, 400);
     const rec = {
@@ -265,7 +266,8 @@ async function attachPassIcon(recordName, file, onProgress, sealCode) {
     const code = normalizeCode(sealCode || "");
     const records = [];
     for (let i = 0; i < parts.length; i += 1) {
-      const chunk = code.length === 10 ? await sealText(code, parts[i]) : parts[i];
+      const chunk = await sealText(code, parts[i]);
+      if (chunk.indexOf("whs1.") !== 0) return;
       records.push({
         recordType: PASS_TYPE,
         recordName: "passimg." + recordName + "." + i,

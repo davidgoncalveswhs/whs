@@ -106,6 +106,10 @@ function deriveCodeKeys(code) {
   }
   return codeKeyCache.get(compact);
 }
+// Drops every cached code key, e.g. on sign-out.
+function forgetCodeKeys() {
+  codeKeyCache.clear();
+}
 async function sealKey(code) {
   const derived = await deriveCodeKeys(code);
   if (!derived) throw new Error("CODE");
@@ -227,9 +231,11 @@ async function openStaffBody(stored) {
   }
   return text || "";
 }
+// Locks text with the student's code. Returns "" when it can't be locked, so a bad code never
+// stores the text in the clear.
 async function sealText(code, plain) {
   const text = String(plain || "");
-  if (!text || normalizeCode(code).length !== 10) return text;
+  if (!text || normalizeCode(code).length !== 10) return "";
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const cipher = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, await sealKey(code), new TextEncoder().encode(text)));
   const blob = new Uint8Array(iv.length + cipher.length);
@@ -295,6 +301,17 @@ async function openSealedFile(code, record, field) {
   } catch (_) {
     return null;
   }
+}
+// The student's name is locked with their code too (nameSeal). Older records kept it in the clear.
+async function profileNames(record, code) {
+  let names = null;
+  try { names = JSON.parse((await openSeal(code, fieldValue(record, "nameSeal"))) || "null"); } catch (_) {}
+  const displayName = String((names && names.displayName) || fieldValue(record, "displayName") || "");
+  const firstName = String((names && names.firstName) || fieldValue(record, "firstName") || "");
+  return { displayName, firstName };
+}
+async function sealProfileNames(code, displayName, firstName) {
+  return sealText(code, JSON.stringify({ displayName: String(displayName || ""), firstName: String(firstName || "") }));
 }
 async function profileSecrets(record, code) {
   const photoFile = await openSealedFile(code, record, "photoFile");
