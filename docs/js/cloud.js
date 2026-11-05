@@ -94,6 +94,7 @@ function deriveCodeKeys(code) {
   const compact = normalizeCode(code);
   if (compact.length !== 10) return Promise.resolve(null);
   if (!codeKeyCache.has(compact)) {
+    const ticket = profileSession;
     // Keep only a handful of codes in memory; a full cache starts over.
     if (codeKeyCache.size >= 4) codeKeyCache.clear();
     const pending = (async () => {
@@ -105,6 +106,8 @@ function deriveCodeKeys(code) {
       return { key, tag };
     })();
     pending.catch(() => codeKeyCache.delete(compact));
+    // Finished after a sign-out: hand back the result but don't keep it cached.
+    pending.then(() => { if (!sameSession(ticket) && codeKeyCache.get(compact) === pending) codeKeyCache.delete(compact); }, () => {});
     codeKeyCache.set(compact, pending);
   }
   return codeKeyCache.get(compact);

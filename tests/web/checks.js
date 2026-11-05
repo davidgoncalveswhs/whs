@@ -140,7 +140,7 @@ window.runWhsChecks = async function runWhsChecks() {
     check(await eraseOwnedProfileRecords(guest) === "failed", "a lookup that didn't finish is reported, not treated as success");
     stub("restLookupDetailed", async () => ({ records: [], complete: true, failed: [] }));
     stub("restModifyOps", async (ops) => ({ records: ops.map((o) => ({ recordName: o.record.recordName, serverErrorCode: o.record.recordName.indexOf("profile.") === 0 ? "NOT_FOUND" : "ACCESS_DENIED" })) }));
-    check(await eraseOwnedProfileRecords(guest) === true, "teacher-made inbox records the student can't delete don't block the delete");
+    check(await eraseOwnedProfileRecords(guest) === "partial", "teacher-made records the student can't delete are reported as left behind, not deleted");
     stub("restModifyOps", async (ops) => ({ records: ops.map((o) => ({ recordName: o.record.recordName, serverErrorCode: "ACCESS_DENIED" })) }));
     check(await eraseOwnedProfileRecords(guest) === "failed", "the student's own profile has to be deleted");
     profile = { displayName: "T", firstName: "T", role: "student", key: "ABCDE23456", guest: true, cloudSaved: true, classes: [] };
@@ -193,7 +193,50 @@ window.runWhsChecks = async function runWhsChecks() {
     check(!keptKey && !(await keyStoreDo("readonly", (store) => store.count())) && !localStorage.getItem("whsWebProfile") && !!sessionStorage.getItem("whsWebProfileSession"), "without Keep me signed in, nothing outlasts the browser session");
     forgetLocalProfile();
     await sleep(150);
-    check(!!document.getElementById("keepSignedIn") && document.getElementById("keepSignedIn").checked, "sign-in offers Keep me signed in on this device");
+    check(!!document.getElementById("keepSignedIn") && !document.getElementById("keepSignedIn").checked && !document.getElementById("guestKeepSignedIn").checked, "Keep me signed in is offered and starts unchecked");
+
+    // Without Keep me signed in, 30 idle minutes sign the student out; activity keeps them in.
+    profile = { displayName: "T", firstName: "T", role: "student", key: "ABCDE23456", guest: true, cloudSaved: false, classes: [], keyStored: false };
+    sessionStorage.setItem("whsLastActive", String(Date.now() - 10 * 60000));
+    checkStudentIdle();
+    check(!!profile, "a session stays signed in after 10 idle minutes");
+    sessionStorage.setItem("whsLastActive", String(Date.now() - 31 * 60000));
+    checkStudentIdle();
+    check(profile === null && gateError.textContent === t().idleSignedOut, "a session signs out after 30 idle minutes");
+    profile = { displayName: "T", firstName: "T", role: "student", key: "whsk:" + "1".repeat(32), guest: false, classes: [], seenAt: Date.now() - 91 * 86400000 };
+    checkStudentIdle();
+    check(profile === null, "a kept device key is dropped after 90 days without use, even while the page is open");
+    gateError.textContent = "";
+
+    // Signing out of this device only keeps the school-site profile.
+    profile = { displayName: "T", firstName: "T", role: "student", key: "ABCDE23456", guest: true, cloudSaved: true, classes: [] };
+    show("more");
+    await sleep(80);
+    check(!!document.querySelector('[data-action="askSignOutOnly"]'), "students get a Sign out that doesn't delete their profile");
+    let erased = false;
+    stub("eraseOwnedProfileRecords", async () => { erased = true; return true; });
+    signOutThisDevice("");
+    check(profile === null && !erased, "Sign out leaves the school-site profile alone");
+    restore();
+
+    // A save still running when the student signs out writes nothing back.
+    profile = { displayName: "Late", firstName: "Late", role: "student", key: "ABCDE23456", guest: true, cloudSaved: true, classes: [] };
+    const lateRemember = rememberProfileCode("ABCDE23456", true);
+    forgetLocalProfile();
+    await lateRemember;
+    await sleep(150);
+    check(!localStorage.getItem("whsWebProfile") && !sessionStorage.getItem("whsWebProfileSession") && !(await keyStoreDo("readonly", (store) => store.count())) && !codeKeyCache.has("ABCDE23456"), "a save still running at sign-out leaves nothing behind");
+    profile = { displayName: "Late", firstName: "Late", role: "student", key: "ABCDE23456", keyHandle: "whsk:5cc110d3709f3aa31942364a676d2032", guest: true, classes: [] };
+    const lateStore = storeProfile();
+    forgetLocalProfile();
+    await lateStore;
+    check(!localStorage.getItem("whsWebProfile"), "a queued profile write is dropped after sign-out");
+    profile = { role: "student", key: "whsk:" + "2".repeat(32), sealed: "whs1.AAAA" };
+    storeProfile();
+    await sleep(50);
+    check(!localStorage.getItem("whsWebProfile"), "a still-locked profile is never saved over");
+    forgetLocalProfile();
+    await sleep(100);
 
     // Student codes typed by teachers don't stay in memory.
     await privateCodeTag("ZZZZZ22222");

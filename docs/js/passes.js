@@ -177,12 +177,12 @@ async function deliverPassToInbox(passId, webCode, studentName) {
   const taken = new Set(existing.map((record) => String(record.recordName || "").toLowerCase()));
   const already = existing.some((record) => parsePassIDs(fieldValue(record, "passIDs")).some((item) => item.toLowerCase() === id.toLowerCase()));
   if (already) return true;
-  const sealedName = await sealText(key, studentName || "");
+  // Inbox and link records hold only pass IDs: a teacher's device makes them, so the student can't
+  // delete them later, and nothing personal should be left behind.
   const fields = {
     kind: { value: "inbox" },
     passIDs: { value: id },
-    destination: { value: tag },
-    studentName: { value: sealedName }
+    destination: { value: tag }
   };
   for (const name of names) {
     if (taken.has(name.toLowerCase())) continue;
@@ -215,8 +215,6 @@ async function attachPassToStudent(passId, webCode, studentName) {
   if (profileRec && role && role !== "student" && role !== "guest") {
     throw Object.assign(new Error("CODE"), { code: "CODE" });
   }
-  const known = profileRec ? await profileNames(profileRec, key) : { displayName: "", firstName: "" };
-  const name = studentName || known.displayName || known.firstName || "";
   if (profileRec) {
     const ids = capNewestIDs(parsePassIDs(fieldValue(profileRec, "passIDs")), passId, 400);
     const rec = {
@@ -240,8 +238,7 @@ async function attachPassToStudent(passId, webCode, studentName) {
     recordName: linkName,
     fields: {
       kind: { value: "webpass" },
-      passIDs: { value: ids.join(",") },
-      studentName: { value: await sealText(key, name) }
+      passIDs: { value: ids.join(",") }
     }
   };
   if (link && link.recordChangeTag) record.recordChangeTag = link.recordChangeTag;

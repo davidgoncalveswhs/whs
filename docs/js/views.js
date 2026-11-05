@@ -114,6 +114,7 @@ function renderMore() {
       ${adminTools}
       ${guestWebCodeCard()}
       ${isGuest() ? `${guestHomeCard()}<button class="card action" type="button" data-action="useCode"><div class="t">${c.useCode}</div></button>` : ""}
+      ${profile && profile.key && currentRole() === "student" ? `<button class="card action" type="button" data-action="askSignOutOnly"><div class="t">${c.signOutOnly}</div></button>` : ""}
       <button class="card action" type="button" id="signOutProfile">${c.signOut}</button>
     </div>`;
   const tokenEl = document.getElementById("token");

@@ -457,7 +457,8 @@ async function resetWebCode() {
       do { next = makeWebUnlockKey(); } while (next === normalizeCode(old.key));
     }
     // Sign-in was checked above, so this removes the old profile, passes, and seals.
-    if (old.cloudSaved && await eraseOwnedProfileRecords(old) !== true) {
+    const erased = old.cloudSaved ? await eraseOwnedProfileRecords(old) : true;
+    if (erased !== true && erased !== "partial") {
       // Keep the old code; remove the new profile we just made so nothing is left behind.
       if (ckWebAuthToken()) await eraseOwnedProfileRecords({ key: next, cloudSaved: true }).catch(() => {});
       throw new Error("ERASE");
@@ -572,6 +573,8 @@ function applyChrome() {
     const node = document.getElementById(id);
     if (node) node.textContent = c.keepSignedIn;
   });
+  const keepHint = document.getElementById("guestKeepHint");
+  if (keepHint) keepHint.textContent = c.keepSignedInHint;
   const nameLabel = document.getElementById("nameLabel");
   const gradeLabel = document.getElementById("gradeLabel");
   const rolePickLabel = document.getElementById("rolePickLabel");

@@ -11,6 +11,12 @@ let staff = [];
 const DEVICE_KEY_PREFIX = "whsk:";
 const SESSION_CODE = "whsSessionCode";
 const deviceKeys = new Map();
+// Goes up at every sign-out. Async work (key derivation, encryption, storage) checks it before saving
+// anything, so a save that was still running can't bring a signed-out profile or key back.
+let profileSession = 0;
+function sameSession(ticket) {
+  return ticket === profileSession;
+}
 function isKeyHandle(value) {
   return /^whsk:[0-9a-f]{32}$/.test(String(value || ""));
 }
@@ -47,10 +53,11 @@ async function keyStoreDo(mode, work) {
   });
 }
 async function deviceKeyFor(handle) {
+  const ticket = profileSession;
   const tag = String(handle || "").slice(DEVICE_KEY_PREFIX.length);
   if (deviceKeys.has(tag)) return deviceKeys.get(tag);
   const key = await keyStoreDo("readonly", (store) => store.get(tag));
-  if (!key || typeof key !== "object" || !key.type) return null;
+  if (!key || typeof key !== "object" || !key.type || !sameSession(ticket)) return null;
   const found = { key, tag };
   deviceKeys.set(tag, found);
   return found;
@@ -78,12 +85,15 @@ async function profileSealKey() {
 // the device key. With no saved device key (the student didn't choose to stay signed in) it only
 // lasts this browser session.
 function storeProfile() {
-  if (!profile) return;
+  // A profile that hasn't been unlocked yet is never saved, so its locked details can't be lost.
+  if (!profile || profile.sealed) return;
   const snapshot = { ...profile };
-  profileWrites = profileWrites.then(() => writeProfile(snapshot)).catch(() => {});
+  const ticket = profileSession;
+  profileWrites = profileWrites.then(() => writeProfile(snapshot, ticket)).catch(() => {});
   return profileWrites;
 }
-async function writeProfile(current) {
+async function writeProfile(current, ticket) {
+  if (!sameSession(ticket)) return;
   const saved = { ...current };
   delete saved.keyHandle;
   delete saved.keyStored;
@@ -94,7 +104,7 @@ async function writeProfile(current) {
   let text = JSON.stringify(saved);
   if (saved.key) {
     const derived = await deriveCodeKeys(current.key);
-    if (!derived) return;
+    if (!derived || !sameSession(ticket)) return;
     const shell = {};
     const rest = {};
     Object.keys(saved).forEach((name) => { (PROFILE_SHELL_FIELDS.includes(name) ? shell : rest)[name] = saved[name]; });
@@ -106,6 +116,8 @@ async function writeProfile(current) {
     shell.sealed = "whs1." + bytesToBase64(blob);
     text = JSON.stringify(shell);
   }
+  // Signed out while this was being prepared: save nothing.
+  if (!sameSession(ticket)) return;
   try {
     if (!saved.key || current.keyStored !== false) {
       localStorage.setItem("whsWebProfile", text);
@@ -142,10 +154,16 @@ function wantsToStaySignedIn(id) {
 // Call after the student types or gets a code. Saves the device key only if they chose to stay
 // signed in, keeps the code for this session only, then saves the profile.
 async function rememberProfileCode(code, keep = true) {
+  const ticket = profileSession;
   const derived = await deriveCodeKeys(code);
-  if (!derived || !profile) return false;
+  if (!derived || !profile || !sameSession(ticket)) return false;
   deviceKeys.set(derived.tag, derived);
   const stored = keep ? await saveDeviceKey(derived.tag, derived.key) : (await clearDeviceKeys(), false);
+  if (!sameSession(ticket)) {
+    // Signed out while the key was being saved: take it back out.
+    await clearDeviceKeys();
+    return false;
+  }
   try { sessionStorage.setItem(SESSION_CODE, JSON.stringify({ tag: derived.tag, code: normalizeCode(code) })); } catch (_) {}
   profile.keyHandle = DEVICE_KEY_PREFIX + derived.tag;
   profile.keyStored = stored;
@@ -448,6 +466,22 @@ function confirmRemoveProfile() {
     <button class="primary" type="button" data-action="closeSheet">${c.signOutCancel}</button>
     <button class="ghost" type="button" id="removeProfileButton" data-action="removeProfile" style="width:100%;margin-top:8px;color:#B42318;">${c.signOutConfirm}</button>`);
 }
+// Signs out of this device only; the school-site profile stays.
+function confirmSignOutOnly() {
+  const c = t();
+  openSheet(`
+    <div class="card-title"><b>${c.signOutOnlyTitle}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
+    <p class="muted">${c.signOutOnlyBody}</p>
+    <button class="primary" type="button" data-action="signOutOnly">${c.signOutOnlyConfirm}</button>
+    <button class="ghost" type="button" data-action="closeSheet" style="width:100%;margin-top:8px;">${c.signOutCancel}</button>`);
+}
+function signOutThisDevice(message) {
+  closeSheet();
+  forgetLocalProfile();
+  applyAvatar("");
+  showGate();
+  if (message && gateError) gateError.textContent = message;
+}
 // The device copy is only forgotten once the school-site copy is gone, so the code is never lost
 // while its records are still in iCloud.
 async function removeChromebookProfile() {
@@ -458,17 +492,20 @@ async function removeChromebookProfile() {
   if (button) button.disabled = true;
   let result = "failed";
   try { result = await eraseOwnedProfileRecords(person); } catch (_) {}
-  if (result === true) {
+  if (result === true || result === "partial") {
     closeSheet();
     forgetLocalProfile();
     showGate();
+    if (result === "partial" && gateError) gateError.textContent = c.signOutLeftBehind;
     return;
   }
   if (err) err.textContent = result === "needsApple" ? c.signOutCloudSkipped : c.signOutCloudFailed;
   if (button) button.disabled = false;
 }
 // Deletes the school-site records this browser created for a guest profile. Returns true when
-// they're gone (or there were none), "needsApple" when Apple sign-in is missing, else "failed".
+// everything is gone (or there was nothing), "partial" when the profile is gone but records a
+// teacher's device made couldn't be (the student isn't allowed to), "needsApple" when Apple sign-in
+// is missing, else "failed".
 // Profiles paired from the app belong to the app's iCloud account; the app deletes those.
 async function eraseOwnedProfileRecords(person) {
   if (!person || !person.cloudSaved) return true;
@@ -488,6 +525,8 @@ async function eraseOwnedProfileRecords(person) {
   });
   // Every name this code could own is deleted, found or not; missing ones come back NOT_FOUND.
   let pending = [...new Set(names.concat(seals).filter(Boolean))];
+  const teacherMade = new Set(pending.filter((name) => name !== profileName));
+  const leftBehind = new Set();
   // Each batch gets one retry; anything still not deleted (other than already-missing) is a failure.
   for (let attempt = 0; attempt < 2 && pending.length; attempt += 1) {
     const stillThere = [];
@@ -502,17 +541,21 @@ async function eraseOwnedProfileRecords(person) {
       batch.forEach((recordName, index) => {
         const item = results.find((record) => String(record.recordName || "") === recordName) || results[index];
         const code = String((item && item.serverErrorCode) || "").toUpperCase();
-        // Teachers create the inbox and link records, so the student may not be allowed to delete
-        // them; they stay locked with a code that no longer exists. The profile itself must go.
-        const notOurs = code === "ACCESS_DENIED" && recordName !== profileName;
-        if (!item || (code && code !== "NOT_FOUND" && code !== "UNKNOWN_ITEM" && !notOurs)) stillThere.push(recordName);
+        if (!item) { stillThere.push(recordName); return; }
+        if (!code || code === "NOT_FOUND" || code === "UNKNOWN_ITEM") return;
+        // Teachers' devices create the inbox, link, and seal records, so the student isn't allowed to
+        // delete those. They're reported as left behind, never as deleted. Anything else must go.
+        if (code === "ACCESS_DENIED" && teacherMade.has(recordName)) { leftBehind.add(recordName); return; }
+        stillThere.push(recordName);
       });
     }
     pending = stillThere;
   }
-  return pending.length ? "failed" : true;
+  if (pending.length) return "failed";
+  return leftBehind.size ? "partial" : true;
 }
 function forgetLocalProfile() {
+  profileSession += 1;
   try {
     const container = CloudKit.getDefaultContainer();
     if (container && typeof container.signOut === "function") container.signOut();

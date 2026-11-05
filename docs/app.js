@@ -187,10 +187,8 @@ async function loadPasses() {
 }
 
 function returnToCodeGate() {
-  localStorage.removeItem("whsWebProfile");
-  profile = null;
-  applyAvatar("");
-  showGate();
+  // A full sign-out, so no device key or session code is left behind.
+  signOutThisDevice("");
 }
 
 async function enterWithCode() {
@@ -296,6 +294,8 @@ document.body.addEventListener("click", (event) => {
     }
     if (name === "issuePass") issuePassFromWeb();
     if (name === "useCode") returnToCodeGate();
+    if (name === "askSignOutOnly") confirmSignOutOnly();
+    if (name === "signOutOnly") signOutThisDevice("");
     if (name === "toggleWebCode") setWebCodeShown(!window._webCodeShown);
     if (name === "auditMore") loadAuditLog(false);
     if (name === "auditRefresh") loadAuditLog(true);
@@ -621,12 +621,39 @@ if ("serviceWorker" in navigator) {
     }
   }
 })();
+// Without "Keep me signed in", a student is signed out after 30 minutes without use (classroom
+// devices). With it, the device key is dropped after 90 days without use, checked while open too.
+const SESSION_IDLE_MS = 30 * 60 * 1000;
+function noteActivity() {
+  try { sessionStorage.setItem("whsLastActive", String(Date.now())); } catch (_) {}
+}
+function lastActivity() {
+  try { return Number(sessionStorage.getItem("whsLastActive")) || Date.now(); } catch (_) { return Date.now(); }
+}
+["pointerdown", "keydown", "touchstart", "wheel"].forEach((type) => {
+  window.addEventListener(type, noteActivity, { passive: true, capture: true });
+});
+// A reload doesn't count as activity: check the old timestamp first.
+checkStudentIdle();
+noteActivity();
+function checkStudentIdle() {
+  if (!profile || !profile.key || currentRole() !== "student") return;
+  if (profile.keyStored === false) {
+    if (Date.now() - lastActivity() > SESSION_IDLE_MS) signOutThisDevice(t().idleSignedOut);
+    return;
+  }
+  const idleDays = (Date.now() - Number(profile.seenAt || Date.now())) / 86400000;
+  if (idleDays > DEVICE_KEY_IDLE_DAYS) { signOutThisDevice(""); return; }
+  if (idleDays > 1) { profile.seenAt = Date.now(); storeProfile(); }
+}
+setInterval(checkStudentIdle, 60000);
 document.addEventListener("visibilitychange", () => {
   // Hide the web code again when the student switches away from this tab or app.
   if (document.visibilityState !== "visible") {
     if (window._webCodeShown) setWebCodeShown(false);
     return;
   }
+  checkStudentIdle();
   syncStaffRoleFromCloud().catch(() => {});
 });
 setInterval(() => {
