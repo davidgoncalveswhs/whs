@@ -4027,8 +4027,29 @@
       const ok = document.getElementById("issuePassOk");
       if (ok && message) ok.classList.add("hidden");
     }
+    async function readAsSignedIn(name) {
+      if (!ckWebAuthToken() || !name) return null;
+      try {
+        const response = await fetch(restPublicUrl("records/lookup", false), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ records: [{ recordName: name }] })
+        });
+        const payload = await response.json();
+        const wanted = String(name).toLowerCase();
+        return recordsFrom(payload).filter(usableRecord).find((item) => String(item.recordName || "").toLowerCase() === wanted) || null;
+      } catch (_) {
+        return null;
+      }
+    }
     async function readExact(name) {
-      try { return (await restLookupExact([name]))[0] || null; } catch (_) { return null; }
+      try {
+        if (ckWebAuthToken()) {
+          const signed = await readAsSignedIn(name);
+          if (signed) return signed;
+        }
+        return (await restLookupExact([name]))[0] || null;
+      } catch (_) { return null; }
     }
     function indexIDs(record) {
       return parsePassIDs(record && fieldValue(record, "passIDs"));
@@ -5282,6 +5303,8 @@
         const ids = campusReady ? indexIDs(campus) : (hasManifest ? parsePassIDs(fieldValue(seen.get(MANIFEST), "passIDs")) : []);
         if (ids.length) {
           (await fetchByNames(db, ids.concat(ids.flatMap((id) => [tombstoneName(id), revokedName(id)]), [CLEARED, CAMPUS_CLEARED]))).forEach(remember);
+          const privateCleared = await readExact(CAMPUS_CLEARED);
+          if (privateCleared) remember(privateCleared);
           if (!campusReady) await storePassIndex(CAMPUS_LOG, MANIFEST, "manifest", ids, true);
         } else if (hasManifest) {
           (await fetchByNames(db, [CLEARED, CAMPUS_CLEARED])).forEach(remember);
