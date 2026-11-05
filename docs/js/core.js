@@ -554,8 +554,33 @@ async function eraseOwnedProfileRecords(person) {
   if (pending.length) return "failed";
   return leftBehind.size ? "partial" : true;
 }
-function forgetLocalProfile() {
+// Signing out in one tab signs out every other open tab of the site too, so none keeps the code,
+// keys, or profile in memory or can write them back.
+const SIGNED_OUT_KEY = "whsSignedOutAt";
+const sessionChannel = (() => {
+  try { return typeof BroadcastChannel === "function" ? new BroadcastChannel("whs-session") : null; } catch (_) { return null; }
+})();
+function announceSignOut() {
+  try { if (sessionChannel) sessionChannel.postMessage({ type: "signout" }); } catch (_) {}
+  // Backup for browsers without BroadcastChannel: other tabs get a storage event.
+  try { localStorage.setItem(SIGNED_OUT_KEY, String(Date.now())); } catch (_) {}
+}
+function signedOutElsewhere() {
+  if (!profile) return;
+  forgetLocalProfile(true);
+  try { closeSheet(); } catch (_) {}
+  try { applyAvatar(""); } catch (_) {}
+  try { showGate(); } catch (_) {}
+}
+if (sessionChannel) {
+  sessionChannel.onmessage = (event) => { if (event && event.data && event.data.type === "signout") signedOutElsewhere(); };
+}
+window.addEventListener("storage", (event) => {
+  if (event.key === SIGNED_OUT_KEY && event.newValue) signedOutElsewhere();
+});
+function forgetLocalProfile(fromOtherTab) {
   profileSession += 1;
+  if (fromOtherTab !== true) announceSignOut();
   try {
     const container = CloudKit.getDefaultContainer();
     if (container && typeof container.signOut === "function") container.signOut();

@@ -206,6 +206,51 @@ window.runWhsChecks = async function runWhsChecks() {
     profile = { displayName: "T", firstName: "T", role: "student", key: "whsk:" + "1".repeat(32), guest: false, classes: [], seenAt: Date.now() - 91 * 86400000 };
     checkStudentIdle();
     check(profile === null, "a kept device key is dropped after 90 days without use, even while the page is open");
+    profile = { displayName: "T", firstName: "T", role: "student", key: "whsk:" + "1".repeat(32), guest: false, classes: [], seenAt: Date.now() - 2 * 86400000 };
+    const seenBefore = profile.seenAt;
+    checkStudentIdle();
+    check(profile && profile.seenAt === seenBefore, "an open page with no input doesn't restart the 90 days");
+    noteActivity();
+    check(profile && profile.seenAt > seenBefore, "real input restarts the 90 days");
+    profile = null;
+
+    // Signing out in another tab signs this one out too.
+    profile = { displayName: "T", firstName: "T", role: "student", key: "ABCDE23456", guest: true, classes: [] };
+    window.dispatchEvent(new StorageEvent("storage", { key: "whsSignedOutAt", newValue: String(Date.now()) }));
+    check(profile === null, "a sign-out in another tab (storage event) signs this tab out");
+    if (typeof BroadcastChannel === "function") {
+      profile = { displayName: "T", firstName: "T", role: "student", key: "ABCDE23456", guest: true, classes: [] };
+      const otherTab = new BroadcastChannel("whs-session");
+      otherTab.postMessage({ type: "signout" });
+      await sleep(100);
+      check(profile === null, "a sign-out in another tab (broadcast) signs this tab out");
+      let heard = false;
+      otherTab.onmessage = (event) => { heard = event.data && event.data.type === "signout"; };
+      profile = { displayName: "T", firstName: "T", role: "student", key: "ABCDE23456", guest: true, classes: [] };
+      forgetLocalProfile();
+      await sleep(100);
+      check(heard && !!localStorage.getItem("whsSignedOutAt"), "signing out tells every other open tab");
+      otherTab.close();
+    }
+
+    // A code reset that leaves teacher-made records says so.
+    profile = { displayName: "T", firstName: "T", role: "student", key: "ABCDE23456", guest: true, cloudSaved: true, classes: [] };
+    stub("ckWebAuthToken", () => "test");
+    stub("allocateGuestStudentKey", async () => "FGHJK23456");
+    stub("eraseOwnedProfileRecords", async () => "partial");
+    stub("rememberProfileCode", async () => true);
+    await resetWebCode();
+    check(profile && profile.key === "FGHJK23456" && document.getElementById("sheetCard").textContent.includes(t().webCodeResetLeftBehind.slice(0, 30)), "a code reset that leaves records behind tells the student");
+    closeSheet();
+    restore();
+
+    // A browser-only profile says its code can't bring it back.
+    profile = { displayName: "T", firstName: "T", role: "student", key: "ABCDE23456", guest: true, cloudSaved: false, classes: [] };
+    check(guestWebCodeCard().includes("localOnlyNote"), "a browser-only profile explains its code can't restore it");
+    profile.cloudSaved = true;
+    check(!guestWebCodeCard().includes("localOnlyNote"), "a school-site profile doesn't show that note");
+    forgetLocalProfile();
+    await sleep(100);
     gateError.textContent = "";
 
     // Signing out of this device only keeps the school-site profile.

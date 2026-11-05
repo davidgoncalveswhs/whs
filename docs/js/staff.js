@@ -471,6 +471,12 @@ async function resetWebCode() {
     window._studentPassUsable = [];
     closeSheet();
     renderMore();
+    if (erased === "partial") {
+      openSheet(`
+        <div class="card-title"><b>${c.webCodeTitle}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
+        <p class="muted">${c.webCodeResetLeftBehind}</p>
+        <button class="primary" type="button" data-action="closeSheet">${c.close}</button>`);
+    }
   } catch (_) {
     if (err) err.textContent = c.webCodeResetFail;
     if (button) { button.disabled = false; button.textContent = c.webCodeResetConfirm; }
@@ -500,6 +506,7 @@ function guestWebCodeCard() {
   const kept = !isKeyHandle(profile.key);
   return `<div class="card wide">
       <div class="t">${c.webCodeTitle}</div>
+      ${profile.cloudSaved ? "" : `<p class="muted" id="localOnlyNote" style="margin:6px 0 10px;">${c.localOnlyProfile}</p>`}
       ${kept ? webCodeValueHTML() : `<p class="muted" style="margin:6px 0 10px;">${c.webCodeNotKept}</p>`}
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
         ${kept ? `<button class="ghost" type="button" data-action="toggleWebCode" id="toggleWebCode" aria-controls="webCodeValue">${window._webCodeShown ? c.webCodeHide : c.webCodeShow}</button>

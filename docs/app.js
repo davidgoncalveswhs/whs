@@ -545,6 +545,14 @@ async function enterGuest() {
   applyAvatar("");
   showGate();
   show("home");
+  // Couldn't save to the school site: say plainly that the code can't bring this profile back.
+  if (profile && profile.role === "student" && profile.key && !profile.cloudSaved) {
+    const c = t();
+    openSheet(`
+      <div class="card-title"><b>${c.webCodeTitle}</b><button type="button" data-action="closeSheet">${c.close}</button></div>
+      <p class="muted">${c.localOnlyProfile}</p>
+      <button class="primary" type="button" data-action="closeSheet">${c.close}</button>`);
+  }
 }
 async function finishPendingGuestStaff() {
   const pending = window._pendingGuestStaff;
@@ -606,9 +614,6 @@ if ("serviceWorker" in navigator) {
   } else if (profile && !isKeyHandle(profile.key) && normalizeCode(profile.key).length === 10 && !profile.keyHandle) {
     // Browsers that saved the code itself (older versions) switch to the locked device key once.
     await rememberProfileCode(profile.key).catch(() => {});
-  } else if (profile && profile.key) {
-    profile.seenAt = Date.now();
-    storeProfile();
   }
   showGate();
   if (signedIn()) {
@@ -624,8 +629,15 @@ if ("serviceWorker" in navigator) {
 // Without "Keep me signed in", a student is signed out after 30 minutes without use (classroom
 // devices). With it, the device key is dropped after 90 days without use, checked while open too.
 const SESSION_IDLE_MS = 30 * 60 * 1000;
+// Only real input counts: a page left open (or reopened by the browser) never extends either limit.
 function noteActivity() {
   try { sessionStorage.setItem("whsLastActive", String(Date.now())); } catch (_) {}
+  // A kept device key's 90 days restart only when the student actually uses the site (at most hourly).
+  if (profile && profile.key && profile.keyStored !== false && !profile.sealed && currentRole() === "student"
+      && Date.now() - Number(profile.seenAt || 0) > 3600000) {
+    profile.seenAt = Date.now();
+    storeProfile();
+  }
 }
 function lastActivity() {
   try { return Number(sessionStorage.getItem("whsLastActive")) || Date.now(); } catch (_) { return Date.now(); }
@@ -633,9 +645,9 @@ function lastActivity() {
 ["pointerdown", "keydown", "touchstart", "wheel"].forEach((type) => {
   window.addEventListener(type, noteActivity, { passive: true, capture: true });
 });
-// A reload doesn't count as activity: check the old timestamp first.
+// A reload doesn't count as activity: check the old timestamp, and start the clock only for a new tab.
 checkStudentIdle();
-noteActivity();
+try { if (!sessionStorage.getItem("whsLastActive")) sessionStorage.setItem("whsLastActive", String(Date.now())); } catch (_) {}
 function checkStudentIdle() {
   if (!profile || !profile.key || currentRole() !== "student") return;
   if (profile.keyStored === false) {
@@ -643,8 +655,7 @@ function checkStudentIdle() {
     return;
   }
   const idleDays = (Date.now() - Number(profile.seenAt || Date.now())) / 86400000;
-  if (idleDays > DEVICE_KEY_IDLE_DAYS) { signOutThisDevice(""); return; }
-  if (idleDays > 1) { profile.seenAt = Date.now(); storeProfile(); }
+  if (idleDays > DEVICE_KEY_IDLE_DAYS) signOutThisDevice("");
 }
 setInterval(checkStudentIdle, 60000);
 document.addEventListener("visibilitychange", () => {
