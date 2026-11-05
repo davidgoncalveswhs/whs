@@ -455,6 +455,8 @@
       white-space: nowrap; flex: none;
       display: inline-flex; align-items: center; justify-content: center;
     }
+    .web-code { font-size: 22px; font-weight: 700; letter-spacing: 0.08em; margin: 8px 0; color: var(--ink); transition: filter 0.2s ease; }
+    .web-code.is-hidden { filter: blur(9px); user-select: none; -webkit-user-select: none; }
     .gate-guest {
       margin-top: 28px; border: 1px solid #cfd6de; padding: var(--sign-inset);
     }
@@ -707,6 +709,9 @@
         webCodeTitle: "WHS Web Code",
         webCodeGuestHint: "Show this to a teacher so they can issue a hallway or Flex pass to this device.",
         webCodeCopy: "Copy code",
+        webCodeShow: "Show code",
+        webCodeHide: "Hide code",
+        webCodeHiddenLabel: "WHS Web Code hidden",
         webCodeReset: "Reset web code",
         webCodeResetTitle: "Reset your WHS Web Code?",
         webCodeResetBody: "Use this if someone else saw your code. You get a new code and the old one stops working. Passes sent to the old code won't show here anymore.",
@@ -964,6 +969,9 @@
         webCodeTitle: "Código web WHS",
         webCodeGuestHint: "Muéstralo a un maestro para que emita un pase de pasillo o Flex a este dispositivo.",
         webCodeCopy: "Copiar código",
+        webCodeShow: "Mostrar código",
+        webCodeHide: "Ocultar código",
+        webCodeHiddenLabel: "Código web WHS oculto",
         webCodeReset: "Restablecer código web",
         webCodeResetTitle: "¿Restablecer tu código web WHS?",
         webCodeResetBody: "Úsalo si alguien vio tu código. Recibes un código nuevo y el anterior deja de funcionar. Los pases enviados al código anterior ya no aparecerán aquí.",
@@ -2919,13 +2927,29 @@
         window._webCodeResetBusy = false;
       }
     }
+    // The code is a password, so it starts hidden each time the More tab opens. While hidden, the page
+    // holds only a blurred placeholder, never the real code.
+    const WEB_CODE_MASK = "XXXXX-XXXXX";
+    function webCodeValueHTML() {
+      const shown = !!window._webCodeShown;
+      const label = shown ? "" : ` aria-label="${escapeHtml(t().webCodeHiddenLabel)}"`;
+      return `<div class="s web-code${shown ? "" : " is-hidden"}" id="webCodeValue"${label}>${shown ? escapeHtml(formatWebKey(profile.key)) : WEB_CODE_MASK}</div>`;
+    }
+    function setWebCodeShown(shown) {
+      window._webCodeShown = !!shown;
+      const value = document.getElementById("webCodeValue");
+      if (value) value.outerHTML = webCodeValueHTML();
+      const button = document.getElementById("toggleWebCode");
+      if (button) button.textContent = shown ? t().webCodeHide : t().webCodeShow;
+    }
     function guestWebCodeCard() {
       const c = t();
       if (!isGuestStudent() || !hasWebKey()) return "";
       return `<div class="card wide">
           <div class="t">${c.webCodeTitle}</div>
-          <div class="s" style="font-size:22px;font-weight:700;letter-spacing:0.08em;margin:8px 0;color:var(--ink);">${escapeHtml(formatWebKey(profile.key))}</div>
+          ${webCodeValueHTML()}
           <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <button class="ghost" type="button" data-action="toggleWebCode" id="toggleWebCode" aria-controls="webCodeValue">${window._webCodeShown ? c.webCodeHide : c.webCodeShow}</button>
             <button class="ghost" type="button" data-action="copyWebCode" id="copyWebCode">${c.webCodeCopy}</button>
             <button class="ghost" type="button" data-action="askResetWebCode" style="color:#B42318;">${c.webCodeReset}</button>
           </div>
@@ -3075,7 +3099,10 @@
       if (id === "news") loadNews();
       if (id === "lunch") renderLunch();
       if (id === "contacts") renderStaff(document.getElementById("staffQuery") ? document.getElementById("staffQuery").value : "");
-      if (id === "more") renderMore();
+      if (id === "more") {
+        window._webCodeShown = false;
+        renderMore();
+      }
       if (id === "posts") {
         if (!canPostNews()) {
           show("home");
@@ -5924,6 +5951,7 @@
         }
         if (name === "issuePass") issuePassFromWeb();
         if (name === "useCode") returnToCodeGate();
+        if (name === "toggleWebCode") setWebCodeShown(!window._webCodeShown);
         if (name === "askResetWebCode") askResetWebCode();
         if (name === "confirmResetWebCode") resetWebCode();
         if (name === "copyWebCode") {
@@ -6234,7 +6262,11 @@
       }
     }
     document.addEventListener("visibilitychange", () => {
-      if (document.visibilityState !== "visible") return;
+      // Hide the web code again when the student switches away from this tab or app.
+      if (document.visibilityState !== "visible") {
+        if (window._webCodeShown) setWebCodeShown(false);
+        return;
+      }
       syncStaffRoleFromCloud().catch(() => {});
     });
     setInterval(() => {
