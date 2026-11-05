@@ -422,7 +422,7 @@ async function ensureGuestStudentProfile() {
   profile.key = key;
   profile.guest = true;
   if (!profile.role || profile.role === "guest") profile.role = "student";
-  await rememberProfileCode(key);
+  await rememberProfileCode(key, profile.keyStored !== false);
 }
 function askResetWebCode() {
   const c = t();
@@ -464,7 +464,8 @@ async function resetWebCode() {
     }
     profile.key = next;
     profile.cloudSaved = !!ckWebAuthToken();
-    await rememberProfileCode(next);
+    forgetCodeKey(old.key);
+    await rememberProfileCode(next, profile.keyStored !== false);
     dropPassFieldCache();
     window._studentPassUsable = [];
     closeSheet();
@@ -567,6 +568,10 @@ function applyChrome() {
     gateBody.textContent = c.gateBody;
   }
   codeLabel.textContent = c.codeLabel;
+  ["keepSignedInLabel", "guestKeepLabel"].forEach((id) => {
+    const node = document.getElementById(id);
+    if (node) node.textContent = c.keepSignedIn;
+  });
   const nameLabel = document.getElementById("nameLabel");
   const gradeLabel = document.getElementById("gradeLabel");
   const rolePickLabel = document.getElementById("rolePickLabel");

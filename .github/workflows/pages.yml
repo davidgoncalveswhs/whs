@@ -50,6 +50,11 @@ jobs:
             exit 1
           fi
           ENV="${WHS_CK_ENV:-development}"
+          case "$ENV" in
+            production) ;;
+            development) echo "::warning::The live site is using the CloudKit development environment (test data). Set WHS_CK_ENV=production before real students use it. See Docs/RUNBOOK.md, Switch the website to production." ;;
+            *) echo "WHS_CK_ENV must be production or development" >&2; exit 1 ;;
+          esac
           python3 - << 'PY'
           import os
           token = os.environ["WHS_SCHOOL_TOKEN"].replace("\\", "\\\\").replace('"', '\\"')

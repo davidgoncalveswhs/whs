@@ -430,6 +430,8 @@
       visibility: visible !important;
       border: 0;
     }
+    .gate-keep { display: flex; align-items: center; gap: 8px; margin: 10px 0 2px; font-size: 14px; color: var(--muted); cursor: pointer; }
+    .gate-keep input { width: 18px; height: 18px; margin: 0; accent-color: var(--orange); }
     .gate-actions {
       display: flex; justify-content: flex-end;
       margin-top: 16px; padding-right: var(--sign-inset);
@@ -583,6 +585,7 @@
             <label id="codeLabel" for="webCode">WHS Web Code</label>
             <input id="webCode" autocomplete="off" spellcheck="false" placeholder="XXXXX-XXXXX">
           </div>
+          <label class="gate-keep" for="keepSignedIn"><input type="checkbox" id="keepSignedIn" checked><span id="keepSignedInLabel">Keep me signed in on this device</span></label>
           <div class="gate-actions">
             <button class="gate-signin" type="button" id="enterSite">Sign In</button>
           </div>
@@ -619,6 +622,7 @@
               </select>
             </div>
           </div>
+          <label class="gate-keep" for="guestKeepSignedIn" id="guestKeepRow"><input type="checkbox" id="guestKeepSignedIn" checked><span id="guestKeepLabel">Keep me signed in on this device</span></label>
           <div class="gate-actions">
             <button class="gate-signin" type="button" id="guestFinish">Sign In</button>
           </div>
@@ -642,13 +646,13 @@
 
   <script src="https://cdn.apple-cloudkit.com/ck/2/cloudkit.js"></script>
   <!-- App code, in load order. Each file shares one global scope with the others. -->
-  <script src="./js/strings.js?v=6"></script>
-  <script src="./js/core.js?v=6"></script>
-  <script src="./js/cloud.js?v=6"></script>
-  <script src="./js/staff.js?v=6"></script>
-  <script src="./js/views.js?v=6"></script>
-  <script src="./js/passes.js?v=6"></script>
-  <script src="./js/news.js?v=6"></script>
-  <script src="./app.js?v=6"></script>
+  <script src="./js/strings.js?v=7"></script>
+  <script src="./js/core.js?v=7"></script>
+  <script src="./js/cloud.js?v=7"></script>
+  <script src="./js/staff.js?v=7"></script>
+  <script src="./js/views.js?v=7"></script>
+  <script src="./js/passes.js?v=7"></script>
+  <script src="./js/news.js?v=7"></script>
+  <script src="./app.js?v=7"></script>
 </body>
 </html>

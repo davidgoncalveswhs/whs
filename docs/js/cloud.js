@@ -94,6 +94,8 @@ function deriveCodeKeys(code) {
   const compact = normalizeCode(code);
   if (compact.length !== 10) return Promise.resolve(null);
   if (!codeKeyCache.has(compact)) {
+    // Keep only a handful of codes in memory; a full cache starts over.
+    if (codeKeyCache.size >= 4) codeKeyCache.clear();
     const pending = (async () => {
       const base = await crypto.subtle.importKey("raw", new TextEncoder().encode(compact), "PBKDF2", false, ["deriveBits"]);
       const bits = new Uint8Array(await crypto.subtle.deriveBits(
@@ -106,6 +108,10 @@ function deriveCodeKeys(code) {
     codeKeyCache.set(compact, pending);
   }
   return codeKeyCache.get(compact);
+}
+// Forgets one code's keys, e.g. a student's code a teacher typed, or an old code after a reset.
+function forgetCodeKey(code) {
+  codeKeyCache.delete(normalizeCode(code));
 }
 // Drops every cached code key, e.g. on sign-out.
 function forgetCodeKeys() {

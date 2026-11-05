@@ -64,19 +64,50 @@ async function clearDeviceKeys() {
   deviceKeys.clear();
   await keyStoreDo("readwrite", (store) => { store.clear(); return null; });
 }
-// Saves the profile without the code. With no saved device key it only lasts this browser session.
+// Fields that stay readable before the device key unlocks the rest (no names, grades, or photos).
+const PROFILE_SHELL_FIELDS = ["key", "role", "guest", "cloudSaved", "seenAt", "appleUser"];
+// A device key that hasn't been used for this long is dropped; the student signs in again.
+const DEVICE_KEY_IDLE_DAYS = 90;
+let profileWrites = Promise.resolve();
+async function profileSealKey() {
+  if (!profile || !profile.key) return null;
+  const derived = await deriveCodeKeys(profile.key);
+  return derived ? derived.key : null;
+}
+// Saves the profile without the code. A student's name, grade, classes, and photos are locked with
+// the device key. With no saved device key (the student didn't choose to stay signed in) it only
+// lasts this browser session.
 function storeProfile() {
   if (!profile) return;
-  const saved = { ...profile };
+  const snapshot = { ...profile };
+  profileWrites = profileWrites.then(() => writeProfile(snapshot)).catch(() => {});
+  return profileWrites;
+}
+async function writeProfile(current) {
+  const saved = { ...current };
   delete saved.keyHandle;
   delete saved.keyStored;
   if (saved.key && !isKeyHandle(saved.key)) {
-    if (!profile.keyHandle) return;
-    saved.key = profile.keyHandle;
+    if (!current.keyHandle) return;
+    saved.key = current.keyHandle;
   }
-  const text = JSON.stringify(saved);
+  let text = JSON.stringify(saved);
+  if (saved.key) {
+    const derived = await deriveCodeKeys(current.key);
+    if (!derived) return;
+    const shell = {};
+    const rest = {};
+    Object.keys(saved).forEach((name) => { (PROFILE_SHELL_FIELDS.includes(name) ? shell : rest)[name] = saved[name]; });
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const cipher = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, derived.key, new TextEncoder().encode(JSON.stringify(rest))));
+    const blob = new Uint8Array(iv.length + cipher.length);
+    blob.set(iv, 0);
+    blob.set(cipher, iv.length);
+    shell.sealed = "whs1." + bytesToBase64(blob);
+    text = JSON.stringify(shell);
+  }
   try {
-    if (!saved.key || profile.keyStored !== false) {
+    if (!saved.key || current.keyStored !== false) {
       localStorage.setItem("whsWebProfile", text);
       sessionStorage.removeItem("whsWebProfileSession");
     } else {
@@ -85,17 +116,41 @@ function storeProfile() {
     }
   } catch (_) {}
 }
-// Call after the student types or gets a code: saves the device key, keeps the code for this
-// session only, then saves the profile.
-async function rememberProfileCode(code) {
+// Opens the locked part of a saved profile. False when the device key is missing, expired, or wrong.
+async function unlockStoredProfile() {
+  if (!profile || !profile.sealed) return true;
+  const sealed = String(profile.sealed);
+  delete profile.sealed;
+  try {
+    const key = await profileSealKey();
+    if (!key || sealed.indexOf("whs1.") !== 0) return false;
+    const blob = base64ToBytes(sealed.slice(5));
+    const clear = await crypto.subtle.decrypt({ name: "AES-GCM", iv: blob.slice(0, 12) }, key, blob.slice(12));
+    const rest = JSON.parse(new TextDecoder().decode(clear));
+    Object.keys(rest || {}).forEach((name) => {
+      if (!PROFILE_SHELL_FIELDS.includes(name)) profile[name] = rest[name];
+    });
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+function wantsToStaySignedIn(id) {
+  const box = document.getElementById(id);
+  return !box || box.checked;
+}
+// Call after the student types or gets a code. Saves the device key only if they chose to stay
+// signed in, keeps the code for this session only, then saves the profile.
+async function rememberProfileCode(code, keep = true) {
   const derived = await deriveCodeKeys(code);
   if (!derived || !profile) return false;
   deviceKeys.set(derived.tag, derived);
-  const stored = await saveDeviceKey(derived.tag, derived.key);
+  const stored = keep ? await saveDeviceKey(derived.tag, derived.key) : (await clearDeviceKeys(), false);
   try { sessionStorage.setItem(SESSION_CODE, JSON.stringify({ tag: derived.tag, code: normalizeCode(code) })); } catch (_) {}
   profile.keyHandle = DEVICE_KEY_PREFIX + derived.tag;
   profile.keyStored = stored;
-  storeProfile();
+  profile.seenAt = Date.now();
+  await storeProfile();
   return stored;
 }
 let profile = null;
@@ -107,6 +162,9 @@ try {
 if (profile && typeof profile === "object") {
   delete profile.staffProof;
   delete profile.staffEnrolled;
+  // Drop a device key that hasn't been used in a long time.
+  const idleDays = (Date.now() - Number(profile.seenAt || Date.now())) / 86400000;
+  if (isKeyHandle(profile.key) && idleDays > DEVICE_KEY_IDLE_DAYS) profile.expired = true;
   if (isKeyHandle(profile.key)) {
     profile.keyHandle = profile.key;
     try {
@@ -419,15 +477,17 @@ async function eraseOwnedProfileRecords(person) {
   const profileName = await profileRecordName(key);
   const names = [profileName, await webPassLinkName(key)].concat(privateInboxNames(await privateCodeTag(key)));
   if (!ckWebAuthToken()) return "needsApple";
-  let foundRecords;
-  try { foundRecords = await restLookupExact([...new Set(names.filter(Boolean))]); } catch (_) { return "failed"; }
+  // The profile lists the pass seals to remove, so its lookup has to succeed (found or missing).
+  let looked;
+  try { looked = await restLookupDetailed([profileName], true); } catch (_) { return "failed"; }
+  if (!looked || !looked.complete) return "failed";
   const seals = [];
-  foundRecords.forEach((record) => {
+  (looked.records || []).forEach((record) => {
     if (String(record.recordName || "") !== profileName) return;
     parsePassIDs(fieldValue(record, "passIDs")).forEach((id) => seals.push("seal." + id));
   });
-  const found = foundRecords.map((record) => String(record.recordName || "")).filter(Boolean);
-  let pending = [...new Set(found.concat(seals, [profileName]))];
+  // Every name this code could own is deleted, found or not; missing ones come back NOT_FOUND.
+  let pending = [...new Set(names.concat(seals).filter(Boolean))];
   // Each batch gets one retry; anything still not deleted (other than already-missing) is a failure.
   for (let attempt = 0; attempt < 2 && pending.length; attempt += 1) {
     const stillThere = [];
@@ -442,7 +502,10 @@ async function eraseOwnedProfileRecords(person) {
       batch.forEach((recordName, index) => {
         const item = results.find((record) => String(record.recordName || "") === recordName) || results[index];
         const code = String((item && item.serverErrorCode) || "").toUpperCase();
-        if (!item || (code && code !== "NOT_FOUND" && code !== "UNKNOWN_ITEM")) stillThere.push(recordName);
+        // Teachers create the inbox and link records, so the student may not be allowed to delete
+        // them; they stay locked with a code that no longer exists. The profile itself must go.
+        const notOurs = code === "ACCESS_DENIED" && recordName !== profileName;
+        if (!item || (code && code !== "NOT_FOUND" && code !== "UNKNOWN_ITEM" && !notOurs)) stillThere.push(recordName);
       });
     }
     pending = stillThere;

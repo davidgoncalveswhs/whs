@@ -120,18 +120,29 @@ window.runWhsChecks = async function runWhsChecks() {
 
     // Deleting a profile only reports success when iCloud confirms every record is gone.
     const guest = { key: "ABCDE23456", cloudSaved: true };
-    stub("restLookupExact", async () => []);
+    stub("restLookupDetailed", async () => ({ records: [], complete: true, failed: [] }));
     stub("ckWebAuthToken", () => "");
     check(await eraseOwnedProfileRecords(guest) === "needsApple", "deleting without Apple sign-in says so instead of succeeding");
     stub("ckWebAuthToken", () => "test");
     let deleteCalls = 0;
     stub("restModifyOps", async (ops) => { deleteCalls += 1; return { records: ops.map((o) => ({ recordName: o.record.recordName, serverErrorCode: "SERVER_ERROR" })) }; });
-    check(await eraseOwnedProfileRecords(guest) === "failed" && deleteCalls === 2, "a failed delete is retried, then reported");
+    check(await eraseOwnedProfileRecords(guest) === "failed" && deleteCalls === 10, "a failed delete is retried (5 batches, twice each), then reported");
     stub("restModifyOps", async () => { throw new Error("offline"); });
     check(await eraseOwnedProfileRecords(guest) === "failed", "an offline delete is reported");
     stub("restModifyOps", async (ops) => ({ records: ops.map((o) => ({ recordName: o.record.recordName, serverErrorCode: "NOT_FOUND" })) }));
     check(await eraseOwnedProfileRecords(guest) === true, "records that are already gone count as deleted");
     check(await eraseOwnedProfileRecords({ key: "ABCDE23456", cloudSaved: false }) === true, "profiles the app owns are left to the app");
+    let deletedNames = [];
+    stub("restModifyOps", async (ops) => { deletedNames.push(...ops.map((o) => o.record.recordName)); return { records: ops.map((o) => ({ recordName: o.record.recordName, serverErrorCode: "NOT_FOUND" })) }; });
+    await eraseOwnedProfileRecords(guest);
+    check(deletedNames.length === 162 && deletedNames.includes("profile.v2.5cc110d3709f3aa31942364a676d2032") && deletedNames.some((n) => n.indexOf("inbox.v2.") === 0) && deletedNames.some((n) => n.indexOf("webpass.v2.") === 0), "a delete targets every record the code could own, found or not");
+    stub("restLookupDetailed", async () => ({ records: [], complete: false, failed: ["x"] }));
+    check(await eraseOwnedProfileRecords(guest) === "failed", "a lookup that didn't finish is reported, not treated as success");
+    stub("restLookupDetailed", async () => ({ records: [], complete: true, failed: [] }));
+    stub("restModifyOps", async (ops) => ({ records: ops.map((o) => ({ recordName: o.record.recordName, serverErrorCode: o.record.recordName.indexOf("profile.") === 0 ? "NOT_FOUND" : "ACCESS_DENIED" })) }));
+    check(await eraseOwnedProfileRecords(guest) === true, "teacher-made inbox records the student can't delete don't block the delete");
+    stub("restModifyOps", async (ops) => ({ records: ops.map((o) => ({ recordName: o.record.recordName, serverErrorCode: "ACCESS_DENIED" })) }));
+    check(await eraseOwnedProfileRecords(guest) === "failed", "the student's own profile has to be deleted");
     profile = { displayName: "T", firstName: "T", role: "student", key: "ABCDE23456", guest: true, cloudSaved: true, classes: [] };
     stub("restModifyOps", async () => { throw new Error("offline"); });
     confirmRemoveProfile();
@@ -161,6 +172,36 @@ window.runWhsChecks = async function runWhsChecks() {
     forgetLocalProfile();
     await sleep(150);
     check(!(await keyStoreDo("readonly", (store) => store.count())) && !sessionStorage.getItem("whsSessionCode"), "signing out removes the device key and the session code");
+
+    // Saved profile details are locked with the device key.
+    profile = { displayName: "Jordan S", firstName: "Jordan", role: "student", grade: "11", key: "ABCDE23456", guest: true, cloudSaved: true, classes: [{ name: "Chemistry" }] };
+    await rememberProfileCode("ABCDE23456", true);
+    const shellText = localStorage.getItem("whsWebProfile") || "";
+    check(shellText && !/Jordan|Chemistry|"grade"/.test(shellText) && JSON.parse(shellText).sealed.indexOf("whs1.") === 0, "the saved profile keeps no name, grade, or classes in the clear");
+    profile = JSON.parse(shellText);
+    forgetCodeKeys();
+    check(await unlockStoredProfile() && profile.firstName === "Jordan" && profile.grade === "11" && profile.classes[0].name === "Chemistry", "the device key opens the saved profile again");
+    profile = JSON.parse(shellText);
+    profile.key = "whsk:" + "0".repeat(32);
+    check(await unlockStoredProfile() === false, "a missing device key can't open the saved profile");
+    forgetLocalProfile();
+    await sleep(150);
+
+    // Not choosing to stay signed in keeps nothing for later.
+    profile = { displayName: "T", firstName: "T", role: "student", key: "ABCDE23456", guest: true, cloudSaved: true, classes: [] };
+    const keptKey = await rememberProfileCode("ABCDE23456", false);
+    check(!keptKey && !(await keyStoreDo("readonly", (store) => store.count())) && !localStorage.getItem("whsWebProfile") && !!sessionStorage.getItem("whsWebProfileSession"), "without Keep me signed in, nothing outlasts the browser session");
+    forgetLocalProfile();
+    await sleep(150);
+    check(!!document.getElementById("keepSignedIn") && document.getElementById("keepSignedIn").checked, "sign-in offers Keep me signed in on this device");
+
+    // Student codes typed by teachers don't stay in memory.
+    await privateCodeTag("ZZZZZ22222");
+    forgetCodeKey("zzzzz-22222");
+    check(!codeKeyCache.has("ZZZZZ22222"), "a teacher's browser forgets a student's code after use");
+    for (const c of ["AAAAA22222", "BBBBB22222", "CCCCC22222", "DDDDD22222", "EEEEE22222"]) await privateCodeTag(c);
+    check(codeKeyCache.size <= 4, "at most four codes are kept in memory");
+    forgetCodeKeys();
     profile = { displayName: "T", firstName: "T", role: "student", key: "ABCDE23456", classes: [] };
     let askedFor = [];
     stub("fetchByNames", async (db, names) => { askedFor = names; return []; });

@@ -408,6 +408,8 @@ async function issuePassFromWeb() {
     setIssuePassError(message);
     showWorkProgress(100, message, "", "", true, "finishIssuePass");
   } finally {
+    // The teacher's browser doesn't keep the student's code keys once the pass is sent.
+    forgetCodeKey(webCode);
     if (window._issuePassSending === sendTicket) window._issuePassSending = null;
     const again = document.getElementById("issuePassBtn");
     if (again) again.disabled = false;

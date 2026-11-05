@@ -230,7 +230,7 @@ async function enterWithCode() {
       grade: secrets.grade || "",
       key
     };
-    await rememberProfileCode(key);
+    await rememberProfileCode(key, wantsToStaySignedIn("keepSignedIn"));
     applyAvatar(secrets.photo);
     showGate();
     show("home");
@@ -499,6 +499,8 @@ function syncGuestRoleFields() {
   const staff = role === "teacher" || role === "administrator";
   const gradeRow = document.getElementById("guestGradeRow");
   if (gradeRow) gradeRow.classList.toggle("hidden", staff);
+  const keepRow = document.getElementById("guestKeepRow");
+  if (keepRow) keepRow.classList.toggle("hidden", staff);
 }
 function pendingStaffFromForm() {
   if (!((window._gateStep === "guest" || window._gateStep === "apple") && gateIsOpen())) return null;
@@ -537,7 +539,7 @@ async function enterGuest() {
     const key = savedKey || makeWebUnlockKey();
     if (finish) finish.disabled = false;
     profile = { displayName: name, firstName: name, role: "student", grade, key, guest: true, cloudSaved: !!savedKey, classes: [] };
-    await rememberProfileCode(key);
+    await rememberProfileCode(key, wantsToStaySignedIn("guestKeepSignedIn"));
   }
   storeProfile();
   applyAvatar("");
@@ -592,28 +594,33 @@ window.openPassesInfo = openPassesInfo;
 if ("serviceWorker" in navigator) {
   navigator.serviceWorker.register("./sw.js").catch(() => {});
 }
-// Browsers that saved the code itself (older versions) switch to the locked device key once.
-if (profile && !isKeyHandle(profile.key) && normalizeCode(profile.key).length === 10) {
-  rememberProfileCode(profile.key).catch(() => {});
-}
-// If the device key is gone (site data partly cleared), the profile can't unlock anything; sign out.
-if (profile && isKeyHandle(profile.key)) {
-  deviceKeyFor(profile.key).then((found) => {
-    if (found || !profile || !isKeyHandle(profile.key)) return;
+// Startup: open the locked profile first, so nothing renders before the student's details are ready.
+(async () => {
+  let usable = true;
+  if (profile && profile.expired) usable = false;
+  else if (profile && profile.sealed) usable = await unlockStoredProfile();
+  else if (profile && isKeyHandle(profile.key)) usable = !!(await deviceKeyFor(profile.key));
+  if (!usable) {
+    // The device key is gone, wrong, or unused for too long: sign in again.
     forgetLocalProfile();
-    showGate();
-  }).catch(() => {});
-}
-showGate();
-if (signedIn()) {
-  show("home");
-  if (currentRole() === "teacher" || currentRole() === "administrator") {
-    restoreStaffCloudSession().then(() => {
-      keepAppleSessionFresh();
-      return syncStaffRoleFromCloud();
-    }).catch(() => keepAppleSessionFresh());
+  } else if (profile && !isKeyHandle(profile.key) && normalizeCode(profile.key).length === 10 && !profile.keyHandle) {
+    // Browsers that saved the code itself (older versions) switch to the locked device key once.
+    await rememberProfileCode(profile.key).catch(() => {});
+  } else if (profile && profile.key) {
+    profile.seenAt = Date.now();
+    storeProfile();
   }
-}
+  showGate();
+  if (signedIn()) {
+    show("home");
+    if (currentRole() === "teacher" || currentRole() === "administrator") {
+      restoreStaffCloudSession().then(() => {
+        keepAppleSessionFresh();
+        return syncStaffRoleFromCloud();
+      }).catch(() => keepAppleSessionFresh());
+    }
+  }
+})();
 document.addEventListener("visibilitychange", () => {
   // Hide the web code again when the student switches away from this tab or app.
   if (document.visibilityState !== "visible") {
