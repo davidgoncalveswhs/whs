@@ -67,6 +67,13 @@ jobs:
               f'window.WHS_SCHOOL_TOKEN = "{token}";\nwindow.WHS_CK_ENV = "{env}";\n'
           )
           PY
+      - name: Give the offline cache a new name for this deploy
+        run: |
+          set -euo pipefail
+          # sw.js serves images and versioned code from its cache; a new cache name per deploy
+          # makes every browser drop the old copies.
+          sed -i -E "s/^const CACHE = \"([^\"]*)\";/const CACHE = \"\1-${GITHUB_SHA::7}\";/" docs/sw.js
+          grep -q "^const CACHE = \".*-${GITHUB_SHA::7}\";" docs/sw.js
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
           path: docs

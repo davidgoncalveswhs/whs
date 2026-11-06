@@ -1,4 +1,4 @@
-const CACHE = "whs-web-v80";
+const CACHE = "whs-web-v81";
 
 self.addEventListener("install", (event) => {
   event.waitUntil(self.skipWaiting());
@@ -20,23 +20,19 @@ self.addEventListener("fetch", (event) => {
     return;
   }
   const url = new URL(event.request.url);
-  // Images and PDFs rarely change: show the saved copy right away and refresh it in the background.
-  // Pages, code, and data stay network-first so updates show up immediately.
-  if (url.origin === self.location.origin && /\.(png|jpe?g|svg|webp|gif|ico|pdf)$/i.test(url.pathname)) {
+  // Images, PDFs, and versioned code (?v=) are served from the saved copy without asking the network
+  // again. Every deploy gives this file a new cache name (see .github/workflows/pages.yml), and
+  // "activate" deletes the old cache, so a new version is never stuck behind an old copy.
+  // Pages, data, and the CloudKit config stay network-first so updates show up immediately.
+  const versioned = url.searchParams.has("v");
+  if (url.origin === self.location.origin && (versioned || /\.(png|jpe?g|svg|webp|gif|ico|pdf)$/i.test(url.pathname))) {
     event.respondWith(
       caches.open(CACHE).then(async (cache) => {
         const cached = await cache.match(event.request);
-        const refresh = fetch(event.request)
-          .then((response) => {
-            if (response.ok) cache.put(event.request, response.clone()).catch(() => {});
-            return response;
-          })
-          .catch(() => cached);
-        if (cached) {
-          event.waitUntil(refresh);
-          return cached;
-        }
-        return refresh;
+        if (cached) return cached;
+        const response = await fetch(event.request);
+        if (response.ok) cache.put(event.request, response.clone()).catch(() => {});
+        return response;
       })
     );
     return;
